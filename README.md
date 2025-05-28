@@ -102,7 +102,7 @@ print(modelnames)
 
 ```
 
-### 3. Processing PDF Documents
+### 3. Processing PDF Documents and Ask Questions
 
 ```python
 from LLMlight import LLMlight
@@ -115,7 +115,30 @@ model.read_pdf('path/to/document.pdf')
 
 # Query about the document
 response = model.run('Summarize the main points of this document')
+
+print(response)
+
 ```
+
+### 4. Global Reasoning
+
+```python
+from LLMlight import LLMlight
+
+# Initialize model
+model = LLMlight()
+
+# Read and process PDF
+model.read_pdf('path/to/document.pdf')
+
+# Query about the document
+response = model.run('Summarize the main points of this document', global_reasoning=True)
+
+print(response)
+
+
+```
+
 
 ## 🤝 Contributing
 

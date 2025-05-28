@@ -2,6 +2,14 @@
 # import LLMlight as llm
 # print(dir(llm))
 # print(llm.__version__)
+from LLMlight import LLMlight
+
+# Initialize with default settings
+model = LLMlight()
+
+# Run a simple query
+response = model.run('What is the capital of France?', 
+                    system="You are a helpful assistant.")
 
 # %%
 from LLMlight import LLMlight
@@ -32,9 +40,19 @@ model = LLMlight(endpoint=model_path, top_p=0.9)
 system_message = "You are a helpful assistant."
 response = model.run('What is the capital of France?', system=system_message)
 
+#%%
+from LLMlight import LLMlight
 
+# Initialize model
+model = LLMlight()
 
+# Read and process PDF
+model.read_pdf(r'D://OneDrive - Tilburg University//TiU//Introduction new colleagues.pdf')
 
+# Query about the document
+response = model.run('Summarize the main points of this document', global_reasoning=True)
+
+print(response)
 
 #%%
 import llama_cpp

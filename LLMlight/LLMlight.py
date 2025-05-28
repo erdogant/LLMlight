@@ -452,7 +452,7 @@ class LLMlight:
         qmodel = LLMlight(modelname=self.modelname, temperature=0.7, endpoint=self.endpoint)
 
         # 1. Rewrite user question in global reasoning question.
-        logger.info('Rewriting user question for deep reasoning..')
+        logger.info('Rewriting user question for global reasoning..')
         instructions = (f"In the context are chunks of text from a document. "
                         + " Rewrite the user question in such a way that relevant information can be captured by a Large language model for summarization for the chunks of text in the context."
                         + " Only return the new question with no other information."
