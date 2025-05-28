@@ -1,0 +1,2 @@
+include LLMlight/data/*.zip
+include LLMlight/data/*.txt

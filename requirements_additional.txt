@@ -1,0 +1,9 @@
+#conda create -n env_dicter python=3.8
+#conda activate env_dicter
+
+pandas 
+numpy
+tqdm
+matplotlib
+requests
+datazets

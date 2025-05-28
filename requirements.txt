@@ -1,0 +1,8 @@
+sentence_transformers
+scikit-learn
+llama-cpp-python
+json-repair
+pymupdf
+accelerate
+bitsandbytes
+flash_attn
