@@ -88,7 +88,21 @@ model = LLMlight(endpoint="http://localhost:1234/v1/chat/completions")
 response = model.run('Explain quantum computing in simple terms')
 ```
 
-### 2. Processing PDF Documents
+### 2. Validate Models
+
+```python
+from LLMlight import LLMlight
+
+# Initialize model
+from LLMlight import LLMlight
+model = LLMlight(verbose='info')
+
+modelnames = model.get_available_models(validate=True)
+print(modelnames)
+
+```
+
+### 3. Processing PDF Documents
 
 ```python
 from LLMlight import LLMlight
