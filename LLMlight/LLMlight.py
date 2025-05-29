@@ -290,17 +290,20 @@ class LLMlight:
         # Return
         return response
 
-    def requests_post_http(self, messages, temperature, top_p, headers, stream=False, return_type='string'):
+    def requests_post_http(self, messages, temperature, top_p, headers, task='full', stream=False, return_type='string'):
         # Prepare data for request.
-        max_tokens = compute_max_tokens(messages[0]['content'] + messages[1]['content'], n_ctx=self.n_ctx)
+        used_tokens = compute_used_tokens(messages[0]['content'] + messages[1]['content'], n_ctx=self.n_ctx)
+        # Determine how many tokens are available for the model to generate
+        max_tokens = compute_max_tokens(used_tokens, n_ctx=self.n_ctx, task=task)
+
         data = {
             "model": self.modelname,
             "messages": messages,
             "temperature": temperature,
             "top_p": top_p,
             "stream": stream,
-            "max_tokens": self.n_ctx - max_tokens,
-        }
+            "max_tokens": max_tokens,
+            }
 
         # Send POST request
         response = self.requests_post(headers, data, stream=stream, return_type=return_type)
@@ -337,7 +340,7 @@ class LLMlight:
              instructions="",
              system="You are a helpfull assistant.",
              response_format="**comprehensive, structured document covering all key insights**",
-             tasktype='User question',
+             task='question',
              context=None,
              chunks={'type': 'words', 'size': None, 'n': None},
              return_type='string',
@@ -389,7 +392,7 @@ class LLMlight:
             + "- Extract key insights from the **new text chunk** while maintaining coherence with **Previous summaries**.\n"
             + f"{instructions}\n\n"
 
-            f"### {tasktype}:\n"
+            f"### {task}:\n"
             f"{query}\n\n"
 
             "### Improved Results:\n"
@@ -526,17 +529,17 @@ class LLMlight:
 
     def fit_transform(self, query, chunks):
         """Converts context chunks and query into vector space representations based on the selected embedding method."""
-        if self.embedding_method == 'tfidf':
+        if self.embedding == 'tfidf':
             vectorizer = TfidfVectorizer()
             chunk_vectors = vectorizer.fit_transform(chunks)
             # dense_matrix = chunk_vectors.toarray()  # Converts to a NumPy array
             query_vector = vectorizer.transform([query])
-        elif self.embedding_method == 'bow':
+        elif self.embedding == 'bow':
             vectorizer = CountVectorizer()
             chunk_vectors = vectorizer.fit_transform(chunks)
             query_vector = vectorizer.transform([query])
         # elif self.embedding_model is not None:
-        elif self.embedding_method == 'bert' or self.embedding_method == 'bge-small':
+        elif self.embedding == 'bert' or self.embedding == 'bge-small':
             chunk_vectors = np.vstack([self.embedding_model.encode(chunk) for chunk in chunks])
             query_vector = self.embedding_model.encode([query])
             query_vector = query_vector.reshape(1, -1)
