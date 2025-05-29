@@ -22,13 +22,24 @@ __doc__ = """
 LLMlight
 =====================================================================
 
-LLMlight is for...
+LLMlight is a Python package for running Large Language Models (LLMs) locally with minimal dependencies. It provides a simple interface to interact with various LLM models, including support for GGUF models and local API endpoints.
 
 Example
 -------
->>> import LLMlight as LLMlight
->>> model = LLMlight.fit_transform(X)
->>> fig,ax = LLMlight.plot(model)
+>>> from LLMlight import LLMlight
+>>> # Initialize with LM Studio endpoint
+>>> model = LLMlight(endpoint="http://localhost:1234/v1/chat/completions")
+>>> # Run queries
+>>> response = model.prompt('Explain quantum computing in simple terms')
+
+Example
+-------
+>>> from LLMlight import LLMlight
+>>> # Initialize model
+>>> model = LLMlight(verbose='info')
+>>> modelnames = model.get_available_models(validate=True)
+>>> print(modelnames)
+
 
 References
 ----------
