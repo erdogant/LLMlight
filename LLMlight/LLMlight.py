@@ -415,7 +415,7 @@ class LLMlight:
 
         {response_format}
 
-        f"### {tasktype}:\n"
+        f"### {task}:\n"
         {query}\n\n
 
         Begin your response below:
@@ -450,46 +450,51 @@ class LLMlight:
 
             prompt = "Is the proposal well thought out?"
             instructions = "Your task is to rewrite questions for global reasoning. As an example, if there is a question like: 'Does this document section explain the societal relevance of the research?', the desired output would be: 'Does this document section explain the societal relevance of the research? If so, summarize it. If not, return 'No societal relevance found.''"
-            response = model.llm.prompt(query=prompt, instructions=instructions, tasktype='Task')
+            response = model.llm.prompt(query=prompt, instructions=instructions, task='Task')
+
         """
+
         # Initialize model for question refinement and summarization
         qmodel = LLMlight(modelname=self.modelname, temperature=0.7, endpoint=self.endpoint)
 
-        # 1. Rewrite user question in global reasoning question.
-        logger.info('Rewriting user question for global reasoning..')
-        instructions = (f"In the context are chunks of text from a document. "
-                        + " Rewrite the user question in such a way that relevant information can be captured by a Large language model for summarization for the chunks of text in the context."
-                        + " Only return the new question with no other information."
-                        )
-        # Create new query
-        new_query = qmodel.prompt(query=query, instructions=instructions, tasktype='Task')
+        # if rewrite_query:
+        #     # 1. Rewrite user question in global reasoning question.
+        #     logger.info('Rewriting user question for global reasoning..')
+        #     instructions = """In the context are chunks of text from a document.
+        #     Rewrite the user question in such a way that relevant information can be captured by a Large language model for summarization for the chunks of text in the context.
+        #     Only return the new question with no other information.
+        #     """
+        #     # Create new query
+        #     new_query = qmodel.prompt(query=query, instructions=instructions)
+        # else:
+        #     new_query = query
 
         # Create chunks with overlapping parts to make sure we do not miss out
         chunks = utils.chunk_text(context, chunk_size=6000, method='chars', overlap=1000)
 
         # Now summaries for the chunks
-        instructions = ("- Base your summary **strictly** on the provided text.\n"
-                        +"- Do **not** use any external knowledge or assumptions.\n"
-                        +"- If the answer is **explicitly available**, extract it exactly.\n"
-                        +"- If the answer is not available, Return only: 'N/A'"
-                        )
+        instructions = """- Base your answer **strictly** on the provided text.
+        - Do **not** use any external knowledge or assumptions.
+        - Determine the language of the context and answer in the **exact** same language.
+        - If the answer is not available, Return **ONLY**: 'N/A'
+        """
 
         summaries = []
         for chunk in chunks:
             prompt = f"""Context:
                 {chunk}
 
-                Question:
-                {new_query}
+                User question: Make a an extensive and complete summary.
                 """
 
-            response = qmodel.prompt(query=prompt, instructions=instructions, tasktype='Question')
+            response = qmodel.prompt(query=prompt, instructions=instructions)
             summaries.append(response)
 
         # Final summarization pass over all collected summaries
         # Filter out "N/A" summaries
         summaries = [s for s in summaries if s.strip() != "N/A"]
         summaries_final = "\n\n---\n\n".join(summaries)
+        # Return
         return summaries_final
 
 
@@ -541,30 +546,34 @@ class LLMlight:
 
 
     def relevant_text_retrieval(self, query, context):
-        # Default
-        relevant_chunks = context
-
         # Create advanced prompt using relevant chunks of text, the input query and instructions
         if context is not None:
-            if self.retrieval_method == 'naive_RAG' and np.isin(self.embedding_method, ['tfidf', 'bow', 'bert', 'bge-small']):
-                # Find the best matching parts using simple retrieval_method approach.
-                logger.info(f'retrieval_method approach [{self.retrieval_method}] is applied with [{self.embedding_method}] embedding.')
+            if self.method=='global_reasoning':
+                # Global Reasoning
+                relevant_chunks = self.global_reasoning(query, context)
+            elif self.method == 'naive_RAG' and np.isin(self.embedding, ['tfidf', 'bow', 'bert', 'bge-small']):
+                # Find the best matching parts using simple retrieval method approach.
+                logger.info(f'[{self.method}] approach is applied with [{self.embedding}] embedding.')
                 relevant_chunks = self.parse_large_document(query, context, chunk_size=self.chunks['size'], top_chunks=self.chunks['n'], return_type='string')
-            elif self.retrieval_method == 'RSE' and np.isin(self.embedding_method, ['bert', 'bge-small']):
-                logger.info(f'RAG approach [{self.retrieval_method}] is applied.')
-                relevant_chunks = RAG_with_RSE(context, query, label=None, chunk_size=self.chunks['size'], irrelevant_chunk_penalty=0, embedding_method=self.embedding_method, device='cpu', batch_size=32)
+            elif self.method == 'RSE' and np.isin(self.embedding, ['bert', 'bge-small']):
+                logger.info(f'RAG approach [{self.method}] is applied.')
+                relevant_chunks = RAG_with_RSE(context, query, label=None, chunk_size=self.chunks['size'], irrelevant_chunk_penalty=0, embedding=self.embedding, device='cpu', batch_size=32)
             else:
-                logger.info(f'The entire text will be used as context.')
+                logger.info(f'No chunking: The entire text is used as context.')
+        else:
+            # Default
+            relevant_chunks = context
+
         # Return
         return relevant_chunks
 
-    def set_prompt(self, query, instructions, response_format, context, tasktype):
+    def set_prompt(self, query, instructions, response_format, context):
         # Default and update when context and instructions are available.
         prompt = (
             ("Context:\n" + context + "\n\n" if context else "")
             + ("Instructions:\n" + instructions + "\n\n" if instructions else "")
             + ("Response format:\n" + response_format + "\n\n" if response_format else "")
-            + f"{tasktype}:\n"
+            + f"User question:\n"
             + query
             )
 
@@ -685,12 +694,47 @@ def load_local_gguf_model(model_path: str, n_ctx: int=4096, n_threads: int=8, n_
     # Return
     return llm
 
-def compute_max_tokens(string, n_ctx=4096):
+def compute_used_tokens(string, n_ctx=4096):
     tokenizer = AutoTokenizer.from_pretrained("gpt2")
     # Tokenize the input string
     tokens = tokenizer.encode(string, truncation=True, max_length=n_ctx)
     # Get the number of tokens
     return len(tokens)
+
+
+def compute_max_tokens(used_tokens, n_ctx=4096, task="full"):
+    """
+    Compute the number of tokens that can be generated based on the task type.
+
+    Parameters:
+    - used_tokens (int): Tokens already used in the input prompt.
+    - n_ctx (int): Total context window size of the model.
+    - task (str): The use case for generation. Options:
+        'summarization', 'chat', 'code', 'longform', 'full'
+
+    Returns:
+    - max_tokens (int): Tokens allowed for generation.
+    """
+
+    available_tokens = max(n_ctx - used_tokens, 1)  # Ensure at least 1
+
+    task = task.lower()
+    if task == "summarization":
+        max_tokens = max(min(available_tokens, int(n_ctx * 0.5)), 128)
+    elif task == "chat":
+        max_tokens = max(min(available_tokens, int(n_ctx * 0.6)), 128)
+    elif task == "code":
+        max_tokens = max(min(available_tokens, int(n_ctx * 0.75)), 128)
+    elif task == "longform":
+        max_tokens = max(min(available_tokens, int(n_ctx * 0.9)), 256)
+    elif task == "full":
+        max_tokens = available_tokens
+    else:
+        # Default to safe fallback
+        max_tokens = max(min(available_tokens, int(n_ctx * 0.5)), 128)
+
+    return max_tokens
+
 
 def set_system_message(system):
     return "You are a helpful assistant." if system is None else system
