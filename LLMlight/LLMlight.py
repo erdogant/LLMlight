@@ -232,7 +232,7 @@ class LLMlight:
         str
             The model's response or an error message if the request fails.
         """
-        logger.debug(f'{self.modelname} is loaded..')
+        logger.info(f'{self.modelname} is loaded..')
         headers = {"Content-Type": "application/json"}
 
         if temperature is None: temperature = self.temperature
@@ -240,9 +240,9 @@ class LLMlight:
         if context is None: context = self.context
         # if embedding is not None: self.embedding = embedding
         if isinstance(context, dict): context = '\n\n'.join(context.values())
-        if self.method=='global_reasoning' and context is None:
-            logger.error('Context must be provided when using method="global_reasoning"')
-            return None
+        # if self.method=='global_reasoning' and context is None:
+            # logger.error('Context must be provided when using method="global_reasoning"')
+            # return None
 
         # Set system message
         system = set_system_message(system)
@@ -479,7 +479,8 @@ class LLMlight:
         instructions = """- Base your answer **strictly** on the provided text.
         - Do **not** use any external knowledge or assumptions.
         - Determine the language of the context and answer in the **exact** same language.
-        - If the answer is not available, Return **ONLY**: 'N/A'
+        - Correct any grammar or spelling mistakes.
+        - If the answer is not available, Return **ONLY**: 'N/A'.
         """
 
         summaries = []
@@ -490,8 +491,12 @@ class LLMlight:
                 User question: Make a an extensive and complete summary.
                 """
 
+            # Summarize
             response = qmodel.prompt(query=prompt, instructions=instructions)
+            # Append
             summaries.append(response)
+            # Show
+            logger.debug(response)
 
         # Final summarization pass over all collected summaries
         # Filter out "N/A" summaries
