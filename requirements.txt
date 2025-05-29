@@ -6,3 +6,4 @@ pymupdf
 accelerate
 bitsandbytes
 flash_attn
+torch

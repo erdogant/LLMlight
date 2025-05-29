@@ -28,6 +28,7 @@ dependencies = [
     'llama-cpp-python',
     'json-repair',
     'pymupdf',
+    'torch',
     # 'accelerate',
     # 'bitsandbytes',
     # 'flash_attn',
