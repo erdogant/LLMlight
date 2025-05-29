@@ -50,19 +50,26 @@ class LLMlight:
     system : str
         String of the system message.
         "I am a helpfull assistant"
-    temperature : float, optional
-        Sampling temperature (default is 0.7).
-    top_p : float, optional
-        Top-p (nucleus) sampling parameter (default is 1.0, no filtering).
-    embedding_method : str
+    method : str
+        'naive_RAG': Simple RAG. Chunk text in fixed parts. Use cosine similarity to for ranking. The top scoring chunks will be combined (n chunks) and used as input with the prompt.
+        'global_reasoning': Apply a a two steps proces, first the user question is re-formulated into a more generic question so that text chunks can be summarized more accurately. The total combined summarized context is then used as the new context for the user question following the rest of the pipeline.
+        'RSE': Identify and extract entire segments of relevant text.
+    embedding : str
         None
         'tfidf': Best use when it is a structured documents and the words in the queries are matching.
         'bow': Bag of words approach. Best use when you expect words in the document and queries to be matching.
         'bert': Best use when document is more free text and the queries may not match exactly the words or sentences in the document.
         'bge-small':
-    retrieval_method : str
-        'naive_RAG': Simple RAG. Chunk text in fixed parts. Use cosine similarity to for ranking. The top scoring chunks will be combined (n chunks) and used as input with the prompt.
-        'RSE': Identify and extract entire segments of relevant text.
+    temperature : float, optional
+        Sampling temperature (default is 0.7).
+    top_p : float, optional
+        Top-p (nucleus) sampling parameter (default is 1.0, no filtering).
+    task (str): The use case for generation. (default: 'full')
+        'summarization'
+        'chat'
+        'code'
+        'longform'
+        'full'
     chunks: dict : {'type': 'words', 'size': 250, 'n': 5}
         type : str
             'words': Chunks are created using words.
@@ -93,10 +100,11 @@ class LLMlight:
     """
     def __init__(self,
                  modelname="hermes-3-llama-3.2-3b",
+                 method='naive_RAG',
+                 embedding='bert',
                  temperature=0.7,
                  top_p=1.0,
-                 embedding_method='bert',
-                 retrieval_method='naive_RAG',
+                 task='full',
                  chunks={'type': 'words', 'size': 250, 'n': 5},
                  endpoint="http://localhost:1234/v1/chat/completions",
                  n_ctx=4096,
@@ -110,17 +118,18 @@ class LLMlight:
         self.endpoint = endpoint
         self.temperature = temperature
         self.top_p = top_p
-        self.retrieval_method = retrieval_method
-        self.embedding_method = embedding_method
+        self.task = task
+        self.method = method
+        self.embedding = embedding
         if chunks is None: chunks = {'type': 'words', 'size': None, 'n': None}
         self.chunks = {**{'type': 'words', 'size': 250, 'n': 5}, **chunks}
         self.n_ctx = n_ctx
         self.context = None
 
         # Set the correct name for the model.
-        if embedding_method == 'bert':
+        if embedding == 'bert':
             self.embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
-        elif embedding_method == 'bge-small':
+        elif embedding == 'bge-small':
             self.embedding_model = SentenceTransformer('BAAI/bge-small-en')
         else:
             self.embedding_model = None
@@ -182,15 +191,13 @@ class LLMlight:
             query,
             instructions=None,
             system=None,
-            tasktype='User question',
-            response_format=None,
             context=None,
-            global_reasoning = False,
+            response_format=None,
             temperature=None,
             top_p=None,
-            embedding_method=None,
+            stream=False,
             return_type='string',
-            stream=False):
+            ):
         """
         Run the model with the provided parameters.
         The final prompt is created based on the query, instructions, and the context
@@ -198,34 +205,27 @@ class LLMlight:
         Parameters
         ----------
         query : str
-            The question or query or entire prompt to send to the model.
+            The question or query.
+            "What is the capital for France?"
         context : str
-            Large text string that will be chunked, and embedded. Chunks will be feeded to the model.
+            Large text string that will be chunked, and embedded. The answer for the query is based on the chunks.
         instructions : str
             Set your instructions.
             "Answer the question strictly based on the provided context."
         system : str, optional
             Optional system message to set context for the AI (default is None).
             "You are helpfull assistant."
-        tasktype : str
-            Specifify the task type. This will be used in front of the query that is provided.
-            * 'User question(s)'
-            * 'Aim'
-            * 'Task'
-        global_reasoning: bool
-            True: Apply a a two steps proces, first the user question is re-formulated into a more generic question so that text chunks can be summarized more accurately. The total combined summarized context is then used as the new context for the user question following the rest of the pipeline.
-            False: Do not apply global reasoning
         temperature : float, optional
             Sampling temperature (default is 0.7).
         top_p : float, optional
             Top-p (nucleus) sampling parameter (default is 1.0, no filtering).
+        stream : bool, optional
+            Whether to enable streaming (default is False).
         return_type: bool, optional
             Return dictionary in case the output is a json
             'full': Output the full json
             'dict': Convert json into dictionary.
             'string': Return only the string output
-        stream : bool, optional
-            Whether to enable streaming (default is False).
 
         Returns
         -------
@@ -233,49 +233,53 @@ class LLMlight:
             The model's response or an error message if the request fails.
         """
         logger.debug(f'{self.modelname} is loaded..')
+        headers = {"Content-Type": "application/json"}
 
         if temperature is None: temperature = self.temperature
         if top_p is None: top_p = self.top_p
         if context is None: context = self.context
-        if embedding_method is not None: self.embedding_method = embedding_method
+        # if embedding is not None: self.embedding = embedding
         if isinstance(context, dict): context = '\n\n'.join(context.values())
-        headers = {"Content-Type": "application/json"}
+        if self.method=='global_reasoning' and context is None:
+            logger.error('Context must be provided when using method="global_reasoning"')
+            return None
 
         # Set system message
         system = set_system_message(system)
-        # Global Reasoning
-        if global_reasoning: context = self.global_reasoning(query, context)
-        # Extract relevant text using retrieval_method method
+        # Extract relevant text using retrieval method
         relevant_text = self.relevant_text_retrieval(query, context)
         # Set the prompt
-        prompt = self.set_prompt(query, instructions, response_format, relevant_text, tasktype)
+        prompt = self.set_prompt(query, instructions, response_format, relevant_text)
         # Prepare messages
         messages = [{"role": "system", "content": system}, {"role": "user", "content": prompt}]
 
         # Run model
         if os.path.isfile(self.endpoint):
             # Run LLM from gguf model
-            response = self.requests_post_gguf(messages, temperature, top_p, headers, stream, return_type)
+            response = self.requests_post_gguf(messages, temperature, top_p, headers, task=self.task, stream=stream, return_type=return_type)
         else:
             # Run LLM with http model
-            response = self.requests_post_http(messages, temperature, top_p, headers, stream, return_type)
+            response = self.requests_post_http(messages, temperature, top_p, headers, task=self.task, stream=stream, return_type=return_type)
 
         # Return
         return response
 
-    def requests_post_gguf(self, messages, temperature, top_p, headers, stream=False, return_type='string'):
+    def requests_post_gguf(self, messages, temperature, top_p, headers, task='full', stream=False, return_type='string'):
         # Note that it is better to use messages_prompt instead of a dict (messages_dict) because most GGUF-based models don't have a tokenizer/parser that can interpret the JSON-style message structure.
         # Convert messages to string prompt
         prompt = convert_prompt(messages, modelname=self.modelname)
         # Prepare data for request.
-        max_tokens = compute_max_tokens(prompt, n_ctx=self.n_ctx)
+        used_tokens = compute_used_tokens(prompt, n_ctx=self.n_ctx)
+        # Determine how many tokens are available for the model to generate
+        max_tokens = compute_max_tokens(used_tokens, self.n_ctx, task=task)
+
         # Send post request to local GGUF model
         response = self.llm(
             prompt=prompt,
             temperature=temperature,
             top_p=top_p,
             stream=stream,
-            max_tokens=self.n_ctx - max_tokens,
+            max_tokens=max_tokens,
             stop=["<end_of_turn>", "<|im_end|>"]  # common stop tokens for chat formats
         )
 
