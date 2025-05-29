@@ -66,12 +66,12 @@ from LLMlight import LLMlight
 model = LLMlight()
 
 # Run a simple query
-response = model.run('What is the capital of France?', 
+response = model.prompt('What is the capital of France?', 
                     system="You are a helpful assistant.")
 
 # Use with a local GGUF model
 model = LLMlight(endpoint='path/to/your/model.gguf')
-response = model.run('Tell me about quantum computing')
+response = model.prompt('Tell me about quantum computing')
 ```
 
 ## 📊 Examples
@@ -85,7 +85,7 @@ from LLMlight import LLMlight
 model = LLMlight(endpoint="http://localhost:1234/v1/chat/completions")
 
 # Run queries
-response = model.run('Explain quantum computing in simple terms')
+response = model.prompt('Explain quantum computing in simple terms')
 ```
 
 ### 2. Validate Models
@@ -114,7 +114,7 @@ model = LLMlight()
 model.read_pdf('path/to/document.pdf')
 
 # Query about the document
-response = model.run('Summarize the main points of this document')
+response = model.prompt('Summarize the main points of this document')
 
 print(response)
 
@@ -132,7 +132,7 @@ model = LLMlight()
 model.read_pdf('path/to/document.pdf')
 
 # Query about the document
-response = model.run('Summarize the main points of this document', global_reasoning=True)
+response = model.prompt('Summarize the main points of this document', global_reasoning=True)
 
 print(response)
 

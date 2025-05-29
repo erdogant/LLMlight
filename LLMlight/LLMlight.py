@@ -86,9 +86,9 @@ class LLMlight:
     Examples
     --------
     >>> model = LLMlight()
-    >>> model.run('hello, who are you?')
+    >>> model.prompt('hello, who are you?')
     >>> system_message = "You are a helpful assistant."
-    >>> response = model.run('What is the capital of France?', system=system_message, top_p=0.9)
+    >>> response = model.prompt('What is the capital of France?', system=system_message, top_p=0.9)
 
     """
     def __init__(self,
@@ -168,7 +168,7 @@ class LLMlight:
             for key in keys:
                 from LLMlight import LLMlight
                 llm = LLMlight(modelname=key)
-                response = llm.run('What is the capital of France?', system="You are a helpful assistant.", return_type='string')
+                response = llm.prompt('What is the capital of France?', system="You are a helpful assistant.", return_type='string')
                 response = response[0:30].replace('\n', ' ').replace('\r', ' ').lower()
                 if 'error: 404' in response:
                     logger.error(f"{llm.modelname}: {response}")
@@ -178,7 +178,7 @@ class LLMlight:
 
         return list(model_dict.keys())
 
-    def run(self,
+    def prompt(self,
             query,
             instructions=None,
             system=None,
@@ -446,7 +446,7 @@ class LLMlight:
 
             prompt = "Is the proposal well thought out?"
             instructions = "Your task is to rewrite questions for global reasoning. As an example, if there is a question like: 'Does this document section explain the societal relevance of the research?', the desired output would be: 'Does this document section explain the societal relevance of the research? If so, summarize it. If not, return 'No societal relevance found.''"
-            response = model.llm.run(query=prompt, instructions=instructions, tasktype='Task')
+            response = model.llm.prompt(query=prompt, instructions=instructions, tasktype='Task')
         """
         # Initialize model for question refinement and summarization
         qmodel = LLMlight(modelname=self.modelname, temperature=0.7, endpoint=self.endpoint)
@@ -458,7 +458,7 @@ class LLMlight:
                         + " Only return the new question with no other information."
                         )
         # Create new query
-        new_query = qmodel.run(query=query, instructions=instructions, tasktype='Task')
+        new_query = qmodel.prompt(query=query, instructions=instructions, tasktype='Task')
 
         # Create chunks with overlapping parts to make sure we do not miss out
         chunks = utils.chunk_text(context, chunk_size=6000, method='chars', overlap=1000)
@@ -479,7 +479,7 @@ class LLMlight:
                 {new_query}
                 """
 
-            response = qmodel.run(query=prompt, instructions=instructions, tasktype='Question')
+            response = qmodel.prompt(query=prompt, instructions=instructions, tasktype='Question')
             summaries.append(response)
 
         # Final summarization pass over all collected summaries

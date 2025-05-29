@@ -8,8 +8,7 @@ from LLMlight import LLMlight
 model = LLMlight()
 
 # Run a simple query
-response = model.run('What is the capital of France?', 
-                    system="You are a helpful assistant.")
+response = model.prompt('What is the capital of France?', system="You are a helpful assistant.")
 
 # %%
 from LLMlight import LLMlight
@@ -29,16 +28,16 @@ for modelname in modelnames:
     print(llm.modelname)
 
     system_message = "You are a helpful assistant."
-    response = llm.run('What is the capital of France?', system=system_message)
+    response = llm.prompt('What is the capital of France?', system=system_message)
     print(response)
 
 # %%
 from LLMlight import LLMlight
 model_path = r'C:/Users\beeld/.lmstudio/models/NousResearch/Hermes-3-Llama-3.2-3B-GGUF\Hermes-3-Llama-3.2-3B.Q4_K_M.gguf'
 model = LLMlight(endpoint=model_path, top_p=0.9)
-# model.run('hello, who are you?')
+# model.prompt('hello, who are you?')
 system_message = "You are a helpful assistant."
-response = model.run('What is the capital of France?', system=system_message)
+response = model.prompt('What is the capital of France?', system=system_message)
 
 #%%
 from LLMlight import LLMlight
@@ -50,7 +49,7 @@ model = LLMlight()
 model.read_pdf(r'D://OneDrive - Tilburg University//TiU//Introduction new colleagues.pdf')
 
 # Query about the document
-response = model.run('Summarize the main points of this document', global_reasoning=True)
+response = model.prompt('Summarize the main points of this document', global_reasoning=True)
 
 print(response)
 
