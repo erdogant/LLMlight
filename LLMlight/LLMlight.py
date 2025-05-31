@@ -335,14 +335,12 @@ class LLMlight:
                 elif return_type == 'string_with_thinking':
                     return response_text
                 elif return_type == 'string':
-                    # match = re.search(r'<think>(.*?)</think>', response_text, re.DOTALL)
-                    # if match: response_text = match.group(1).strip()
                     response_text = re.sub(r'<think>.*?</think>', '', response_text, flags=re.DOTALL).strip()
                     return response_text
                 else:
                     return response.json()
             except:
-                return response_text
+                return response
         else:
             logger.error(f"{response.status_code} - {response}")
             return f"Error: {response.status_code} - {response}"
@@ -498,15 +496,18 @@ class LLMlight:
 
         # Now summaries for the chunks
         summaries = []
-        for i, chunk in enumerate(chunks):
+        for i, chunk in enumerate(tqdm(chunks, desc="Processing chunks", unit="chunk")):
+            logger.info(f'Working on text chunk {i+1}/{len(chunks)}')
+
             prompt = f"""
             ### Context (Part of a larger document (Chunk {i+1}/{len(chunks)})):
                 {chunk}
 
             ### Instructions:
+                - Create a summary of this chunk of text.
+                - Expect missing information because the text is provided in chunks.
                 - Maintain as much as possible the key insights but ensure logical flow.
                 - If repetitions are detected, these might be more important.
-                - Expect missing information because the text is provided in chunks.
 
             ### User Question:
                 {query}
@@ -514,8 +515,7 @@ class LLMlight:
             """
 
             # Summarize
-            system_summaries = "You are a helpfull assistant specialized in summarizing incomplete texts. You are permitted to make assumptions if it improves the results."
-            response = self.requests_post_http(prompt, system_summaries, temperature=self.temperature, top_p=self.top_p, task='full', stream=False, return_type='string')
+            response = self.requests_post_http(prompt, system, temperature=self.temperature, top_p=self.top_p, task='full', stream=False, return_type='string')
             # Append
             summaries.append(response)
             # Show
@@ -532,19 +532,18 @@ class LLMlight:
 
             ---
 
-            ### Task:
-                The context that is given to you are summaries from multiple seperate text chunks.
-                Your task is to connect all the parts and make one output that is **coherent** and well-structured.
-
             ### Instructions:
-                - Maintain as much as possible the key insights but ensure logical flow.
-                - Connect insights smoothly while keeping essential details intact.
-                - If repetitions are detected across the parts, combine it.
                 {instructions}
+
+            ### User Question:
+                The context that is given to you are summaries from multiple seperate text chunks.
+                Your task is to connect all the parts and compile it into one well-structured and **coherent** document that follows the **instructions**.
 
             Begin your response below:
             """
-        final_response = self.requests_post_http(prompt_final, system, temperature=self.temperature, top_p=self.top_p, task='full', stream=False, return_type='string')
+
+        system_summaries = "You are a helpfull assistant that follows the instructions closely. If there is formatting, create headers and comply to it."
+        final_response = self.requests_post_http(prompt_final, system_summaries, temperature=self.temperature, top_p=self.top_p, task='full', stream=False, return_type='string')
 
         # Return
         return final_response
@@ -556,9 +555,6 @@ class LLMlight:
             3. Analyze each chunk seperately following the instructions and system messages and jointly with the last 2 results.
 
         """
-        # prompt_final=''
-        # final_response = self.requests_post_http(prompt_final, system, temperature=self.temperature, top_p=self.top_p, task='full', stream=False, return_type='string')
-
         # Create chunks with overlapping parts to make sure we do not miss out
         chunks = utils.chunk_text(context, method=self.chunks['method'], chunk_size=self.chunks['size'], overlap=self.chunks['overlap'])
 
