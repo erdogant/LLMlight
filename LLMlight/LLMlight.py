@@ -247,30 +247,30 @@ class LLMlight:
         # Set system message
         system = set_system_message(system)
         # Extract relevant text using retrieval method
-        relevant_text = self.relevant_text_retrieval(query, context, instructions, system)
+        relevant_context = self.relevant_text_retrieval(query, context, instructions, system)
         # Set the prompt
-        prompt = self.set_prompt(query, instructions, response_format, relevant_text)
-        # Prepare messages
-        messages = [{"role": "system", "content": system}, {"role": "user", "content": prompt}]
+        prompt = self.set_prompt(query, instructions, response_format, relevant_context)
 
         # Run model
         if os.path.isfile(self.endpoint):
             # Run LLM from gguf model
-            response = self.requests_post_gguf(messages, temperature, top_p, headers, task=self.task, stream=stream, return_type=return_type)
+            response = self.requests_post_gguf(prompt, system, temperature=temperature, top_p=top_p, headers=headers, task=self.task, stream=stream, return_type=return_type)
         else:
             # Run LLM with http model
-            response = self.requests_post_http(messages, temperature, top_p, headers, task=self.task, stream=stream, return_type=return_type)
+            response = self.requests_post_http(prompt, system, temperature=temperature, top_p=top_p, headers=headers, task=self.task, stream=stream, return_type=return_type)
         # Return
         return response
 
-    def requests_post_gguf(self, messages, temperature, top_p, headers, task='full', stream=False, return_type='string'):
+    def requests_post_gguf(self, prompt, system, temperature=0.8, top_p=1, headers=None, task='full', stream=False, return_type='string'):
         # Note that it is better to use messages_prompt instead of a dict (messages_dict) because most GGUF-based models don't have a tokenizer/parser that can interpret the JSON-style message structure.
+        # Prepare data for request.
+        if headers is None: headers = {"Content-Type": "application/json"}
+        # Prepare messages
+        messages = [{"role": "system", "content": system}, {"role": "user", "content": prompt}]
         # Convert messages to string prompt
         prompt = convert_prompt(messages, modelname=self.modelname)
-        # Prepare data for request.
-        used_tokens = compute_used_tokens(prompt, n_ctx=self.n_ctx)
-        # Determine how many tokens are available for the model to generate
-        max_tokens = compute_max_tokens(used_tokens, self.n_ctx, task=task)
+        # Compute tokens
+        used_tokens, max_tokens = compute_tokens(prompt, n_ctx=self.n_ctx, task=task)
 
         # Send post request to local GGUF model
         response = self.llm(
@@ -283,22 +283,23 @@ class LLMlight:
         )
 
         # Take only the output
-        if return_type == 'string' or return_type == 'string_with_thinking':
+        if 'string' in return_type:
             response = response.get('choices', [{}])[0].get('text', "No response")
         if return_type == 'string':
-            # Get the thinking
-            # match = re.search(r'<think>(.*?)</think>', response)
-            # response = match.group(1).strip()
             # Remove thinking
             response = re.sub(r'<think>.*?</think>', '', response, flags=re.DOTALL).strip()
         # Return
         return response
 
-    def requests_post_http(self, messages, temperature, top_p, headers, task='full', stream=False, return_type='string'):
+    def requests_post_http(self, prompt, system, temperature=0.8, top_p=1, headers=None, task='full', stream=False, return_type='string'):
         # Prepare data for request.
-        used_tokens = compute_used_tokens(messages[0]['content'] + messages[1]['content'], n_ctx=self.n_ctx)
-        # Determine how many tokens are available for the model to generate
-        max_tokens = compute_max_tokens(used_tokens, n_ctx=self.n_ctx, task=task)
+        if headers is None: headers = {"Content-Type": "application/json"}
+        # Prepare messages
+        messages = [{"role": "system", "content": system}, {"role": "user", "content": prompt}]
+        # Create full prompt
+        prompt = messages[0]['content'] + messages[1]['content']
+        # Compute tokens
+        used_tokens, max_tokens = compute_tokens(prompt, n_ctx=self.n_ctx, task=task)
 
         data = {
             "model": self.modelname,
@@ -404,7 +405,9 @@ class LLMlight:
             )
 
             # Get the summary for the current chunk
-            chunk_result = self.query_llm(prompt, system=system)
+            # chunk_result = self.query_llm(prompt, system=system)
+            chunk_result= self.requests_post_http(prompt, system, temperature=self.temperature, top_p=self.top_p, task='full', stream=False, return_type='string')
+
             results_list.append(f"Results {i+1}:\n" + chunk_result)
 
         # Final summarization pass over all collected summaries
@@ -430,24 +433,37 @@ class LLMlight:
         """
         logger.info('Combining all information to create a single coherent output..')
         # Create the final summary.
-        final_result = self.query_llm(final_prompt, system=system, return_type=return_type)
+        # final_result = self.query_llm(final_prompt, system=system, return_type=return_type)
+        final_result = self.requests_post_http(final_prompt, system, temperature=self.temperature, top_p=self.top_p, task='full', stream=False, return_type=return_type)
         # Return
         return final_result
         # return {'summary': final_result, 'summary_per_chunk': results_total}
 
+    # def query_llm(self, prompt, system=None, task='full', stream=False, return_type='string'):
+    #     """Calls the LLM and returns the response."""
+    #     # Set defaults
+    #     headers = {"Content-Type": "application/json"}
+    #     # System
+    #     if system is None: system = "You are a helpful assistant."
+    #     # Messages
+    #     messages = [{"role": "system", "content": system}, {"role": "user", "content": prompt}]
+    #     # Compute tokens
+    #     used_tokens, max_tokens = compute_tokens(prompt, n_ctx=self.n_ctx, task=task)
 
-    def query_llm(self, prompt, system=None, return_type='string'):
-        """Calls the LLM and returns the response."""
-        headers = {"Content-Type": "application/json"}
-        if system is None: system = "You are a helpful assistant."
-        messages = [{"role": "system", "content": system}, {"role": "user", "content": prompt}]
-        data = {"model": self.modelname, "messages": messages, "temperature": self.temperature, "top_p": self.top_p}
+    #     data = {
+    #         "model": self.modelname,
+    #         "messages": messages,
+    #         "temperature": self.temperature,
+    #         "top_p": self.top_p,
+    #         "stream": stream,
+    #         "max_tokens": max_tokens,
+    #         }
 
-        # Send POST request
-        response = self.requests_post(headers, data, stream=False, return_type=return_type)
+    #     # Send POST request
+    #     response = self.requests_post(headers, data, return_type=return_type)
 
-        # Return
-        return response
+    #     # Return
+    #     return response
 
     def global_reasoning(self, query, context, rewrite_query=True):
         """Global Reasoning.
@@ -550,7 +566,8 @@ class LLMlight:
             )
 
             # Get the summary for the current chunk
-            chunk_result = self.query_llm(prompt, system=system)
+            # chunk_result = self.query_llm(prompt, system=system, task='full', stream=False, return_type='string')
+            chunk_result = self.requests_post_http(prompt, system, temperature=self.temperature, top_p=self.top_p, task='full', stream=False, return_type='string')
             results_list.append(f"Results {i+1}:\n" + chunk_result)
 
         # Final summarization pass over all collected summaries
@@ -577,7 +594,9 @@ class LLMlight:
         """
         logger.info('Combining all information to create a single coherent output.')
         # Create the final summary.
-        final_result = self.query_llm(final_prompt, system=system, return_type='string')
+        # final_result = self.query_llm(final_prompt, system=system, return_type='string')
+        final_result= self.requests_post_http(final_prompt, system, temperature=self.temperature, top_p=self.top_p, task='full', stream=False, return_type='string')
+
         # Return
         return final_result
         # return {'summary': final_result, 'summary_per_chunk': results_total}
@@ -807,12 +826,15 @@ def load_local_gguf_model(model_path: str, n_ctx: int=4096, n_threads: int=8, n_
     # Return
     return llm
 
-def compute_used_tokens(string, n_ctx=4096):
+def compute_tokens(string, n_ctx=4096, task='full'):
     tokenizer = AutoTokenizer.from_pretrained("gpt2")
     # Tokenize the input string
     tokens = tokenizer.encode(string, truncation=True, max_length=n_ctx)
     # Get the number of tokens
-    return len(tokens)
+    used_tokens = len(tokens)
+    # Determine how many tokens are available for the model to generate
+    max_tokens = compute_max_tokens(used_tokens, n_ctx=n_ctx, task=task)
+    return used_tokens, max_tokens
 
 
 def compute_max_tokens(used_tokens, n_ctx=4096, task="full"):
