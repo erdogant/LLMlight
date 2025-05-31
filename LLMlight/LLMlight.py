@@ -52,8 +52,9 @@ class LLMlight:
         String of the system message.
         "I am a helpfull assistant"
     method : str
-        'naive_RAG': Simple RAG. Chunk text in fixed parts. Use cosine similarity to for ranking. The top scoring chunks will be combined (n chunks) and used as input with the prompt.
-        'global_reasoning': Apply a a two steps proces, first the user question is re-formulated into a more generic question so that text chunks can be summarized more accurately. The total combined summarized context is then used as the new context for the user question following the rest of the pipeline.
+        'chunk-wise':       Ideal when context is too long. Chunks of text are created. Each chunk is analyzed and answered seperately. The total set of answers is combined into one part.
+        'naive_RAG':        Ideal for chats and when you need to answer specfic questions: Chunk of text are created. Use cosine similarity to for ranking. The top scoring chunks will be combined (n chunks) and used as input with the prompt.
+        'global_reasoning': Apply a a two steps proces, first each chunk is summarized. The total combined summarized context is then used as the new context for the user question following the rest of the pipeline.
         'RSE': Identify and extract entire segments of relevant text.
     embedding : str
         None
@@ -223,7 +224,8 @@ class LLMlight:
             Return dictionary in case the output is a json
             'full': Output the full json
             'dict': Convert json into dictionary.
-            'string': Return only the string output
+            'string': Return only the string answer (remove thinking strings using tags: <think> </think>).
+            'string_with_thinking' Return the full response which includes the thinking proces (if available).
 
         Returns
         -------
@@ -245,7 +247,7 @@ class LLMlight:
         # Set system message
         system = set_system_message(system)
         # Extract relevant text using retrieval method
-        relevant_text = self.relevant_text_retrieval(query, context)
+        relevant_text = self.relevant_text_retrieval(query, context, instructions, system)
         # Set the prompt
         prompt = self.set_prompt(query, instructions, response_format, relevant_text)
         # Prepare messages
@@ -258,7 +260,6 @@ class LLMlight:
         else:
             # Run LLM with http model
             response = self.requests_post_http(messages, temperature, top_p, headers, task=self.task, stream=stream, return_type=return_type)
-
         # Return
         return response
 
@@ -448,7 +449,7 @@ class LLMlight:
         # Return
         return response
 
-    def global_reasoning(self, query, context):
+    def global_reasoning(self, query, context, rewrite_query=True):
         """Global Reasoning.
             1. Rewrite the input user question into something like: "Based on the extracted summaries, does the document explain the societal relevance of the research? Justify your answer."
             2. Break the document into manageable chunks with overlapping parts to make sure we do not miss out.
@@ -492,7 +493,7 @@ class LLMlight:
             prompt = f"""Context:
                 {chunk}
 
-                User question: Make a an extensive and complete summary.
+                User question: Make a complete summary.
                 """
 
             # Summarize
