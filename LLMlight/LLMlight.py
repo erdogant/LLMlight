@@ -15,16 +15,17 @@ import numpy as np
 from llama_cpp import Llama
 from transformers import AutoTokenizer
 import copy
+import re
 
 from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from sentence_transformers import SentenceTransformer
 
-from .RAG import RAG_with_RSE
-from . import utils
+# from .RAG import RAG_with_RSE
+# from . import utils
 # DEBUG
-# import utils
-# from RAG import RAG_with_RSE
+import utils
+from RAG import RAG_with_RSE
 
 logger = logging.getLogger(__name__)
 
@@ -281,9 +282,14 @@ class LLMlight:
         )
 
         # Take only the output
-        if return_type == 'string':
+        if return_type == 'string' or return_type == 'string_with_thinking':
             response = response.get('choices', [{}])[0].get('text', "No response")
-
+        if return_type == 'string':
+            # Get the thinking
+            # match = re.search(r'<think>(.*?)</think>', response)
+            # response = match.group(1).strip()
+            # Remove thinking
+            response = re.sub(r'<think>.*?</think>', '', response, flags=re.DOTALL).strip()
         # Return
         return response
 
@@ -322,14 +328,19 @@ class LLMlight:
                 if return_type == 'dict':
                     response_text = utils.is_valid_json(response_text)
                     return response_text
+                elif return_type == 'string_with_thinking':
+                    return response_text
                 elif return_type == 'string':
+                    # match = re.search(r'<think>(.*?)</think>', response_text, re.DOTALL)
+                    # if match: response_text = match.group(1).strip()
+                    response_text = re.sub(r'<think>.*?</think>', '', response_text, flags=re.DOTALL).strip()
                     return response_text
                 else:
                     return response.json()
             except:
                 return response_text
         else:
-            logger.error(f"Error: {response.status_code} - {response}")
+            logger.error(f"{response.status_code} - {response}")
             return f"Error: {response.status_code} - {response}"
 
     def task(self,
