@@ -350,7 +350,6 @@ class LLMlight:
              response_format="**comprehensive, structured document covering all key insights**",
              task='question',
              context=None,
-             chunks={'type': 'words', 'size': None, 'n': None},
              return_type='string',
              ):
         """
@@ -465,20 +464,20 @@ class LLMlight:
         # Initialize model for question refinement and summarization
         qmodel = LLMlight(modelname=self.modelname, temperature=0.7, endpoint=self.endpoint)
 
-        # if rewrite_query:
-        #     # 1. Rewrite user question in global reasoning question.
-        #     logger.info('Rewriting user question for global reasoning..')
-        #     instructions = """In the context are chunks of text from a document.
-        #     Rewrite the user question in such a way that relevant information can be captured by a Large language model for summarization for the chunks of text in the context.
-        #     Only return the new question with no other information.
-        #     """
-        #     # Create new query
-        #     new_query = qmodel.prompt(query=query, instructions=instructions)
-        # else:
-        #     new_query = query
+        if rewrite_query:
+            # 1. Rewrite user question in global reasoning question.
+            logger.info('Rewriting user question for global reasoning..')
+            instructions = """In the context are chunks of text from a document.
+            Rewrite the user question in such a way that relevant information can be captured by a Large language model for summarization for the chunks of text in the context.
+            Only return the new question with no other information.
+            """
+            # Create new query
+            new_query = qmodel.prompt(query=query, instructions=instructions)
+        else:
+            new_query = query
 
         # Create chunks with overlapping parts to make sure we do not miss out
-        chunks = utils.chunk_text(context, chunk_size=6000, method='chars', overlap=1000)
+        chunks = utils.chunk_text(context, method=self.chunks['method'], chunk_size=self.chunks['size'], overlap=self.chunks['overlap'])
 
         # Now summaries for the chunks
         instructions = """- Base your answer **strictly** on the provided text.
