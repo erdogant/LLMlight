@@ -16,6 +16,7 @@ from llama_cpp import Llama
 from transformers import AutoTokenizer
 import copy
 import re
+from tqdm import tqdm
 
 from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
@@ -249,7 +250,7 @@ class LLMlight:
         # Extract relevant text using retrieval method
         relevant_context = self.relevant_text_retrieval(query, context, instructions, system)
         # Set the prompt
-        prompt = self.set_prompt(query, instructions, response_format, relevant_context)
+        prompt = self.set_prompt(query, instructions, relevant_context, response_format=response_format)
 
         # Run model
         if os.path.isfile(self.endpoint):
@@ -300,6 +301,7 @@ class LLMlight:
         prompt = messages[0]['content'] + messages[1]['content']
         # Compute tokens
         used_tokens, max_tokens = compute_tokens(prompt, n_ctx=self.n_ctx, task=task)
+        logger.info(f'Running {self.modelname} with max tokens: {max_tokens}')
 
         data = {
             "model": self.modelname,
@@ -380,16 +382,16 @@ class LLMlight:
         chunks = utils.chunk_text(context, method=self.chunks['method'], chunk_size=self.chunks['size'], overlap=self.chunks['overlap'])
 
         # Build a structured prompt that includes all previous summaries
-        results_list = []
+        response_list = []
         for i, chunk in enumerate(chunks):
             logger.info(f'Working on text chunk {i}/{len(chunks)}')
 
             # Keep last N summaries for context (this needs to be within the context-window otherwise it will return an error.)
-            previous_results = "\n---\n".join(results_list[-self.chunks['top_chunks']:])
+            previous_results = "\n---\n".join(response_list[-self.chunks['top_chunks']:])
 
             prompt = (
             "### Context:\n"
-            + (f"Previous results:\n{previous_results}\n" if len(results_list) > 0 else "")
+            + (f"Previous results:\n{previous_results}\n" if len(response_list) > 0 else "")
 
             + "\n---\nNew text chunk (Part of a larger document, maintain context):\n"
             + f"{chunk}\n\n"
@@ -408,10 +410,10 @@ class LLMlight:
             # chunk_result = self.query_llm(prompt, system=system)
             chunk_result= self.requests_post_http(prompt, system, temperature=self.temperature, top_p=self.top_p, task='full', stream=False, return_type='string')
 
-            results_list.append(f"Results {i+1}:\n" + chunk_result)
+            response_list.append(f"Results {i+1}:\n" + chunk_result)
 
         # Final summarization pass over all collected summaries
-        results_total = "\n---\n".join(results_list[-self.chunks['top_chunks']:])
+        results_total = "\n---\n".join(response_list[-self.chunks['top_chunks']:])
         final_prompt = f"""
         ### Context:
         {results_total}
@@ -422,7 +424,6 @@ class LLMlight:
         ### Instructions:
         - Maintain as much as possible the key insights but ensure logical flow.
         - Connect insights smoothly while keeping essential details intact.
-        - Do **not** use any external knowledge or assumptions.
 
         {response_format}
 
@@ -465,7 +466,7 @@ class LLMlight:
     #     # Return
     #     return response
 
-    def global_reasoning(self, query, context, rewrite_query=True):
+    def global_reasoning(self, query, context, instructions, system, rewrite_query=True):
         """Global Reasoning.
             1. Rewrite the input user question into something like: "Based on the extracted summaries, does the document explain the societal relevance of the research? Justify your answer."
             2. Break the document into manageable chunks with overlapping parts to make sure we do not miss out.
@@ -478,9 +479,6 @@ class LLMlight:
 
         """
 
-        # Initialize model for question refinement and summarization
-        qmodel = LLMlight(modelname=self.modelname, temperature=0.7, endpoint=self.endpoint)
-
         if rewrite_query:
             # 1. Rewrite user question in global reasoning question.
             logger.info('Rewriting user question for global reasoning..')
@@ -488,6 +486,8 @@ class LLMlight:
             Rewrite the user question in such a way that relevant information can be captured by a Large language model for summarization for the chunks of text in the context.
             Only return the new question with no other information.
             """
+            # Initialize model for question refinement and summarization
+            qmodel = LLMlight(modelname=self.modelname, temperature=0.7, endpoint=self.endpoint)
             # Create new query
             new_query = qmodel.prompt(query=query, instructions=instructions)
         else:
@@ -497,134 +497,167 @@ class LLMlight:
         chunks = utils.chunk_text(context, method=self.chunks['method'], chunk_size=self.chunks['size'], overlap=self.chunks['overlap'])
 
         # Now summaries for the chunks
-        instructions = """- Base your answer **strictly** on the provided text.
-        - Do **not** use any external knowledge or assumptions.
-        - Determine the language of the context and answer in the **exact** same language.
-        - Correct any grammar or spelling mistakes.
-        - If the answer is not available, Return **ONLY**: 'N/A'.
-        """
-
         summaries = []
-        for chunk in chunks:
-            prompt = f"""Context:
+        for i, chunk in enumerate(chunks):
+            prompt = f"""
+            ### Context (Part of a larger document (Chunk {i+1}/{len(chunks)})):
                 {chunk}
 
-                User question: Make a complete summary.
-                """
+            ### Instructions:
+                - Maintain as much as possible the key insights but ensure logical flow.
+                - If repetitions are detected, these might be more important.
+                - Expect missing information because the text is provided in chunks.
+
+            ### User Question:
+                {query}
+
+            """
 
             # Summarize
-            response = qmodel.prompt(query=prompt, instructions=instructions)
+            system_summaries = "You are a helpfull assistant specialized in summarizing incomplete texts. You are permitted to make assumptions if it improves the results."
+            response = self.requests_post_http(prompt, system_summaries, temperature=self.temperature, top_p=self.top_p, task='full', stream=False, return_type='string')
             # Append
             summaries.append(response)
             # Show
             logger.debug(response)
 
-        # Final summarization pass over all collected summaries
         # Filter out "N/A" summaries
-        summaries = [s for s in summaries if s.strip() != "N/A"]
+        summaries = [s for s in summaries if s.strip() != "N/A" and not any(err in s.strip()[:30] for err in ("400", "404"))]
+        # Final summarization pass over all collected summaries
         summaries_final = "\n\n---\n\n".join(summaries)
-        # Return
-        return summaries_final
 
-    def analyze_chunk_wise(self, query, context, instructions, system):
+        # Create final prompt
+        prompt_final = f"""### Context (summaries of multiple texts):
+            {summaries_final}
+
+            ---
+
+            ### Task:
+                The context that is given to you are summaries from multiple seperate text chunks.
+                Your task is to connect all the parts and make one output that is **coherent** and well-structured.
+
+            ### Instructions:
+                - Maintain as much as possible the key insights but ensure logical flow.
+                - Connect insights smoothly while keeping essential details intact.
+                - If repetitions are detected across the parts, combine it.
+                {instructions}
+
+            Begin your response below:
+            """
+        final_response = self.requests_post_http(prompt_final, system, temperature=self.temperature, top_p=self.top_p, task='full', stream=False, return_type='string')
+
+        # Return
+        return final_response
+
+    def chunk_wise(self, query, context, instructions, system, incremental_prompt=True):
         """Chunk-wise.
-            1. Break the document into manageable chunks with overlapping parts to make sure we do not miss out.
-            2. Analyze each chunk following the instructions and system
-            3. Take the summarized outputs and aggregate them.
+            1. Break the document into chunks with overlapping parts to make sure we do not miss out.
+            2. Include the last two results in the prompt as context.
+            3. Analyze each chunk seperately following the instructions and system messages and jointly with the last 2 results.
+
         """
-        # Initialize model for question refinement and summarization
-        # qmodel = LLMlight(modelname=self.modelname, temperature=0.7, endpoint=self.endpoint, method=None, embedding=None)
+        # prompt_final=''
+        # final_response = self.requests_post_http(prompt_final, system, temperature=self.temperature, top_p=self.top_p, task='full', stream=False, return_type='string')
 
         # Create chunks with overlapping parts to make sure we do not miss out
         chunks = utils.chunk_text(context, method=self.chunks['method'], chunk_size=self.chunks['size'], overlap=self.chunks['overlap'])
 
         # Build a structured prompt that includes all previous summaries
-        results_list = []
-        for i, chunk in enumerate(chunks):
-            logger.info(f'Working on text chunk {i}/{len(chunks)}')
+        response_list = []
+        for i, chunk in enumerate(tqdm(chunks, desc="Processing chunks", unit="chunk")):
+            logger.info(f'Working on text chunk {i+1}/{len(chunks)}')
 
             # Keep last N summaries for context (this needs to be within the context-window otherwise it will return an error.)
-            # previous_results = "\n---\n".join(results_list[-self.chunks['top_chunks']:])
-            if len(results_list)>0:
-                previous_results = results_list[-1]
+            top_chunks = 1
 
-            prompt = (
-            "### Context:\n"
-            + (f"Previous result:\n{results_list[-1]}\n" if len(results_list) > 0 else "Previous result: No results because it is the initial chunk.")
+            if incremental_prompt:
+                previous_results = '\n\n---\n\n'.join(response_list[-top_chunks:])
+                prompt = (
+                "### Context:\n"
+                + (f"Previous results:\n{previous_results}\n" if len(response_list) > 0 else "Previous results: No results because this is the initial chunk.")
 
-            + "\n---\nNew text chunk (Part of a larger document, maintain context):\n"
-            + f"{chunk}\n\n"
+                + "\n---\nNew text chunk (Part of a larger document, maintain context):\n"
+                + f"{chunk}\n\n"
 
-            "### Instructions:\n"
-            + "- Follow the underneath instructions for the **new text chunk** while maintaining coherence with the **previous result**.\n"
-            + f"{instructions}\n\n"
+                "### Instructions:\n"
+                + "- Follow the underneath instructions for the **new text chunk** while the **Final improved results** maintains coherence with the **previous results**.\n"
+                + f"{instructions}\n\n"
 
-            f"### User Question:\n"
-            f"{query}\n\n"
+                f"### User Question:\n"
+                f"{query}\n\n"
 
-            "### Improved Results:\n"
-            )
+                "### Final improved Results:\n"
+                )
+            else:
+                prompt = (
+                f"### Context (Part of a larger document (Chunk {i+1}/{len(chunks)}), maintain context):\n"
+                + f"{chunk}\n\n"
+
+                "### Instructions:\n"
+                + "- Follow the underneath instructions for the **new text chunk** while maintaining coherence with the **previous result**.\n"
+                + f"{instructions}\n\n"
+
+                f"### User Question:\n"
+                f"{query}\n\n"
+
+                "### Improved Results:\n"
+                )
 
             # Get the summary for the current chunk
-            # chunk_result = self.query_llm(prompt, system=system, task='full', stream=False, return_type='string')
             chunk_result = self.requests_post_http(prompt, system, temperature=self.temperature, top_p=self.top_p, task='full', stream=False, return_type='string')
-            results_list.append(f"Results {i+1}:\n" + chunk_result)
+            response_list.append(f"Results {i+1}/{len(chunks)}:\n{chunk_result}\n")
 
-        # Final summarization pass over all collected summaries
-        results_total = "\n---\n".join(results_list[-self.chunks['top_chunks']:])
+        if incremental_prompt:
+            # Filter out "N/A" summaries
+            response_list = [s for s in response_list if s.strip() != "N/A"]
+            # Final summarization pass over all collected summaries
+            response_total = "\n\n---\n\n".join(response_list)
 
-        final_prompt = f"""
-        ### Context:
-        {results_total}
+            prompt_final = f"""### Context (results based on {len(chunks)} chunk of text):
+                {response_total}
 
-        ### Task:
-        The context that is given to you contains the output of {len(chunks)} seperate text chunks.
-        Your task is to connect all the parts and make one output that is **coherent** and well-structured.
+                ---
 
-        ### Instructions:
-        - Maintain as much as possible the key insights but ensure logical flow.
-        - Connect insights smoothly while keeping essential details intact.
-        - If repetitions are detected across the parts, combine it.
-        - You are permitted to make few assumptions if it improves the results.
+                ### Task:
+                    The context that is given to you contains the output of {len(chunks)} seperate text chunks.
+                    Your task is to connect all the parts and make one output that is **coherent** and well-structured.
 
-        f"### User Question:\n"
-        {query}\n\n
+                ### Instructions:
+                    - Maintain as much as possible the key insights but ensure logical flow.
+                    - Connect insights smoothly while keeping essential details intact.
+                    - If repetitions are detected across the parts, combine it.
+                    {instructions}
 
-        Begin your response below:
-        """
-        logger.info('Combining all information to create a single coherent output.')
-        # Create the final summary.
-        # final_result = self.query_llm(final_prompt, system=system, return_type='string')
-        final_result= self.requests_post_http(final_prompt, system, temperature=self.temperature, top_p=self.top_p, task='full', stream=False, return_type='string')
+                Begin your response below:
+                """
+            system = "You are a helpfull assistant specialized in combining multiple results that belong together. You are permitted to make assumptions if it improves the results."
+            logger.info('Combining all information to create a single coherent output.')
+            # Create the final summary.
+            final_response = self.requests_post_http(prompt_final, system, temperature=self.temperature, top_p=self.top_p, task='full', stream=False, return_type='string')
+        else:
+            prompt_final = f"""### Context:
+                {response_total}
+
+                ### Task:
+                    Given to you is a text that is compiled after analyzing multiple seperate chunks of text.
+                    Your task is to restructure the text so that it complies with the instructions.
+
+                ### Instructions:
+                    - Maintain as much as possible the key insights but ensure logical flow.
+                    - Connect insights smoothly while keeping essential details intact.
+                    - If repetitions are detected across the parts, combine it.
+                    - If there are vagues expressions, rewrite it to improve the quality.
+                    {instructions}
+
+                Begin your response below:
+                """
+            system = "You are a helpfull assistant specialized in combining multiple results that belong together. You are permitted to make assumptions if it improves the results."
+
+            final_response = self.requests_post_http(prompt_final, system, temperature=self.temperature, top_p=self.top_p, task='full', stream=False, return_type='string')
 
         # Return
-        return final_result
-        # return {'summary': final_result, 'summary_per_chunk': results_total}
-
-
-        #----------------------------
-        # summaries = []
-        # for chunk in chunks:
-        #     # prompt = f"""Context:
-        #     #     {chunk}
-
-        #     #     User question:
-        #     #         {query}
-        #     #     """
-
-        #     # Summarize
-        #     response = qmodel.prompt(query=query, context=chunk, instructions=instructions, system=system, return_type='string')
-        #     # Append
-        #     summaries.append(response)
-        #     # Show
-        #     logger.debug(response)
-
-        # # Final summarization pass over all collected summaries
-        # # Filter out "N/A" summaries
-        # summaries = [s for s in summaries if s.strip() != "N/A"]
-        # summaries_final = "\n\n---\n\n".join(summaries)
-        # # Return
-        # return summaries_final
+        return final_response
+        # return {'response': final_response, 'response_per_chunk': response_total}
 
     def parse_large_document(self, query, context, return_type='string'):
         """Splits large text into chunks and finds the most relevant ones."""
@@ -678,10 +711,10 @@ class LLMlight:
         if context is not None:
             if self.method=='global_reasoning':
                 # Global Reasoning
-                relevant_chunks = self.global_reasoning(query, context)
+                relevant_chunks = self.global_reasoning(query, context, instructions, system, rewrite_query=False)
             elif self.method=='chunk-wise':
                 # Analyze per chunk
-                relevant_chunks = self.analyze_chunk_wise(query, context, instructions, system)
+                relevant_chunks = self.chunk_wise(query, context, instructions, system)
             elif self.method == 'naive_RAG' and np.isin(self.embedding, ['tfidf', 'bow', 'bert', 'bge-small']):
                 # Find the best matching parts using simple retrieval method approach.
                 logger.info(f'[{self.method}] approach is applied with [{self.embedding}] embedding.')
@@ -699,12 +732,12 @@ class LLMlight:
         # Return
         return relevant_chunks
 
-    def set_prompt(self, query, instructions, response_format, context):
+    def set_prompt(self, query, instructions, context, response_format=''):
         # Default and update when context and instructions are available.
         prompt = (
             ("Context:\n" + context + "\n\n" if context else "")
-            + ("Instructions:\n" + instructions + "\n\n" if instructions else "")
-            + ("Response format:\n" + response_format + "\n\n" if response_format else "")
+            + (f"Instructions:\n{instructions}\n\n" if instructions != '' else "")
+            + (f"Response format:\n{response_format}\n\n" if response_format != '' else "")
             + f"User question:\n"
             + query
             )
