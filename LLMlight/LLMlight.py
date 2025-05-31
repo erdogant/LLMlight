@@ -22,11 +22,11 @@ from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from sentence_transformers import SentenceTransformer
 
-# from .RAG import RAG_with_RSE
-# from . import utils
+from .RAG import RAG_with_RSE
+from . import utils
 # DEBUG
-import utils
-from RAG import RAG_with_RSE
+# import utils
+# from RAG import RAG_with_RSE
 
 logger = logging.getLogger(__name__)
 
