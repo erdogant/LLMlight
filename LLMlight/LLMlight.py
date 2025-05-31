@@ -70,25 +70,22 @@ class LLMlight:
         'code'
         'longform'
         'full'
-    chunks: dict : {'type': 'words', 'size': 250, 'n': 5}
+    chunks: dict : {'method': 'chars', 'size': 1000, 'overlap': 250, 'top_chunks': 5}
         type : str
-            'words': Chunks are created using words.
-            'chars': Chunks are created using chars.
-        size : str
-            The chunk size is measured in words. When lower chunk sizes are taken, the cosine similarity will increase in accuracy but the smaller chunk size reduces the input context for the LLM.
-            Note that 1000 words (~10.000 chars) costs ~3000 tokens. Thus with a context window (n_ctx) of 4096 your can set chunk size=100 words with n chunks=10.
-            256: Create chunks every 256 words.
-            512: Create chunks every 512 words.
-        n : int, optional
-            Top scoring chunks to be used in the context of the prompt (all with length chunk size).
+            'chars' or 'words': Chunks are created using chars or words.
+            'size': Chunk length in chars or words.
+                The accuracy increases with smaller chunk sizes. But it also reduces the input context for the LLM.
+                Estimates: 1000 words or ~10.000 chars costs ~3000 tokens.
+                With a context window (n_ctx) of 4096 your can set size=1000 words with n chunks=5 and leave some space for instructions, system and the query.
+            'overlap': overlap between chunks
+            'top_chunks': Retrieval of the top N chunks when performing RAG analysis.
     endpoint : str
         Endpoint of the LLM API
         "http://localhost:1234/v1/chat/completions"
         './models/Hermes-3-Llama-3.2-3B.Q4_K_M.gguf'
         r'C:/Users/username/.lmstudio/models/lmstudio-community/gemma-2-9b-it-GGUF/gemma-2-9b-it-Q4_K_M.gguf'
     n_ctx : int, default: 4096
-        The context window length is determined by the max tokens. A larger number of tokens will ask more cpu/gpu resources.
-        Note that 1000 words (~10.000 chars) costs ~3000 tokens. Thus with a context window (n_ctx) of 4096 your can set chunk size=100 words with n=10.
+        The context window length is determined by the max tokens. A larger number of tokens will ask more cpu/gpu resources. Estimates: 1000 words or ~10.000 chars costs ~3000 tokens.
 
     Examples
     --------
@@ -105,7 +102,7 @@ class LLMlight:
                  temperature=0.7,
                  top_p=1.0,
                  task='full',
-                 chunks={'type': 'words', 'size': 250, 'n': 5},
+                 chunks={'method': 'chars', 'size': 1000, 'overlap': 250, 'top_chunks': 5},
                  endpoint="http://localhost:1234/v1/chat/completions",
                  n_ctx=4096,
                  verbose='info',
@@ -121,8 +118,8 @@ class LLMlight:
         self.task = task
         self.method = method
         self.embedding = embedding
-        if chunks is None: chunks = {'type': 'words', 'size': None, 'n': None}
-        self.chunks = {**{'type': 'words', 'size': 250, 'n': 5}, **chunks}
+        if chunks is None: chunks = {}
+        self.chunks = {**{'method': 'chars', 'size': 1000, 'overlap': 250, 'top_chunks': 5}, **chunks}
         self.n_ctx = n_ctx
         self.context = None
 
@@ -352,9 +349,6 @@ class LLMlight:
         - The query can for example be to summarize the text or to extract key insights.
 
         """
-        chunks = {**{'type': 'words', 'size': None, 'n': None}, **chunks}
-        if chunks['size'] is None: chunks['size'] = self.chunks['size']
-        if chunks['type'] is None: chunks['type'] = self.chunks['type']
         if system is None:
             logger.error('system can not be None. <return>')
             return
@@ -371,7 +365,7 @@ class LLMlight:
         logger.info(f'Processing the document for the given task..')
 
         # Create chunks based on words
-        chunks = utils.chunk_text(context, chunks['size'], method=chunks['type'])
+        chunks = utils.chunk_text(context, method=self.chunks['method'], chunk_size=self.chunks['size'], overlap=self.chunks['overlap'])
 
         # Build a structured prompt that includes all previous summaries
         results_list = []
@@ -379,7 +373,7 @@ class LLMlight:
             logger.info(f'Working on text chunk {i}/{len(chunks)}')
 
             # Keep last N summaries for context (this needs to be within the context-window otherwise it will return an error.)
-            previous_results = "\n---\n".join(results_list[-self.chunks['n']:])
+            previous_results = "\n---\n".join(results_list[-self.chunks['top_chunks']:])
 
             prompt = (
             "### Context:\n"
@@ -403,7 +397,7 @@ class LLMlight:
             results_list.append(f"Results {i+1}:\n" + chunk_result)
 
         # Final summarization pass over all collected summaries
-        results_total = "\n---\n".join(results_list[-self.chunks['n']:])
+        results_total = "\n---\n".join(results_list[-self.chunks['top_chunks']:])
         final_prompt = f"""
         ### Context:
         {results_total}
@@ -505,17 +499,113 @@ class LLMlight:
         # Return
         return summaries_final
 
+    def analyze_chunk_wise(self, query, context, instructions, system):
+        """Chunk-wise.
+            1. Break the document into manageable chunks with overlapping parts to make sure we do not miss out.
+            2. Analyze each chunk following the instructions and system
+            3. Take the summarized outputs and aggregate them.
+        """
+        # Initialize model for question refinement and summarization
+        # qmodel = LLMlight(modelname=self.modelname, temperature=0.7, endpoint=self.endpoint, method=None, embedding=None)
 
-    def parse_large_document(self, query, context, top_chunks=3, chunk_size=512, return_type='string'):
+        # Create chunks with overlapping parts to make sure we do not miss out
+        chunks = utils.chunk_text(context, method=self.chunks['method'], chunk_size=self.chunks['size'], overlap=self.chunks['overlap'])
+
+        # Build a structured prompt that includes all previous summaries
+        results_list = []
+        for i, chunk in enumerate(chunks):
+            logger.info(f'Working on text chunk {i}/{len(chunks)}')
+
+            # Keep last N summaries for context (this needs to be within the context-window otherwise it will return an error.)
+            # previous_results = "\n---\n".join(results_list[-self.chunks['top_chunks']:])
+            if len(results_list)>0:
+                previous_results = results_list[-1]
+
+            prompt = (
+            "### Context:\n"
+            + (f"Previous result:\n{results_list[-1]}\n" if len(results_list) > 0 else "Previous result: No results because it is the initial chunk.")
+
+            + "\n---\nNew text chunk (Part of a larger document, maintain context):\n"
+            + f"{chunk}\n\n"
+
+            "### Instructions:\n"
+            + "- Follow the underneath instructions for the **new text chunk** while maintaining coherence with the **previous result**.\n"
+            + f"{instructions}\n\n"
+
+            f"### User Question:\n"
+            f"{query}\n\n"
+
+            "### Improved Results:\n"
+            )
+
+            # Get the summary for the current chunk
+            chunk_result = self.query_llm(prompt, system=system)
+            results_list.append(f"Results {i+1}:\n" + chunk_result)
+
+        # Final summarization pass over all collected summaries
+        results_total = "\n---\n".join(results_list[-self.chunks['top_chunks']:])
+
+        final_prompt = f"""
+        ### Context:
+        {results_total}
+
+        ### Task:
+        The context that is given to you contains the output of {len(chunks)} seperate text chunks.
+        Your task is to connect all the parts and make one output that is **coherent** and well-structured.
+
+        ### Instructions:
+        - Maintain as much as possible the key insights but ensure logical flow.
+        - Connect insights smoothly while keeping essential details intact.
+        - If repetitions are detected across the parts, combine it.
+        - You are permitted to make few assumptions if it improves the results.
+
+        f"### User Question:\n"
+        {query}\n\n
+
+        Begin your response below:
+        """
+        logger.info('Combining all information to create a single coherent output.')
+        # Create the final summary.
+        final_result = self.query_llm(final_prompt, system=system, return_type='string')
+        # Return
+        return final_result
+        # return {'summary': final_result, 'summary_per_chunk': results_total}
+
+
+        #----------------------------
+        # summaries = []
+        # for chunk in chunks:
+        #     # prompt = f"""Context:
+        #     #     {chunk}
+
+        #     #     User question:
+        #     #         {query}
+        #     #     """
+
+        #     # Summarize
+        #     response = qmodel.prompt(query=query, context=chunk, instructions=instructions, system=system, return_type='string')
+        #     # Append
+        #     summaries.append(response)
+        #     # Show
+        #     logger.debug(response)
+
+        # # Final summarization pass over all collected summaries
+        # # Filter out "N/A" summaries
+        # summaries = [s for s in summaries if s.strip() != "N/A"]
+        # summaries_final = "\n\n---\n\n".join(summaries)
+        # # Return
+        # return summaries_final
+
+    def parse_large_document(self, query, context, return_type='string'):
         """Splits large text into chunks and finds the most relevant ones."""
         # Create chunks
-        chunks = utils.chunk_text(context, chunk_size=chunk_size, method='words')
+        chunks = utils.chunk_text(context, method=self.chunks['method'], chunk_size=self.chunks['size'], overlap=self.chunks['overlap'])
         # Embedding
         query_vector, chunk_vectors = self.fit_transform(query, chunks)
         # Compute similarity
         similarities = cosine_similarity(query_vector, chunk_vectors)[0]
         # Get top scoring chunks
-        if top_chunks is None: top_chunks = len(similarities)
+        if self.chunks['top_chunks'] is None: top_chunks = len(similarities)
         top_indices = np.argsort(similarities)[-top_chunks:][::-1]
 
         # Join relevant chunks and send as prompt
@@ -553,21 +643,25 @@ class LLMlight:
         return query_vector, chunk_vectors
 
 
-    def relevant_text_retrieval(self, query, context):
+    def relevant_text_retrieval(self, query, context, instructions, system):
         # Create advanced prompt using relevant chunks of text, the input query and instructions
         if context is not None:
             if self.method=='global_reasoning':
                 # Global Reasoning
                 relevant_chunks = self.global_reasoning(query, context)
+            elif self.method=='chunk-wise':
+                # Analyze per chunk
+                relevant_chunks = self.analyze_chunk_wise(query, context, instructions, system)
             elif self.method == 'naive_RAG' and np.isin(self.embedding, ['tfidf', 'bow', 'bert', 'bge-small']):
                 # Find the best matching parts using simple retrieval method approach.
                 logger.info(f'[{self.method}] approach is applied with [{self.embedding}] embedding.')
-                relevant_chunks = self.parse_large_document(query, context, chunk_size=self.chunks['size'], top_chunks=self.chunks['n'], return_type='string')
+                relevant_chunks = self.parse_large_document(query, context, return_type='string')
             elif self.method == 'RSE' and np.isin(self.embedding, ['bert', 'bge-small']):
                 logger.info(f'RAG approach [{self.method}] is applied.')
                 relevant_chunks = RAG_with_RSE(context, query, label=None, chunk_size=self.chunks['size'], irrelevant_chunk_penalty=0, embedding=self.embedding, device='cpu', batch_size=32)
             else:
-                logger.info(f'No chunking: The entire text is used as context.')
+                logger.info(f'No method is applied: The entire context is used.')
+                relevant_chunks = context
         else:
             # Default
             relevant_chunks = context

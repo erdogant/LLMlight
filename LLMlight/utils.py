@@ -10,16 +10,16 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 
-def chunk_text(text, chunk_size=512, overlap=0, method='chars'):
+def chunk_text(text, method='chars', chunk_size=512, overlap=0):
     """
     Split text into non-overlapping chunks.
     For RSE, we typically want non-overlapping chunks so we can reconstruct segments properly.
 
     Args:
         text (str): Input text to chunk
+        method (str): Chunk on either 'chars' or 'words'
         chunk_size (int): Size of each chunk in characters
         overlap (int): Overlap between chunks in characters
-        method (str): Chunk on either 'chars' or 'words'
 
     Returns:
         List[str]: List of text chunks
