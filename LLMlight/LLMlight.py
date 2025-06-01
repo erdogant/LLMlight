@@ -52,11 +52,14 @@ class LLMlight:
     system : str
         String of the system message.
         "I am a helpfull assistant"
+    preprocessing : str
+         None:              No pre-processing is performed. The original context is used in the pipeline of method, embedding and the response.
+        'chunk-wise':       In case you have a very large document. The text will be analyze chunkwise based on the query, instructions and system. The total set of answered-chunks is then returned. The normal pipeline proceeds for the query, instructions, system etc.
+        'global-reasoning': In case you have a very large document. The text will be summarized per chunk globally. The total set of summarized context is then returned. The normal pipeline proceeds for the query, instructions, system etc.
     method : str
-        'chunk-wise':       Ideal when context is too long. Chunks of text are created. Each chunk is analyzed and answered seperately. The total set of answers is combined into one part.
+         None:              No processing is performed. The entire context is used for the query.
         'naive_RAG':        Ideal for chats and when you need to answer specfic questions: Chunk of text are created. Use cosine similarity to for ranking. The top scoring chunks will be combined (n chunks) and used as input with the prompt.
-        'global_reasoning': Apply a a two steps proces, first each chunk is summarized. The total combined summarized context is then used as the new context for the user question following the rest of the pipeline.
-        'RSE': Identify and extract entire segments of relevant text.
+        'RSE':              Identify and extract entire segments of relevant text.
     embedding : str
         None
         'tfidf': Best use when it is a structured documents and the words in the queries are matching.
@@ -67,12 +70,6 @@ class LLMlight:
         Sampling temperature (default is 0.7).
     top_p : float, optional
         Top-p (nucleus) sampling parameter (default is 1.0, no filtering).
-    task (str): The use case for generation. (default: 'full')
-        'summarization'
-        'chat'
-        'code'
-        'longform'
-        'full'
     chunks: dict : {'method': 'chars', 'size': 1000, 'overlap': 250, 'top_chunks': 5}
         type : str
             'chars' or 'words': Chunks are created using chars or words.
@@ -100,11 +97,11 @@ class LLMlight:
     """
     def __init__(self,
                  modelname="hermes-3-llama-3.2-3b",
+                 preprocessing=None,
                  method='naive_RAG',
                  embedding='bert',
                  temperature=0.7,
                  top_p=1.0,
-                 task='full',
                  chunks={'method': 'chars', 'size': 1000, 'overlap': 250, 'top_chunks': 5},
                  endpoint="http://localhost:1234/v1/chat/completions",
                  n_ctx=4096,
@@ -115,12 +112,12 @@ class LLMlight:
         set_logger(verbose)
         # Store data in self
         self.modelname = modelname
-        self.endpoint = endpoint
-        self.temperature = temperature
-        self.top_p = top_p
-        self.task = task
+        self.preprocessing = preprocessing
         self.method = method
         self.embedding = embedding
+        self.temperature = temperature
+        self.top_p = top_p
+        self.endpoint = endpoint
         if chunks is None: chunks = {}
         self.chunks = {**{'method': 'chars', 'size': 1000, 'overlap': 250, 'top_chunks': 5}, **chunks}
         self.n_ctx = n_ctx
@@ -241,14 +238,22 @@ class LLMlight:
         if context is None: context = self.context
         # if embedding is not None: self.embedding = embedding
         if isinstance(context, dict): context = '\n\n'.join(context.values())
-        # if self.method=='global_reasoning' and context is None:
-            # logger.error('Context must be provided when using method="global_reasoning"')
-            # return None
+
+        # task (str): The use case for generation. (default: 'full')
+        #     'summarization'
+        #     'chat'
+        #     'code'
+        #     'longform'
+        #     'full'
+        # task = set_task(self.preprocessing, self.method)
+        self.task = 'full'
 
         # Set system message
         system = set_system_message(system)
+        # Preprocessing on the context
+        processed_context = self.compute_preprocessing(query, context, instructions, system)
         # Extract relevant text using retrieval method
-        relevant_context = self.relevant_text_retrieval(query, context, instructions, system)
+        relevant_context = self.relevant_text_retrieval(query, processed_context, instructions, system)
         # Set the prompt
         prompt = self.set_prompt(query, instructions, relevant_context, response_format=response_format)
 
@@ -464,7 +469,7 @@ class LLMlight:
     #     # Return
     #     return response
 
-    def global_reasoning(self, query, context, instructions, system, return_per_chunk=False, rewrite_query=True, stream=False):
+    def global_reasoning(self, query, context, instructions, system, return_per_chunk=False, rewrite_query=False, stream=False):
         """Global Reasoning.
             1. Rewrite the input user question into something like: "Based on the extracted summaries, does the document explain the societal relevance of the research? Justify your answer."
             2. Break the document into manageable chunks with overlapping parts to make sure we do not miss out.
@@ -505,7 +510,8 @@ class LLMlight:
 
             ### Instructions:
                 You are an expert summarizer. For the given chunk of text:
-                - Extract all **key points, decisions, facts, actions, and stakeholders** mentioned.
+                - Extract all **key points, decisions, facts, and actions**.
+                - Ensure your analysis captures important ideas, implications, or patterns.
                 - Preserve the **logical flow** and **chronological order**.
                 - **Avoid repetition** or superficial statements.
                 - Focus on **explicit and implicit information** that could be relevant in the full document.
@@ -581,9 +587,6 @@ class LLMlight:
         for i, chunk in enumerate(tqdm(chunks, desc="Processing chunks", unit="chunk")):
             logger.info(f'Working on text chunk {i+1}/{len(chunks)}')
 
-            # Keep last N summaries for context (this needs to be within the context-window otherwise it will return an error.)
-            top_chunks = 1
-
             if top_chunks > 0:
                 previous_results = '\n\n---\n\n'.join(response_list[-top_chunks:])
                 prompt = f"""### Context:
@@ -616,9 +619,6 @@ class LLMlight:
                 ### Instructions:
                 Carefully analyze the above chunk in isolation while considering that it is part of a broader document. Apply the following instructions to this specific chunk:
                 {instructions}
-
-                - Ensure your analysis captures important ideas, implications, or patterns.
-                - Use bullet points or short paragraphs if applicable.
                 - Avoid repetition and irrelevant details.
                 - Be clear and concise so this output can later be integrated with others.
 
@@ -639,7 +639,8 @@ class LLMlight:
         # Filter out "N/A" summaries
         response_list = [s for s in response_list if s.strip() != "N/A" and not any(err in s.strip()[:30] for err in ("400", "404"))]
         # Combine all results
-        response_total = "\n\n---\n\n".join([f"### Summary {i+1}:\n{s}" for i, s in enumerate(response_list)])
+        response_total = "\n\n---\n\n".join([f"### Chunk {i+1}:\n{s}" for i, s in enumerate(response_list)])
+        # Return all chunk information
         if return_per_chunk:
             return response_total
 
@@ -748,39 +749,51 @@ class LLMlight:
             raise ValueError("Unsupported embedding method. Choose a supported embedding method.")
         return query_vector, chunk_vectors
 
+    def compute_preprocessing(self, query, context, instructions, system):
+        # Create advanced prompt using relevant chunks of text, the input query and instructions
+        if context is not None:
+            if self.preprocessing=='global-reasoning':
+                # Global Reasoning
+                relevant_context = self.global_reasoning(query, context, instructions, system, rewrite_query=False, return_per_chunk=True)
+            elif self.preprocessing=='chunk-wise':
+                # Analyze per chunk
+                relevant_context = self.chunk_wise(query, context, instructions, system, top_chunks=0, return_per_chunk=True)
+            else:
+                logger.info(f'No method is applied: The entire context is used.')
+                relevant_context = context
+        else:
+            # Default
+            relevant_context = context
+
+        # Return
+        return relevant_context
 
     def relevant_text_retrieval(self, query, context, instructions, system):
         # Create advanced prompt using relevant chunks of text, the input query and instructions
         if context is not None:
-            if self.method=='global_reasoning':
-                # Global Reasoning
-                relevant_chunks = self.global_reasoning(query, context, instructions, system, rewrite_query=False)
-            elif self.method=='chunk-wise':
-                # Analyze per chunk
-                relevant_chunks = self.chunk_wise(query, context, instructions, system)
-            elif self.method == 'naive_RAG' and np.isin(self.embedding, ['tfidf', 'bow', 'bert', 'bge-small']):
+            if self.method == 'naive_RAG' and np.isin(self.embedding, ['tfidf', 'bow', 'bert', 'bge-small']):
                 # Find the best matching parts using simple retrieval method approach.
                 logger.info(f'[{self.method}] approach is applied with [{self.embedding}] embedding.')
-                relevant_chunks = self.parse_large_document(query, context, return_type='string')
+                relevant_context = self.parse_large_document(query, context, return_type='string')
             elif self.method == 'RSE' and np.isin(self.embedding, ['bert', 'bge-small']):
                 logger.info(f'RAG approach [{self.method}] is applied.')
-                relevant_chunks = RAG_with_RSE(context, query, label=None, chunk_size=self.chunks['size'], irrelevant_chunk_penalty=0, embedding=self.embedding, device='cpu', batch_size=32)
+                relevant_context = RAG_with_RSE(context, query, label=None, chunk_size=self.chunks['size'], irrelevant_chunk_penalty=0, embedding=self.embedding, device='cpu', batch_size=32)
             else:
                 logger.info(f'No method is applied: The entire context is used.')
-                relevant_chunks = context
+                relevant_context = context
         else:
             # Default
-            relevant_chunks = context
+            relevant_context = context
 
         # Return
-        return relevant_chunks
+        return relevant_context
 
     def set_prompt(self, query, instructions, context, response_format=''):
         # Default and update when context and instructions are available.
         prompt = (
             ("Context:\n" + context + "\n\n" if context else "")
             + (f"Instructions:\n{instructions}\n\n" if instructions != '' else "")
-            + (f"Response format:\n{response_format}\n\n" if response_format != '' else "")
+            + (f"Response format:\n{response_format}\n\n" if (response_format != '') and (response_format is not None) else "")
             + f"User question:\n"
             + query
             )
@@ -910,6 +923,7 @@ def compute_tokens(string, n_ctx=4096, task='full'):
     used_tokens = len(tokens)
     # Determine how many tokens are available for the model to generate
     max_tokens = compute_max_tokens(used_tokens, n_ctx=n_ctx, task=task)
+    logger.info(f"Used_tokens={used_tokens}, max_tokens={max_tokens}, context_limit={n_ctx}")
     return used_tokens, max_tokens
 
 
