@@ -29,6 +29,7 @@ dependencies = [
     'json-repair',
     'pymupdf',
     'torch',
+    'requests',
     # 'accelerate',
     # 'bitsandbytes',
     # 'flash_attn',

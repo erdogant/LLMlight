@@ -7,3 +7,4 @@ accelerate
 bitsandbytes
 flash_attn
 torch
+requests
