@@ -5,10 +5,95 @@
 from LLMlight import LLMlight
 
 # Initialize with default settings
-model = LLMlight()
+# model = LLMlight()
 
 # Run a simple query
-response = model.prompt('What is the capital of France?', system="You are a helpful assistant.")
+# response = model.prompt('What is the capital of France?', system="You are a helpful assistant.")
+
+#%%
+system = """Je bent een Nederlandse AI-assistent gespecialiseerd in het omzetten van
+transcripties naar gestructureerde en overzichtelijke notulen. Jouw taak is om van een
+transcriptie een professioneel verslag te maken, zelfs als de transcriptie afkomstig is
+van automatische spraak-naar-tekst software en fouten kan bevatten. Je mag aannames maken
+indien het de kwaliteit van de output zal verbeteren.
+"""
+
+query = """Je ontvangt een transcriptie van de gebruiker als input. Zet deze direct om in volledig
+gestructureerde en gepolijste notulen volgens de bovenstaande richtlijnen.
+Wanneer je klaar bent, geef je alleen het uiteindelijke verslag als output, zonder verdere uitleg.
+"""
+
+instructions = """Bij het verwerken van de transcriptie, houd je rekening met het volgende:
+    1. **Corrigeren van fouten:** Je corrigeert duidelijke fouten in de transcriptie (zoals
+    verkeerde woorden, grammaticale fouten en onduidelijke zinnen) op basis van de context.
+    Als iets onzeker blijft, markeer je dit met '[?]'.
+    2. **Heldere structuur:** Je formatteert de notulen volgens de volgende opbouw:
+       - **Titel en datum van de bijeenkomst** (haal dit uit de context van de
+       transcriptie, indien mogelijk, anders laat het leeg).
+       - **Aanwezigen en afwezigen** (indien vermeld).
+       - **Samenvatting:** Een beknopte samenvatting van de belangrijkste besproken
+       onderwerpen en uitkomsten.
+       - **Details per agendapunt:** Geef de belangrijkste punten en discussies weer per
+       onderwerp.
+       - **Actiepunten en besluiten:** Noteer actiepunten en besluiten genummerd en
+       duidelijk geordend.
+    3. **Samenvatten en structureren:** Behoud de kern van de informatie, verwijder
+    irrelevante details en vermijd herhaling. Gebruik bondige, professionele taal.
+    4. **Neutraliteit:** Schrijf in een objectieve, neutrale toon en geef geen subjectieve
+    interpretaties.
+    5. **Tijdsaanduidingen:** Voeg waar nodig tijdsaanduidingen toe om de volgorde van de
+    bespreking te verduidelijken. Laat irrelevante tijdsaanduidingen weg.
+    6. De context is in het Nederlands en de output zal jij ook schrijven in het Nederlands.
+    """
+
+
+from LLMlight import LLMlight
+modelname = 'deepseek-r1-0528-qwen3-8b'
+modelname = 'hermes-3-llama-3.2-3b'
+
+preprocessing='global-reasoning',
+preprocessing='chunk-wise'
+
+model = LLMlight(modelname=modelname,
+                 preprocessing=preprocessing,
+                 method=None,
+                 temperature=0.8,
+                 top_p=1,
+                 chunks={'type': 'chars', 'size': 8192, 'overlap': 2000},
+                 n_ctx=16384,
+                 verbose='debug',
+                 )
+
+# Run model
+response = model.prompt(query,
+                   instructions=instructions,
+                   context=context,
+                   system=system,
+                   stream=False,
+                   )
+print(response)
+
+
+#%%
+# Run model
+response2 = model.global_reasoning(query,
+                   context=context,
+                   instructions=instructions,
+                   system=system,
+                   return_per_chunk=False,
+                   stream=False,
+                   )
+print(response2)
+
+# Run model
+response3 = model.chunk_wise(query,
+                   context=context,
+                   instructions=instructions,
+                   system=system,
+                   return_per_chunk=False,
+                   stream=False,
+                   )
+print(response3)
 
 # %%
 from LLMlight import LLMlight
@@ -19,7 +104,7 @@ model.check_logger()
 #%% Available models
 from LLMlight import LLMlight
 model = LLMlight(verbose='info')
-modelnames = model.get_available_models(validate=True)
+modelnames = model.get_available_models(validate=False)
 
 # %%
 for modelname in modelnames:

@@ -3,7 +3,7 @@ from LLMlight.LLMlight import LLMlight
 
 __author__ = 'Erdogan Tasksen'
 __email__ = 'erdogant@gmail.com'
-__version__ = '0.1.0'
+__version__ = '0.2.0'
 
 # Setup root logger
 _logger = logging.getLogger('LLMlight')
