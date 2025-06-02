@@ -143,16 +143,14 @@ class LLMlight:
 
     def get_available_models(self, validate=False):
         # Set your local API base URL
-        # base_url = "http://localhost:1234/v1"
-        base_url = self.endpoint.split("/chat")[0]
+        # base_url = 'http://localhost:1234/v1/chat/completions'
+        base_url = '/'.join(self.endpoint.split('/')[:3]) + '/'
         logger.info('Collecting models in the API endpoint..')
 
-        # Query available models
-        response = requests.get(f"{base_url}/models")
-        model_dict = {}
-
         try:
-            response = requests.get("http://localhost:1234/v1/models", timeout=10)
+            model_url = base_url.rstrip('/') + '/v1/models'
+            logger.info(f'Looking up models: {model_url}')
+            response = requests.get(model_url, timeout=10)
             if response.status_code == 200:
                 try:
                     models = response.json()["data"]
