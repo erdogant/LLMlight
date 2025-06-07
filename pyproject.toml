@@ -30,6 +30,7 @@ dependencies = [
     'pymupdf',
     'torch',
     'requests',
+    'memvid',
     # 'accelerate',
     # 'bitsandbytes',
     # 'flash_attn',
