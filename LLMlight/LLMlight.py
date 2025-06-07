@@ -24,6 +24,7 @@ from sentence_transformers import SentenceTransformer
 
 from .RAG import RAG_with_RSE
 from . import utils
+
 # DEBUG
 # import utils
 # from RAG import RAG_with_RSE
@@ -44,7 +45,7 @@ class LLMlight:
 
     Parameters
     ----------
-    modelname : str
+    model : str
         'hermes-3-llama-3.2-3b'
         'mistral-7b-grok'
         'openhermes-2.5-mistral-7b'
@@ -52,12 +53,8 @@ class LLMlight:
     system : str
         String of the system message.
         "I am a helpfull assistant"
-    preprocessing : str
-         None:              No pre-processing is performed. The original context is used in the pipeline of method, embedding and the response.
-        'chunk-wise':       In case you have a very large document. The text will be analyze chunkwise based on the query, instructions and system. The total set of answered-chunks is then returned. The normal pipeline proceeds for the query, instructions, system etc.
-        'global-reasoning': In case you have a very large document. The text will be summarized per chunk globally. The total set of summarized context is then returned. The normal pipeline proceeds for the query, instructions, system etc.
     method : str
-         None:              No processing is performed. The entire context is used for the query.
+         None:              No processing. The entire context is used for the query.
         'naive_RAG':        Ideal for chats and when you need to answer specfic questions: Chunk of text are created. Use cosine similarity to for ranking. The top scoring chunks will be combined (n chunks) and used as input with the prompt.
         'RSE':              Identify and extract entire segments of relevant text.
     embedding : str
@@ -66,8 +63,15 @@ class LLMlight:
         'bow': Bag of words approach. Best use when you expect words in the document and queries to be matching.
         'bert': Best use when document is more free text and the queries may not match exactly the words or sentences in the document.
         'bge-small':
+    preprocessing : str
+         None:              No pre-processing. The original context is used in the pipeline of method, embedding and the response.
+        'chunk-wise':       The input context will be analyze chunkwise based on the query, instructions and system. The total set of answered-chunks is then returned. The normal pipeline proceeds for the query, instructions, system etc.
+        'global-reasoning': The input context will be summarized per chunk globally. The total set of summarized context is then returned. The normal pipeline proceeds for the query, instructions, system etc.
     temperature : float, optional
-        Sampling temperature (default is 0.7).
+        Sampling temperature.
+        0.7: (default)
+        0: Deterministic
+        1: Stochastic (max)
     top_p : float, optional
         Top-p (nucleus) sampling parameter (default is 1.0, no filtering).
     chunks: dict : {'method': 'chars', 'size': 1000, 'overlap': 250, 'top_chunks': 5}
@@ -89,29 +93,31 @@ class LLMlight:
 
     Examples
     --------
-    >>> model = LLMlight()
-    >>> model.prompt('hello, who are you?')
+    >>> # Examples
+    >>> from LLMlight import LLMlight
+    >>> client =  LLMlight()
+    >>> client.prompt('hello, who are you?')
     >>> system_message = "You are a helpful assistant."
-    >>> response = model.prompt('What is the capital of France?', system=system_message, top_p=0.9)
+    >>> response = client.prompt('What is the capital of France?', system=system_message, top_p=0.9)
 
     """
     def __init__(self,
-                 modelname="hermes-3-llama-3.2-3b",
-                 preprocessing=None,
-                 method='naive_RAG',
-                 embedding='bert',
-                 temperature=0.7,
-                 top_p=1.0,
-                 chunks={'method': 'chars', 'size': 1000, 'overlap': 250, 'top_chunks': 5},
-                 endpoint="http://localhost:1234/v1/chat/completions",
-                 n_ctx=4096,
-                 verbose='info',
+                 model: str = "hermes-3-llama-3.2-3b",
+                 method: str = 'naive_RAG',
+                 embedding: str = 'bert',
+                 preprocessing: str = None,
+                 temperature: float = 0.7,
+                 top_p: (int, float) = 1.0,
+                 chunks: dict = {'method': 'chars', 'size': 1000, 'overlap': 250, 'top_chunks': 5},
+                 endpoint: str = "http://localhost:1234/v1/chat/completions",
+                 n_ctx: int = 4096,
+                 verbose: (str, int) = 'info',
                  ):
 
         # Set the logger
         set_logger(verbose)
         # Store data in self
-        self.modelname = modelname
+        self.model = model
         self.preprocessing = preprocessing
         self.method = method
         self.embedding = embedding
@@ -122,6 +128,7 @@ class LLMlight:
         self.chunks = {**{'method': 'chars', 'size': 1000, 'overlap': 250, 'top_chunks': 5}, **chunks}
         self.n_ctx = n_ctx
         self.context = None
+        self.memory = None
 
         # Set the correct name for the model.
         if embedding == 'bert':
@@ -134,67 +141,19 @@ class LLMlight:
         if os.path.isfile(self.endpoint):
             self.llm = load_local_gguf_model(self.endpoint, n_ctx=self.n_ctx)
 
-    def check_logger(self):
-        """Check the verbosity."""
-        logger.debug('DEBUG')
-        logger.info('INFO')
-        logger.warning('WARNING')
-        logger.critical('CRITICAL')
-
-    def get_available_models(self, validate=False):
-        # Set your local API base URL
-        # base_url = 'http://localhost:1234/v1/chat/completions'
-        base_url = '/'.join(self.endpoint.split('/')[:3]) + '/'
-        logger.info('Collecting models in the API endpoint..')
-
-        try:
-            model_url = base_url.rstrip('/') + '/v1/models'
-            logger.info(f'Looking up models: {model_url}')
-            response = requests.get(model_url, timeout=10)
-            if response.status_code == 200:
-                try:
-                    models = response.json()["data"]
-                    model_dict = {model["id"]: model for model in models}
-                except (KeyError, ValueError) as e:
-                    logger.error("Error parsing model data:", e)
-            else:
-                logger.warning("Request failed with status code:", response.status_code)
-                logger.warning("Response:", response.text)
-
-        except requests.exceptions.RequestException as e:
-            logger.error("Request error:", e)
-
-        # Check each model whether it returns a response
-        if validate:
-            logger.info("Validating models:")
-            keys = copy.deepcopy(list(model_dict.keys()))
-
-            for key in keys:
-                from LLMlight import LLMlight
-                llm = LLMlight(modelname=key)
-                response = llm.prompt('What is the capital of France?', system="You are a helpful assistant.", return_type='string')
-                response = response[0:30].replace('\n', ' ').replace('\r', ' ').lower()
-                if 'error: 404' in response:
-                    logger.error(f"{llm.modelname}: {response}")
-                    model_dict.pop(key)
-                else:
-                    logger.info(f"{llm.modelname}: {response}")
-
-        return list(model_dict.keys())
-
     def prompt(self,
-            query,
-            instructions=None,
-            system=None,
-            context=None,
-            response_format=None,
-            temperature=None,
-            top_p=None,
-            stream=False,
-            return_type='string',
-            ):
-        """
-        Run the model with the provided parameters.
+               query,
+               instructions=None,
+               system=None,
+               context=None,
+               response_format=None,
+               temperature=None,
+               top_p=None,
+               stream=False,
+               return_type='string',
+               ):
+        """Run the model with the provided parameters.
+
         The final prompt is created based on the query, instructions, and the context
 
         Parameters
@@ -228,7 +187,7 @@ class LLMlight:
         str
             The model's response or an error message if the request fails.
         """
-        logger.info(f'{self.modelname} is loaded..')
+        logger.info(f'{self.model} is loaded..')
         headers = {"Content-Type": "application/json"}
 
         if temperature is None: temperature = self.temperature
@@ -272,7 +231,7 @@ class LLMlight:
         # Prepare messages
         messages = [{"role": "system", "content": system}, {"role": "user", "content": prompt}]
         # Convert messages to string prompt
-        prompt = convert_prompt(messages, modelname=self.modelname)
+        prompt = convert_messages_to_model(messages, model=self.model)
         # Compute tokens
         used_tokens, max_tokens = compute_tokens(prompt, n_ctx=self.n_ctx, task=task)
 
@@ -295,19 +254,24 @@ class LLMlight:
         # Return
         return response
 
-    def requests_post_http(self, prompt, system, temperature=0.8, top_p=1, headers=None, task='full', stream=False, return_type='string'):
+    def requests_post_http(self, prompt, system, temperature=0.8, top_p=1, headers=None, task='full', stream=False, return_type='string', max_tokens=None):
         # Prepare data for request.
         if headers is None: headers = {"Content-Type": "application/json"}
         # Prepare messages
         messages = [{"role": "system", "content": system}, {"role": "user", "content": prompt}]
+
+        # Convert messages to string prompt
+        prompt = convert_messages_to_model(messages, model=self.model)
+
         # Create full prompt
         prompt = messages[0]['content'] + messages[1]['content']
         # Compute tokens
-        used_tokens, max_tokens = compute_tokens(prompt, n_ctx=self.n_ctx, task=task)
-        logger.info(f'Running {self.modelname} with max tokens: {max_tokens}')
+        if max_tokens is None:
+            used_tokens, max_tokens = compute_tokens(prompt, n_ctx=self.n_ctx, task=task)
+        logger.info(f'Generating response with {self.model}')
 
         data = {
-            "model": self.modelname,
+            "model": self.model,
             "messages": messages,
             "temperature": temperature,
             "top_p": top_p,
@@ -453,7 +417,7 @@ class LLMlight:
     #     used_tokens, max_tokens = compute_tokens(prompt, n_ctx=self.n_ctx, task=task)
 
     #     data = {
-    #         "model": self.modelname,
+    #         "model": self.model,
     #         "messages": messages,
     #         "temperature": self.temperature,
     #         "top_p": self.top_p,
@@ -488,7 +452,7 @@ class LLMlight:
             Only return the new question with no other information.
             """
             # Initialize model for question refinement and summarization
-            qmodel = LLMlight(modelname=self.modelname, temperature=0.7, endpoint=self.endpoint)
+            qmodel = LLMlight(model=self.model, temperature=0.7, endpoint=self.endpoint)
             # Create new query
             new_query = qmodel.prompt(query=query, instructions=instructions)
         else:
@@ -710,7 +674,12 @@ class LLMlight:
         # Compute similarity
         similarities = cosine_similarity(query_vector, chunk_vectors)[0]
         # Get top scoring chunks
-        if self.chunks['top_chunks'] is None: top_chunks = len(similarities)
+        if self.chunks['top_chunks'] is None:
+            top_chunks = len(similarities)
+            logger.info('Number of top chunks selected is set to: {top_chunks}')
+        else:
+            top_chunks = self.chunks['top_chunks']
+
         top_indices = np.argsort(similarities)[-top_chunks:][::-1]
 
         # Join relevant chunks and send as prompt
@@ -822,14 +791,93 @@ class LLMlight:
             logger.warning(f'{filepath} does not exist.')
             self.context = None
 
+    def get_available_models(self, validate=False):
+        """Retrieve available models from the configured API endpoint.
 
-def convert_prompt(messages, modelname='llama', add_assistant_start=True):
+        Optionally validates each model by sending a test prompt and filtering out
+        models that return a 404 error or similar failure response.
+
+        Parameters
+        ----------
+        validate : bool, optional
+            If True, each model is tested with a prompt to ensure it can respond correctly.
+            Models that fail validation (e.g., return a 404 error) are excluded from the result.
+
+        Returns
+        -------
+        list of str
+            A list of model identifiers (e.g., `"llama3"`, `"gpt-4"`) that are available and valid.
+
+        Examples
+        --------
+        >>> # Import library
+        >>> from LLMlight import LLMlight
+        <<< # Initialize
+        >>> client = LLMlight(endpoint='http://localhost:1234/v1/chat/completions', verbose='info')
+        >>> # Get models
+        >>> models = client.get_available_models(validate=False)
+        >>> # Print
+        >>> print(models)
+        >>> ['llama3', 'mistral-7b']
+
+        Notes
+        -----
+        - Requires an accessible endpoint and valid API response.
+        - Relies on the `LLMlight` class for validation (must be importable).
+        """
+        base_url = '/'.join(self.endpoint.split('/')[:3]) + '/'
+        logger.info('Collecting models in the API endpoint..')
+
+        try:
+            model_url = base_url.rstrip('/') + '/v1/models'
+            logger.info(f'Looking up models: {model_url}')
+            response = requests.get(model_url, timeout=10)
+            if response.status_code == 200:
+                try:
+                    models = response.json()["data"]
+                    model_dict = {model["id"]: model for model in models}
+                except (KeyError, ValueError) as e:
+                    logger.error("Error parsing model data:", e)
+            else:
+                logger.warning("Request failed with status code:", response.status_code)
+                logger.warning("Response:", response.text)
+
+        except requests.exceptions.RequestException as e:
+            logger.error("Request error:", e)
+
+        # Check each model whether it returns a response
+        if validate:
+            logger.info("Validating models:")
+            keys = copy.deepcopy(list(model_dict.keys()))
+
+            for key in keys:
+                from LLMlight import LLMlight
+                llm = LLMlight(model=key)
+                response = llm.prompt('What is the capital of France?', system="You are a helpful assistant.", return_type='string')
+                response = response[0:30].replace('\n', ' ').replace('\r', ' ').lower()
+                if 'error: 404' in response:
+                    logger.error(f"{llm.model}: {response}")
+                    model_dict.pop(key)
+                else:
+                    logger.info(f"{llm.model}: {response}")
+
+        return list(model_dict.keys())
+
+    def check_logger(self):
+        """Check the verbosity."""
+        logger.debug('DEBUG')
+        logger.info('INFO')
+        logger.warning('WARNING')
+        logger.critical('CRITICAL')
+
+#%%
+def convert_messages_to_model(messages, model='llama', add_assistant_start=True):
     """
     Builds a prompt in the appropriate format for different models (LLaMA, Grok, Mistral).
 
     Args:
         messages (list of dict): Each dict must have 'role' ('system', 'user', 'assistant') and 'content'.
-        modelname (str): The type of model to generate the prompt for ('llama', 'grok', or 'mistral').
+        model (str): The type of model to generate the prompt for ('llama', 'grok', or 'mistral').
         add_assistant_start (bool): Whether to add the assistant start (default True).
         add_bos_token (bool): Helps models know it's a fresh conversation. Useful for llama/mistral/hermes-style models
 
@@ -841,31 +889,31 @@ def convert_prompt(messages, modelname='llama', add_assistant_start=True):
         ...     {"role": "system", "content": "You are a helpful assistant."},
         ...     {"role": "user", "content": "What is the capital of France?"}
         ... ]
-        >>> prompt = convert_prompt(messages, modelname='llama')
+        >>> prompt = convert_messages_to_model(messages, model='llama')
          >>> print(prompt)
 
     """
     prompt = ""
 
-    # if add_bos_token and ('llama' in modelname or 'mistral' in modelname):
+    # if add_bos_token and ('llama' in model or 'mistral' in model):
     #     prompt += "<|begin_of_text|>\n"
 
     for msg in messages:
         role = msg["role"]
         content = msg["content"].strip()
 
-        if 'llama' in modelname or 'mistral' in modelname:
+        if 'llama' in model or 'mistral' in model:
             prompt += f"<|im_start|>{role}\n{content}\n<|im_end|>\n"
-        elif 'grok' in modelname:
+        elif 'grok' in model:
             prompt += f"<start_of_turn>{role}\n{content}<end_of_turn>\n"
         else:
             # Default to ChatML format if model not recognized
             prompt += f"<|im_start|>{role}\n{content}\n<|im_end|>\n"
 
     if add_assistant_start:
-        if 'llama' in modelname or 'mistral' in modelname:
+        if 'llama' in model or 'mistral' in model:
             prompt += "<|im_start|>assistant\n"
-        elif 'grok' in modelname:
+        elif 'grok' in model:
             prompt += "<start_of_turn>assistant\n"
 
     return prompt
@@ -1047,11 +1095,3 @@ def disable_tqdm():
     """Set the logger for verbosity messages."""
     return (True if (logger.getEffectiveLevel()>=30) else False)
 
-
-def check_logger(verbose: [str, int] = 'info'):
-    """Check the logger."""
-    set_logger(verbose)
-    logger.debug('DEBUG')
-    logger.info('INFO')
-    logger.warning('WARNING')
-    logger.critical('CRITICAL')

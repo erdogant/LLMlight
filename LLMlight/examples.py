@@ -2,13 +2,105 @@
 # import LLMlight as llm
 # print(dir(llm))
 # print(llm.__version__)
+
+#%%
 from LLMlight import LLMlight
 
 # Initialize with default settings
-# model = LLMlight()
+client = LLMlight(embedding=None, chunks=None)
+
+client.memory
+# Run a simple query
+response = client.prompt('What is the capital of France?', system="You are a helpful assistant.")
+print(response)
+
+
+
+#%%
+from memvid import MemvidEncoder, MemvidRetriever
+import os
+
+# Load documents
+encoder = MemvidEncoder()
+dirname = r'D:\Users\Documents\Hack'
+
+# Add text files
+for file in os.listdir(dirname):
+    ext = os.path.split(file[-4:])[1]
+    pathname = os.path.join(dirname, file)
+
+    if ext == '.pdf':
+        print(f'Adding: {file}')
+        encoder.add_pdf(pathname, chunk_size=512, overlap=50)
+    elif ext == '.txt':
+        print(f'Adding: {file}')
+        with open(pathname, "r") as f:
+            encoder.add_text(f.read(), chunk_size=512, overlap=50)
+    # encoder.add_chunks('')
+    # encoder.add_epub()
+
+# Build optimized video
+encoder.build_video(output_file="knowledge_base.mp4", index_file="knowledge_index.json")
+# For maximum compression
+# encoder.build_video(output_file="knowledge_base.mp4", index_file="knowledge_index.json", codec='h265')
+
+
+# Initialize retriever
+retriever = MemvidRetriever("knowledge_base.mp4", "knowledge_index.json")
+query = 'Get something about pindakaas'
+results = retriever.search(query, top_k=3)
+search_results = retriever.index_manager.search(query, top_k=3)
+
+for chunk in search_results:
+    print(f"Score: {chunk[1]:.3f} | {chunk[2]['text'][:100]}...")
+
+
+context='\n\n Chunk:'.join(results)
+
+from LLMlight import LLMlight
+
+# Initialize with default settings
+client =  LLMlight(preprocessing=None, embedding=None, method=None)
+client =  LLMlight()
+
+default_system = """You are a helpful AI assistant with access to a knowledge base stored in video format. 
+
+When answering questions:
+1. Use the provided context from the knowledge base when relevant
+2. Be clear about what information comes from the knowledge base vs. your general knowledge
+3. If the context doesn't contain enough information, say so clearly
+4. Provide helpful, accurate, and concise responses
+
+The context will be provided with each query based on semantic similarity to the user's question."""
 
 # Run a simple query
-# response = model.prompt('What is the capital of France?', system="You are a helpful assistant.")
+response = client.prompt('What should I do with pindakaas?', system=default_system, context=context)
+print(response)
+
+
+#%%
+from memvid import MemvidEncoder, MemvidChat
+
+# Create video memory from text chunks
+chunks = ["Important fact 1", "Important fact 2", "Historical event details"]
+encoder = MemvidEncoder()
+encoder.add_chunks(chunks)
+encoder.build_video("memory.mp4", "memory_index.json")
+
+# Chat with your memory
+chat = MemvidChat("memory.mp4", "memory_index.json", llm_provider='local', llm_api_key='http://localhost:1234/v1/chat/completions')
+chat.start_session()
+response = chat.chat("What do you know about historical events?")
+print(response)
+#%%
+from LLMlight import LLMlight
+
+# Initialize with default settings
+client = LLMlight(embedding=None, chunks=None)
+
+# Run a simple query
+response = client.prompt('What is the capital of France?', system="You are a helpful assistant.")
+print(response)
 
 #%%
 system = """Je bent een Nederlandse AI-assistent gespecialiseerd in het omzetten van
