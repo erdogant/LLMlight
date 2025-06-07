@@ -147,7 +147,7 @@ modelname = 'hermes-3-llama-3.2-3b'
 preprocessing='global-reasoning',
 preprocessing='chunk-wise'
 
-model = LLMlight(modelname=modelname,
+client =  LLMlight(modelname=modelname,
                  preprocessing=preprocessing,
                  method=None,
                  temperature=0.8,
@@ -158,7 +158,7 @@ model = LLMlight(modelname=modelname,
                  )
 
 # Run model
-response = model.prompt(query,
+response = client.prompt(query,
                    instructions=instructions,
                    context=context,
                    system=system,
@@ -169,7 +169,7 @@ print(response)
 
 #%%
 # Run model
-response2 = model.global_reasoning(query,
+response2 = client.global_reasoning(query,
                    context=context,
                    instructions=instructions,
                    system=system,
@@ -179,7 +179,7 @@ response2 = model.global_reasoning(query,
 print(response2)
 
 # Run model
-response3 = model.chunk_wise(query,
+response3 = client.chunk_wise(query,
                    context=context,
                    instructions=instructions,
                    system=system,
@@ -190,14 +190,14 @@ print(response3)
 
 # %%
 from LLMlight import LLMlight
-model = LLMlight(verbose='debug')
-model.check_logger()
+client =  LLMlight(verbose='debug')
+client.check_logger()
 
 
 #%% Available models
 from LLMlight import LLMlight
-model = LLMlight(verbose='info')
-modelnames = model.get_available_models(validate=False)
+client =  LLMlight(verbose='info')
+modelnames = client.get_available_models(validate=False)
 
 # %%
 for modelname in modelnames:
@@ -212,22 +212,22 @@ for modelname in modelnames:
 # %%
 from LLMlight import LLMlight
 model_path = r'C:/Users\beeld/.lmstudio/models/NousResearch/Hermes-3-Llama-3.2-3B-GGUF\Hermes-3-Llama-3.2-3B.Q4_K_M.gguf'
-model = LLMlight(endpoint=model_path, top_p=0.9)
-# model.prompt('hello, who are you?')
+client =  LLMlight(endpoint=model_path, top_p=0.9)
+# client.prompt('hello, who are you?')
 system_message = "You are a helpful assistant."
-response = model.prompt('What is the capital of France?', system=system_message)
+response = client.prompt('What is the capital of France?', system=system_message)
 
 #%%
 from LLMlight import LLMlight
 
 # Initialize model
-model = LLMlight()
+client =  LLMlight()
 
 # Read and process PDF
-model.read_pdf(r'D://OneDrive - Tilburg University//TiU//Introduction new colleagues.pdf')
+client.read_pdf(r'D://OneDrive - Tilburg University//TiU//Introduction new colleagues.pdf')
 
 # Query about the document
-response = model.prompt('Summarize the main points of this document', global_reasoning=True)
+response = client.prompt('Summarize the main points of this document', global_reasoning=True)
 
 print(response)
 
@@ -268,7 +268,7 @@ def download_and_load_gguf_model(
     Args:
         url (str): Direct URL to the .gguf model file.
         model_name (str): Filename to use for local caching (e.g. 'Hermes.gguf').
-        cache_dir (str): Directory to store the model. Default is 'local_models'.
+        cache_dir (str): Directory to store the client. Default is 'local_models'.
         n_ctx (int): Context window size.
         n_threads (int): CPU threads to use.
         n_gpu_layers (int): GPU layers to offload. Use 0 for CPU-only.
@@ -330,7 +330,7 @@ from transformers import AutoTokenizer, AutoModelForCausalLM, LlamaForCausalLM
 import bitsandbytes, flash_attn
 
 tokenizer = AutoTokenizer.from_pretrained('NousResearch/Hermes-3-Llama-3.1-8B', trust_remote_code=True)
-model = LlamaForCausalLM.from_pretrained(
+client =  LlamaForCausalLM.from_pretrained(
     "NousResearch/Hermes-3-Llama-3.1-8B",
     torch_dtype=torch.float16,
     device_map="auto",
@@ -350,7 +350,7 @@ Write a short story about Goku discovering kirby has teamed up with Majin Buu to
 for chat in prompts:
     print(chat)
     input_ids = tokenizer(chat, return_tensors="pt").input_ids.to("cuda")
-    generated_ids = model.generate(input_ids, max_new_tokens=750, temperature=0.8, repetition_penalty=1.1, do_sample=True, eos_token_id=tokenizer.eos_token_id)
+    generated_ids = client.generate(input_ids, max_new_tokens=750, temperature=0.8, repetition_penalty=1.1, do_sample=True, eos_token_id=tokenizer.eos_token_id)
     response = tokenizer.decode(generated_ids[0][input_ids.shape[-1]:], skip_special_tokens=True, clean_up_tokenization_space=True)
     print(f"Response: {response}")
 
@@ -367,4 +367,4 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 
 model_id = "meta-llama/Llama-2-7b-hf"  # for example
 
-model = AutoModelForCausalLM.from_pretrained(model_name, device_map="auto")  # will crash without CUDA if quantized
+client =  AutoModelForCausalLM.from_pretrained(model_name, device_map="auto")  # will crash without CUDA if quantized
