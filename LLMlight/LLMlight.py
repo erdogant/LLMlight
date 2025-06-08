@@ -18,20 +18,20 @@ import copy
 import re
 from tqdm import tqdm
 
-from typing import List, Optional, Dict, Any, Union
+from typing import List, Union
 
 from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from sentence_transformers import SentenceTransformer
 
 from memvid import MemvidEncoder, MemvidRetriever
-from memvid.config import get_default_config as memvid_get_default_config
+# from memvid.config import get_default_config as memvid_get_default_config
 
-from .RAG import RAG_with_RSE
-from . import utils
+# from .RAG import RAG_with_RSE
+# from . import utils
 # DEBUG
-# import utils
-# from RAG import RAG_with_RSE
+import utils
+from RAG import RAG_with_RSE
 
 logger = logging.getLogger(__name__)
 
@@ -113,7 +113,7 @@ class LLMlight:
                  preprocessing: str = None,
                  temperature: (int, float) = 0.7,
                  top_p: (int, float) = 1.0,
-                 chunks: dict = {'method': 'chars', 'size': 1000, 'overlap': 250, 'top_chunks': 5},
+                 chunks: dict = {'method': 'chars', 'size': 1024, 'overlap': 200, 'top_chunks': 5},
                  endpoint: str = "http://localhost:1234/v1/chat/completions",
                  n_ctx: int = 4096,
                  path_to_memory: str = None,
@@ -169,6 +169,7 @@ class LLMlight:
                top_p: (int, float) = None,
                stream: bool = False,
                return_type: str = 'string',
+               verbose=None,
                ):
         """Run the model with the provided parameters.
 
@@ -215,6 +216,7 @@ class LLMlight:
         str
             The model's response or an error message if the request fails.
         """
+        if verbose is not None: set_logger(verbose)
         logger.info(f'{self.model} is loaded..')
 
         if temperature is None: temperature = self.temperature
@@ -366,7 +368,12 @@ class LLMlight:
         # Update config from memvid Encoder
         self.memory_config = self.encoder.config
 
-    def memory_add(self, text: Union[str, List[str]] = None, input_files: Union[str, List[str]] = None, filetypes: List[str] = ['.pdf', '.txt', '.epub']):
+    def memory_add(self,
+                   text: Union[str, List[str]] = None,
+                   input_files: Union[str, List[str]] = None,
+                   dirpath: str = None,
+                   filetypes: List[str] = ['.pdf', '.txt', '.epub', '.md', '.doc', '.docx', '.rtf', '.html', '.htm'],
+                   overwrite=False):
         """Add chunks to memory.
 
         Parameters
@@ -379,13 +386,20 @@ class LLMlight:
         if not hasattr(self, 'encoder'):
             logger.error('Memory is not yet initialized. Use client.memory_init() first')
             raise AssertionError('Memory is not yet initialized. Use client.memory_init() first')
-        if os.path.isfile(self.memory_video_file):
+        if os.path.isfile(self.memory_video_file) and not overwrite:
             logger.warning(f'Video memory already exists appending is not possible: {self.memory_video_file}')
             return
 
         # Make lists
         if isinstance(text, str): text = [text]
         if isinstance(input_files, str): input_files = [input_files]
+
+        if dirpath is not None and os.path.isdir(dirpath):
+            if input_files is None: input_files = []
+            for root, _, files in os.walk(dirpath):
+                for file in files:
+                    if any(file.lower().endswith(ext) for ext in filetypes):
+                        input_files.append(os.path.join(root, file))
 
         # Add text chunk to video-memory
         if text is not None:
@@ -394,6 +408,8 @@ class LLMlight:
 
         # Run over all files
         if input_files is not None:
+            logger.info(f'Adding {len(input_files)} into memory.')
+
             for filepath in input_files:
                 if not os.path.isfile(filepath):
                     logger.warning(f"File not found: {filepath}")
@@ -401,18 +417,37 @@ class LLMlight:
                     # full filename with extension
                     filename = os.path.basename(filepath)
                     # split name and extension
-                    name, ext = os.path.splitext(filename)
+                    name, ext = os.path.splitext(filename.lower())
                     # Add to encoder
                     if (ext == '.pdf') and (ext in filetypes):
                         self.encoder.add_pdf(filepath, chunk_size=self.chunks['size'], overlap=self.chunks['overlap'])
-                    elif ext == '.txt' and (ext in filetypes):
-                        with open(filepath, "r", encoding="utf-8", errors="replace") as f:
-                            text = f.read()
-                            self.encoder.add_text(text, chunk_size=self.chunks['size'], overlap=self.chunks['overlap'])
                     elif ext == '.epub' and (ext in filetypes):
                         self.encoder.add_epub(filepath, chunk_size=self.chunks['size'], overlap=self.chunks['overlap'])
+                    elif ext == '.txt' and (ext in filetypes):
+                        with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
+                            text = f.read()
+                            self.encoder.add_text(text, chunk_size=self.chunks['size'], overlap=self.chunks['overlap'])
+                    elif ext in ['.html', '.htm']:
+                        # Process HTML with BeautifulSoup
+                        try:
+                            from bs4 import BeautifulSoup
+                        except ImportError:
+                            print(f"Warning: BeautifulSoup not available for HTML processing. Skipping {filepath}")
+                            continue
+ 
+                        with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
+                            soup = BeautifulSoup(f.read(), 'html.parser')
+                            for script in soup(["script", "style"]):
+                                script.decompose()
+                            text = soup.get_text()
+                            lines = (line.strip() for line in text.splitlines())
+                            chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
+                            clean_text = ' '.join(chunk for chunk in chunks if chunk)
+                            if clean_text.strip():
+                                self.encoder.add_text(clean_text, chunk_size=self.chunks['size'], overlap=self.chunks['overlap'])
+
                     elif ext in filetypes:
-                        with open(filepath, "r", encoding="utf-8", errors="replace") as f:
+                        with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
                             text = f.read()
                             self.encoder.add_text(text, chunk_size=self.chunks['size'], overlap=self.chunks['overlap'])
                     else:
@@ -478,6 +513,7 @@ class LLMlight:
 
         # Clear all chunks of text from list because it will use the video memory file.
         self.encoder.chunks = []
+        logger.info('✅ Video Memory saved to disk.')
 
     def _set_memory_path(self, path_to_memory):
         """Set Memory paths."""
@@ -822,24 +858,22 @@ class LLMlight:
         return final_response
         # return {'response': final_response, 'response_per_chunk': response_total}
 
-    def parse_large_document(self, query, context, return_type='string', top_chunks=None):
+    def compute_distances(self, query: str, chunks: list, return_type: str = 'string', top_chunks: int = None):
         """Splits large text into chunks and finds the most relevant ones."""
-        # Create chunks
-        chunks = utils.chunk_text(context, method=self.chunks['method'], chunk_size=self.chunks['size'], overlap=self.chunks['overlap'])
         # Embedding
         query_vector, chunk_vectors = self.fit_transform(query, chunks)
         # Compute similarity
-        similarities = cosine_similarity(query_vector, chunk_vectors)[0]
+        D = cosine_similarity(query_vector, chunk_vectors)[0]
         # Get top scoring chunks
         if top_chunks is None:
-            top_chunks = len(similarities)
+            top_chunks = len(D)
             logger.info('Number of top chunks selected is set to: {top_chunks}')
 
-        top_indices = np.argsort(similarities)[-top_chunks:][::-1]
-
+        # Top indices
+        top_indices = np.argsort(D)[-top_chunks:][::-1]
         # Join relevant chunks and send as prompt
         relevant_chunks = [chunks[i] for i in top_indices]
-        relevant_scores = [similarities[i] for i in top_indices]
+        relevant_scores = [D[i] for i in top_indices]
 
         # Set the return type
         if return_type == 'score':
@@ -869,6 +903,7 @@ class LLMlight:
             query_vector = query_vector.reshape(1, -1)
         else:
             raise ValueError(f"Unsupported embedding method: {self.embedding}")
+        # Return
         return query_vector, chunk_vectors
 
     def compute_preprocessing(self, query, context, instructions, system):
@@ -899,7 +934,15 @@ class LLMlight:
             logger.info(f"Text retrieval from video memory for [{self.chunks['top_chunks']}] chunks.")
             # Initialize retriever
             retriever = MemvidRetriever(video_file=self.memory_video_file, index_file=self.memory_index_file, config=self.memory_config)
+
+            # self.embedding = 'bow'
+            # self.embedding = 'tfidf'
             # Get relevant chunks
+            # chunks = retriever.index_manager.metadata
+            # chunks = list(map(lambda x: x.get('text'), retriever.index_manager.metadata))
+            # Compute distances and get top k chunks
+            # memory_chunks = self.compute_distances(query, chunks, top_chunks=self.chunks['top_chunks'], return_type='list')
+
             memory_chunks = retriever.search(query, top_k=self.chunks['top_chunks'])
             # memory_chunks = retriever.index_manager.search(query, top_k=self.chunks['top_chunks'])
             # Append context
@@ -916,8 +959,11 @@ class LLMlight:
             # Create advanced prompt using relevant chunks of text, the input query and instructions
             if self.retrieval_method == 'naive_RAG' and np.isin(self.embedding, ['tfidf', 'bow', 'bert', 'bge-small']):
                 # Find the best matching parts using simple retrieval method approach.
-                logger.info(f'[{self.retrieval_method}] approach is applied with [{self.embedding}] embedding.')
-                relevant_context = self.parse_large_document(query, context, return_type='string', top_chunks=self.chunks['top_chunks'])
+                logger.info(f'[{self.retrieval_method}] method is applied with [{self.embedding}] embedding for text retrieval.')
+                # Create chunks
+                chunks = utils.chunk_text(context, method=self.chunks['method'], chunk_size=self.chunks['size'], overlap=self.chunks['overlap'])
+                # Compute distances and get top k chunks
+                relevant_context = self.compute_distances(query, chunks, top_chunks=self.chunks['top_chunks'], return_type='string')
             elif self.retrieval_method == 'RSE' and np.isin(self.embedding, ['bert', 'bge-small']):
                 logger.info(f'RAG approach [{self.retrieval_method}] is applied.')
                 relevant_context = RAG_with_RSE(context, query, label=None, chunk_size=self.chunks['size'], irrelevant_chunk_penalty=0, embedding=self.embedding, device='cpu', batch_size=32)

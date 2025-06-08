@@ -6,8 +6,8 @@ import re
 from sentence_transformers import SentenceTransformer
 import logging
 
-from . import utils
-# import utils
+# from . import utils
+import utils
 
 logger = logging.getLogger(__name__)
 
