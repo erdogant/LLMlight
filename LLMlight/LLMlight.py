@@ -138,11 +138,11 @@ class LLMlight:
         if chunks is None: chunks = {}
         self.chunks = {**{'method': 'chars', 'size': 1000, 'overlap': 250, 'top_chunks': 5}, **chunks}
 
-        # Memvid parameters
+        # Memvid default parameters
         self.memory_video_file = None
         self.memory_index_file = None
         self.memory_config = None
-        # Update parameters when memory video file exists.
+        # Update parameters when memory video memory exists.
         if path_to_memory is not None:
             self.memory_init(path_to_memory)
 
@@ -234,6 +234,7 @@ class LLMlight:
         # Set the prompt
         logger.debug(relevant_context)
         prompt = self.set_prompt(query, instructions, relevant_context, response_format=response_format)
+        logger.info('Running model now..')
 
         # Run model
         if os.path.isfile(self.endpoint):
@@ -341,31 +342,24 @@ class LLMlight:
             logger.error(f"{response.status_code} - {response}")
             return f"Error: {response.status_code} - {response}"
 
-    def memory_init(self, filepath: str = "llmlight_memory.mp4", config: dict = None):
+    def memory_init(self, path_to_memory: str = "llmlight_memory.mp4", config: dict = None):
         """Build QR code video and index from chunks with unified codec handling.
 
         Parameters
         ----------
-        filepath : str
+        path_to_memory : str
             Path to output video memory file.
+        config : dict
+            Dictionary containing configuration parameters.
 
         """
-        if os.path.isfile(filepath):
-            logger.info(f'Initializing existing video memory: {filepath}')
+        if os.path.isfile(path_to_memory):
+            logger.info(f'Initializing existing video memory: {path_to_memory}')
         else:
-            logger.info(f'Initializing new video memory: {filepath}')
-        # Get the absolute filepath
-        filepath = os.path.abspath(filepath)
-        # Get directory path (folder)
-        directory = os.path.dirname(filepath)
-        # full filename with extension
-        filename = os.path.basename(filepath)
-        # split name and extension
-        name, extension = os.path.splitext(filename)
+            logger.info(f'Initializing new video memory: {path_to_memory}')
 
-        # Store file names
-        self.memory_video_file = filepath
-        self.memory_index_file = os.path.join(directory, name) + '.json'
+        # Set memory path
+        self._set_memory_path(path_to_memory)
 
         # Initialize new encoder
         self.encoder = MemvidEncoder(config=config)
@@ -382,15 +376,18 @@ class LLMlight:
 
         """
         # Make checks
-        if self.memory_video_file is None or self.memory_index_file is None:
+        if not hasattr(self, 'encoder'):
             logger.error('Memory is not yet initialized. Use client.memory_init() first')
             raise AssertionError('Memory is not yet initialized. Use client.memory_init() first')
+        if os.path.isfile(self.memory_video_file):
+            logger.warning(f'Video memory already exists appending is not possible: {self.memory_video_file}')
+            return
 
         # Make lists
         if isinstance(text, str): text = [text]
         if isinstance(input_files, str): input_files = [input_files]
 
-        # Add text chunk to memory
+        # Add text chunk to video-memory
         if text is not None:
             logger.info(f'Adding {len(text)} text chunks to memory.')
             self.encoder.add_chunks(text)
@@ -424,16 +421,19 @@ class LLMlight:
                     logger.info(f'Added to memory: {filename}')
 
     def memory_save(self,
-                     codec: str = 'mp4v',
-                     auto_build_docker: bool = True,
-                     allow_fallback: bool = True,
-                     overwrite: bool = False,
-                     show_progress: bool = True,
-                     ):
+                    filepath: str = None,
+                    codec: str = 'mp4v',
+                    auto_build_docker: bool = True,
+                    allow_fallback: bool = True,
+                    overwrite: bool = False,
+                    show_progress: bool = True,
+                    ):
         """Build QR code video and index from chunks with unified codec handling.
 
         Parameters
         ----------
+        filepath : str (default is the initialization memory-path)
+            Path to output video memory file.
         codec : str, optional
             Video codec ('mp4v', 'h265', 'h264', etc.)
             'mp4v': Default
@@ -449,12 +449,15 @@ class LLMlight:
             logger.error('No chunks to encode. Use client.add_chunks() first')
             raise AssertionError('No chunks to encode. Use client.add_chunks() first')
 
+        if filepath is not None:
+            self._set_memory_path(filepath)
+
         # Check
         if os.path.isfile(self.memory_video_file) and not overwrite:
             logger.warning(f'File already exists and not allowed to overwrite: {self.memory_video_file}')
             return
 
-        # Remove file if already exist
+        # Remove files when overwrite
         if overwrite:
             if os.path.isfile(self.memory_video_file):
                 logger.info(f'Video memory file is overwriten: {self.memory_video_file}')
@@ -475,6 +478,20 @@ class LLMlight:
 
         # Clear all chunks of text from list because it will use the video memory file.
         self.encoder.chunks = []
+
+    def _set_memory_path(self, path_to_memory):
+        """Set Memory paths."""
+        # Get the absolute filepath
+        filepath = os.path.abspath(path_to_memory)
+        # Get directory path (folder)
+        directory = os.path.dirname(filepath)
+        # full filename with extension
+        filename = os.path.basename(filepath)
+        # split name and extension
+        name, extension = os.path.splitext(filename)
+        # Store file names
+        self.memory_video_file = filepath
+        self.memory_index_file = os.path.join(directory, name) + '.json'
 
     def task(self,
              query="Extract key insights while maintaining coherence of the previous summaries.",
@@ -1008,9 +1025,9 @@ class LLMlight:
             keys = copy.deepcopy(list(model_dict.keys()))
 
             for key in keys:
-                logger.info(f'Checking: {key}')
+                # logger.info(f'Checking: {key}')
                 from LLMlight import LLMlight
-                llm = LLMlight(model=key, verbose=None)
+                llm = LLMlight(model=key)
                 response = llm.prompt('What is the capital of France?', instructions="You are only allowed to return one word.", return_type='string')
                 response = response[0:30].replace('\n', ' ').replace('\r', ' ').lower()
                 if 'error: 404' in response:

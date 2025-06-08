@@ -3,11 +3,50 @@
 # print(dir(llm))
 # print(llm.__version__)
 
+#%% Load video memory, append and store in other file. Then check if info exists
+from LLMlight import LLMlight
+
+# Initialize with default settings
+client = LLMlight(retrieval_method=None, preprocessing=None)
+# Create new memory
+client.memory_init(path_to_memory='knowledge_base.mp4')
+# Add chunks
+client.memory_add(text=['Apes like USB sticks', 'The capital of France is Amsterdam.'])
+# Store memory to disk
+client.memory_save(overwrite=True)
+# Query
+response = client.prompt('What is the capital of France?')
+print(response)
+
+
+
+
+
+
+# Initialize with default settings
+client = LLMlight(retrieval_method=None, preprocessing=None, path_to_memory='knowledge_base.mp4')
+# Test for the floor
+response = client.prompt('What is the capital of France?', instructions='Do not argue with the information in the context. Only return the information from the context.')
+print(response)
+
+# NEW chunks can NOT be added!
+client.memory_add(text=['The floor is paper!'])
+# Store memory to disk
+client.memory_save(filepath="knowledge_base_new.mp4", overwrite=True)
+
+# Test for the floor
+response = client.prompt('The floor is what?', instructions='Do not argue with the information in the context. Only return the information from the context.')
+print(response)
+# Also test for Amsterdam
+response = client.prompt('What is the capital of France?', instructions='Do not argue with the information in the context. Only return the information from the context.')
+print(response)
+client.encoder.clear
+
 #%% No video memory usage
 from LLMlight import LLMlight
 
 # Initialize with default settings
-client = LLMlight(embedding=None, chunks=None, verbose='debug')
+client = LLMlight(retrieval_method=None, preprocessing=None, path_to_memory="knowledge_base.mp4")
 
 # Run a simple query
 # response = client.prompt('What is the capital of France?')
@@ -30,7 +69,7 @@ print(response)
 from LLMlight import LLMlight
 
 # Initialize with default settings
-client = LLMlight(embedding=None, chunks=None, path_to_memory="knowledge_base.mp4")
+client = LLMlight(retrieval_method=None, preprocessing=None, path_to_memory="knowledge_base.mp4")
 
 # Add chunks
 filepath = r'D:\Users\Documents\Hack\Download and Visualize Land Surface Temperature and NDVI from Sentinel-3.pdf'
@@ -51,16 +90,13 @@ print(response)
 from LLMlight import LLMlight
 
 # Initialize with default settings
-client = LLMlight(embedding=None, chunks=None, path_to_memory="knowledge_base.mp4")
+client = LLMlight(retrieval_method=None, preprocessing=None, path_to_memory="knowledge_base.mp4")
 
-# Run a simple query
-response = client.prompt('What is the capital of France?', context='The capital of France is Amsterdam.', instructions='Do not argue with the information in the context. Only return the information from the context.')
+# Run query
+response = client.prompt('What do apes like?', instructions='Only return the information from the context. Answer with maximum of 3 words, and starts with "Apes like: "')
 print(response)
 
-response = client.prompt('What do apes like?')
-print(response)
-
-response = client.prompt('Provide a summary of HyperSpectral.')
+response = client.prompt('What is the capital of France?', instructions='Do not argue with the information in the context. Only return the information from the context.')
 print(response)
 
 
@@ -68,28 +104,31 @@ print(response)
 from LLMlight import LLMlight
 
 # Initialize with default settings
-client = LLMlight(embedding=None, chunks=None, verbose='debug')
+client = LLMlight(retrieval_method=None, preprocessing=None, verbose='info')
 
 # Create new memory
-client.memory_init(filepath="knowledge_base.mp4")
+client.memory_init()
 
 # Add chunks
 filepath = r'D:\Users\Documents\Hack\PCA on HyperSpectral Data. A Beginner friendly tutorial on… _ by Richa Dutt _ Towards Data Science.pdf'
 client.memory_add(input_files=filepath)
-client.memory_add(text=['Apes like USB sticks', 'Trees are mainly yellow'])
+client.memory_add(text=['Apes like USB sticks', 'The capital of France is Amsterdam.'])
 
 # Build memory
-client.memory_save(overwrite=False)
-
-# Run a simple query
-response = client.prompt('What is the capital of France?', context='The capital of France is Amsterdam.', instructions='Do not argue with the information in the context. Only return the information from the context.')
-print(response)
+client.memory_save(filepath="knowledge_base.mp4", overwrite=True)
 
 response = client.prompt('What do apes like?', instructions='Only return the information from the context. Answer with maximum of 3 words, and starts with "Apes like: "')
 print(response)
 
+response = client.prompt('What is the capital of France?', instructions='Do not argue with the information in the context. Only return the information from the context.')
+print(response)
+
 response = client.prompt('Provide a summary of HyperSpectral.', instructions='Do not argue with the information in the context. Only return the information from the context.')
 print(response)
+
+# Run a simple query
+# response = client.prompt('What is the capital of France?', context='The capital of France is Amsterdam.', instructions='Do not argue with the information in the context. Only return the information from the context.')
+# print(response)
 
 
 
@@ -173,7 +212,7 @@ print(response)
 from LLMlight import LLMlight
 
 # Initialize with default settings
-client = LLMlight(embedding=None, chunks=None)
+client = LLMlight(embedding=None, preprocessing=None)
 
 # Run a simple query
 response = client.prompt('What is the capital of France?', system="You are a helpful assistant.")
