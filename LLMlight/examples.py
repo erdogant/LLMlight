@@ -301,10 +301,10 @@ from LLMlight import LLMlight
 client =  LLMlight()
 
 # Read and process PDF
-client.read_pdf(r'D://OneDrive - Tilburg University//TiU//Introduction new colleagues.pdf')
+context = client.read_pdf(r'D://OneDrive - Tilburg University//TiU//Introduction new colleagues.pdf')
 
 # Query about the document
-response = client.prompt('Summarize the main points of this document', global_reasoning=True)
+response = client.prompt('Summarize the main points of this document', preprocessing='global_reasoning', context=context)
 
 print(response)
 

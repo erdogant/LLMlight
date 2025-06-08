@@ -16,6 +16,12 @@ __version__ = '0.3.0'
 
 # Setup root logger
 _logger = logging.getLogger('LLMlight')
+# Remove only our specific handler if it exists
+if _logger.name == 'LLMlight':
+    for handler in _logger.handlers[:]:
+        if isinstance(handler, logging.StreamHandler) and handler.formatter and handler.formatter._fmt == '[{asctime}] [{name}] [{levelname}] {msg}':
+            _logger.removeHandler(handler)
+
 _log_handler = logging.StreamHandler()
 _fmt = '[{asctime}] [{name}] [{levelname}] {msg}'
 _formatter = logging.Formatter(fmt=_fmt, style='{', datefmt='%d-%m-%Y %H:%M:%S')
@@ -35,10 +41,20 @@ LLMlight is a Python package for running Large Language Models (LLMs) locally wi
 Example
 -------
 >>> from LLMlight import LLMlight
->>> # Initialize with LM Studio endpoint
->>> model = LLMlight(endpoint="http://localhost:1234/v1/chat/completions")
+>>> # Initialize with endpoint
+>>> client = LLMlight(endpoint="http://localhost:1234/v1/chat/completions")
 >>> # Run queries
->>> response = model.prompt('Explain quantum computing in simple terms')
+>>> response = client.prompt('Explain quantum computing in simple terms')
+>>> print(response)
+
+Example
+-------
+>>> # Use the entire context without RAG or embeddings
+>>> from LLMlight import LLMlight
+>>> # Initialize with endpoint
+>>> client = LLMlight(endpoint="http://localhost:1234/v1/chat/completions", preprocessing=None, embedding=None, retrieval_method=None)
+>>> # Run query with user-context
+>>> response = client.prompt('What is the capital of France?', context='The capital of France is Amsterdam.', instructions='Do not argue with the information in the context. Only return the information from the context.')
 >>> print(response)
 
 Example
@@ -46,16 +62,29 @@ Example
 >>> # Import library
 >>> from LLMlight import LLMlight
 >>> # Initialize model
->>> model = LLMlight()
+>>> client = LLMlight()
 >>> # List all available models at endpoint
->>> modelnames = model.get_available_models(validate=False)
+>>> modelnames = client.get_available_models(validate=False)
 >>> print(modelnames)
 >>> # Check whether models really work
->>> modelnames = model.get_available_models(validate=True)
+>>> modelnames = client.get_available_models(validate=True)
 >>> print(modelnames)
 
 Example
 -------
+>>> # Import library
+>>> from LLMlight import LLMlight
+>>> # Initialize model
+>>> client = LLMlight(preprocessing='global_reasoning')
+>>> # Read pdf
+>>> context = client.read_pdf(r'c://path_to_your_files//article_1.pdf', return_type='string')
+>>> # Create response
+>>> response = client.prompt('Summarize the main points of this document.', context=context)
+>>> print(response)
+
+Example
+-------
+>>> # Example to use video memory for storing/loading information
 >>> # Import library
 >>> from LLMlight import LLMlight
 >>> # Initialize with default settings

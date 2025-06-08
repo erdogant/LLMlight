@@ -57,18 +57,18 @@ class LLMlight:
     system : str
         String of the system message.
         "I am a helpfull assistant"
-    method : str
+    retrieval_method : str (default: 'naive_RAG')
          None:              No processing. The entire context is used for the query.
         'naive_RAG':        Ideal for chats and when you need to answer specfic questions: Chunk of text are created. Use cosine similarity to for ranking. The top scoring chunks will be combined (n chunks) and used as input with the prompt.
         'RSE':              Identify and extract entire segments of relevant text.
-    embedding : str
+    embedding : str (default: 'bert')
         None
         'tfidf': Best use when it is a structured documents and the words in the queries are matching.
         'bow': Bag of words approach. Best use when you expect words in the document and queries to be matching.
         'bert': Best use when document is more free text and the queries may not match exactly the words or sentences in the document.
         'bge-small':
-    preprocessing : str
-         None:              No pre-processing. The original context is used in the pipeline of method, embedding and the response.
+    preprocessing : str (default: None)
+         None:              No pre-processing. The original context is used in the pipeline of retrieval_method, embedding and the response.
         'chunk-wise':       The input context will be analyze chunkwise based on the query, instructions and system. The total set of answered-chunks is then returned. The normal pipeline proceeds for the query, instructions, system etc.
         'global-reasoning': The input context will be summarized per chunk globally. The total set of summarized context is then returned. The normal pipeline proceeds for the query, instructions, system etc.
     temperature : float, optional
@@ -108,10 +108,10 @@ class LLMlight:
     """
     def __init__(self,
                  model: str = "hermes-3-llama-3.2-3b",
-                 method: str = 'naive_RAG',
+                 retrieval_method: str = 'naive_RAG',
                  embedding: str = 'bert',
                  preprocessing: str = None,
-                 temperature: float = 0.7,
+                 temperature: (int, float) = 0.7,
                  top_p: (int, float) = 1.0,
                  chunks: dict = {'method': 'chars', 'size': 1000, 'overlap': 250, 'top_chunks': 5},
                  endpoint: str = "http://localhost:1234/v1/chat/completions",
@@ -126,7 +126,7 @@ class LLMlight:
         # Store data in self
         self.model = model
         self.preprocessing = preprocessing
-        self.method = method
+        self.retrieval_method = retrieval_method
         self.embedding = embedding
         self.temperature = temperature
         self.top_p = top_p
@@ -160,15 +160,15 @@ class LLMlight:
         logger.info('LLMlight is initialized.')
 
     def prompt(self,
-               query,
-               instructions=None,
-               system=None,
-               context=None,
+               query: str,
+               instructions: str = None,
+               system: str = None,
+               context: str = None,
                response_format=None,
-               temperature=None,
-               top_p=None,
-               stream=False,
-               return_type='string',
+               temperature: (int, float) = None,
+               top_p: (int, float) = None,
+               stream: bool = False,
+               return_type: str = 'string',
                ):
         """Run the model with the provided parameters.
 
@@ -297,7 +297,7 @@ class LLMlight:
         # Compute tokens
         if max_tokens is None:
             used_tokens, max_tokens = compute_tokens(prompt, n_ctx=self.n_ctx, task=task)
-        logger.info(f'Generating response with {self.model}')
+        # logger.info(f'Generating response with {self.model}')
 
         data = {
             "model": self.model,
@@ -598,11 +598,12 @@ class LLMlight:
 
         # Create chunks with overlapping parts to make sure we do not miss out
         chunks = utils.chunk_text(context, method=self.chunks['method'], chunk_size=self.chunks['size'], overlap=self.chunks['overlap'])
+        logger.info(f'Total number of chunks created: {len(chunks)}')
 
         # Now summaries for the chunks
         summaries = []
-        for i, chunk in enumerate(tqdm(chunks, desc="Processing chunks", unit="chunk")):
-            logger.info(f'Working on text chunk {i+1}/{len(chunks)}')
+        for i, chunk in enumerate(tqdm(chunks, desc="Processing chunk", unit="chunk")):
+            # logger.info(f'Working on text chunk {i+1}/{len(chunks)}')
 
             prompt = f"""
             ### Context (Chunk {i+1} of {len(chunks)} from a larger document):
@@ -681,10 +682,11 @@ class LLMlight:
         """
         # Create chunks with overlapping parts to make sure we do not miss out
         chunks = utils.chunk_text(context, method=self.chunks['method'], chunk_size=self.chunks['size'], overlap=self.chunks['overlap'])
+        logger.info(f'Total number of chunks created: {len(chunks)}')
 
         # Build a structured prompt that includes all previous summaries
         response_list = []
-        for i, chunk in enumerate(tqdm(chunks, desc="Processing chunks", unit="chunk")):
+        for i, chunk in enumerate(tqdm(chunks, desc="Processing chunk", unit="chunk")):
             logger.info(f'Working on text chunk {i+1}/{len(chunks)}')
 
             if top_chunks > 0:
@@ -849,7 +851,7 @@ class LLMlight:
             query_vector = self.embedding_model.encode([query])
             query_vector = query_vector.reshape(1, -1)
         else:
-            raise ValueError("Unsupported embedding method. Choose a supported embedding method.")
+            raise ValueError(f"Unsupported embedding method: {self.embedding}")
         return query_vector, chunk_vectors
 
     def compute_preprocessing(self, query, context, instructions, system):
@@ -895,12 +897,12 @@ class LLMlight:
     def relevant_text_retrieval(self, query, context, instructions, system):
         if context is not None:
             # Create advanced prompt using relevant chunks of text, the input query and instructions
-            if self.method == 'naive_RAG' and np.isin(self.embedding, ['tfidf', 'bow', 'bert', 'bge-small']):
+            if self.retrieval_method == 'naive_RAG' and np.isin(self.embedding, ['tfidf', 'bow', 'bert', 'bge-small']):
                 # Find the best matching parts using simple retrieval method approach.
-                logger.info(f'[{self.method}] approach is applied with [{self.embedding}] embedding.')
+                logger.info(f'[{self.retrieval_method}] approach is applied with [{self.embedding}] embedding.')
                 relevant_context = self.parse_large_document(query, context, return_type='string', top_chunks=self.chunks['top_chunks'])
-            elif self.method == 'RSE' and np.isin(self.embedding, ['bert', 'bge-small']):
-                logger.info(f'RAG approach [{self.method}] is applied.')
+            elif self.retrieval_method == 'RSE' and np.isin(self.embedding, ['bert', 'bge-small']):
+                logger.info(f'RAG approach [{self.retrieval_method}] is applied.')
                 relevant_context = RAG_with_RSE(context, query, label=None, chunk_size=self.chunks['size'], irrelevant_chunk_penalty=0, embedding=self.embedding, device='cpu', batch_size=32)
             else:
                 logger.info(f'No retrieval method is applied.')
@@ -936,16 +938,15 @@ class LLMlight:
 
         """
         if os.path.isfile(filepath):
-            self.context = utils.read_pdf(filepath, title_pages=title_pages, body_pages=body_pages, reference_pages=reference_pages, return_type=return_type)
-            if self.context is None:
-                logger.error('No input text gathered. <return>')
-                return
-            if return_type=='dict':
-                counts = utils.count_words(self.context['body'])
-                self.context['body'] = self.context['body'] + f"\n---\nThe exact word count in this document is: {counts}"
+            # Read pdf
+            context = utils.read_pdf(filepath, title_pages=title_pages, body_pages=body_pages, reference_pages=reference_pages, return_type=return_type)
+            # Return
+            return context
+            # if return_type=='dict':
+            #     counts = utils.count_words(self.context['body'])
+            #     self.context['body'] = self.context['body']
         else:
-            logger.warning(f'{filepath} does not exist.')
-            self.context = None
+            logger.error(f'Filepath does not exist: {filepath}')
 
     def get_available_models(self, validate=False):
         """Retrieve available models from the configured API endpoint.
@@ -1126,7 +1127,9 @@ def compute_tokens(string, n_ctx=4096, task='full'):
     used_tokens = len(tokens)
     # Determine how many tokens are available for the model to generate
     max_tokens = compute_max_tokens(used_tokens, n_ctx=n_ctx, task=task)
-    logger.info(f"Used_tokens={used_tokens}, max_tokens={max_tokens}, context_limit={n_ctx}")
+    # Show message
+    logger.debug(f"Used_tokens={used_tokens}, max_tokens={max_tokens}, context_limit={n_ctx}")
+    # Return
     return used_tokens, max_tokens
 
 
