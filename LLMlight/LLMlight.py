@@ -18,13 +18,17 @@ import copy
 import re
 from tqdm import tqdm
 
+from typing import List, Optional, Dict, Any, Union
+
 from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from sentence_transformers import SentenceTransformer
 
+from memvid import MemvidEncoder, MemvidRetriever
+from memvid.config import get_default_config as memvid_get_default_config
+
 from .RAG import RAG_with_RSE
 from . import utils
-
 # DEBUG
 # import utils
 # from RAG import RAG_with_RSE
@@ -111,6 +115,7 @@ class LLMlight:
                  chunks: dict = {'method': 'chars', 'size': 1000, 'overlap': 250, 'top_chunks': 5},
                  endpoint: str = "http://localhost:1234/v1/chat/completions",
                  n_ctx: int = 4096,
+                 path_to_memory: str = None,
                  verbose: (str, int) = 'info',
                  ):
 
@@ -128,7 +133,15 @@ class LLMlight:
         self.chunks = {**{'method': 'chars', 'size': 1000, 'overlap': 250, 'top_chunks': 5}, **chunks}
         self.n_ctx = n_ctx
         self.context = None
-        self.memory = None
+
+        # Memvid parameters
+        self.memory_video_file = None
+        self.memory_index_file = None
+        self.memory_config = None
+        # Update parameters when memory video file exists.
+        if path_to_memory is not None and os.path.isfile(path_to_memory):
+            logger.info('Memory video file found.')
+            self.memory_init(path_to_memory)
 
         # Set the correct name for the model.
         if embedding == 'bert':
@@ -140,6 +153,7 @@ class LLMlight:
         # Load local model
         if os.path.isfile(self.endpoint):
             self.llm = load_local_gguf_model(self.endpoint, n_ctx=self.n_ctx)
+        logger.info('LLMlight is initialized.')
 
     def prompt(self,
                query,
@@ -188,25 +202,17 @@ class LLMlight:
             The model's response or an error message if the request fails.
         """
         logger.info(f'{self.model} is loaded..')
-        headers = {"Content-Type": "application/json"}
 
         if temperature is None: temperature = self.temperature
         if top_p is None: top_p = self.top_p
-        if context is None: context = self.context
-        # if embedding is not None: self.embedding = embedding
-        if isinstance(context, dict): context = '\n\n'.join(context.values())
-
-        # task (str): The use case for generation. (default: 'full')
-        #     'summarization'
-        #     'chat'
-        #     'code'
-        #     'longform'
-        #     'full'
-        # task = set_task(self.preprocessing, self.method)
         self.task = 'full'
 
         # Set system message
         system = set_system_message(system)
+        # Get context
+        context = self._get_context(context)
+        # Extract relevant text for video memory
+        context = self.get_video_memory(query, context)
         # Preprocessing on the context
         processed_context = self.compute_preprocessing(query, context, instructions, system)
         # Extract relevant text using retrieval method
@@ -217,12 +223,20 @@ class LLMlight:
         # Run model
         if os.path.isfile(self.endpoint):
             # Run LLM from gguf model
-            response = self.requests_post_gguf(prompt, system, temperature=temperature, top_p=top_p, headers=headers, task=self.task, stream=stream, return_type=return_type)
+            response = self.requests_post_gguf(prompt, system, temperature=temperature, top_p=top_p, task=self.task, stream=stream, return_type=return_type)
         else:
             # Run LLM with http model
-            response = self.requests_post_http(prompt, system, temperature=temperature, top_p=top_p, headers=headers, task=self.task, stream=stream, return_type=return_type)
+            response = self.requests_post_http(prompt, system, temperature=temperature, top_p=top_p, task=self.task, stream=stream, return_type=return_type)
         # Return
         return response
+
+    def _get_context(self, context):
+        # First get the context
+        if context is None:
+            context = self.context
+        if isinstance(context, dict):
+            context = '\n\n'.join(context.values())
+        return context
 
     def requests_post_gguf(self, prompt, system, temperature=0.8, top_p=1, headers=None, task='full', stream=False, return_type='string'):
         # Note that it is better to use messages_prompt instead of a dict (messages_dict) because most GGUF-based models don't have a tokenizer/parser that can interpret the JSON-style message structure.
@@ -311,6 +325,138 @@ class LLMlight:
         else:
             logger.error(f"{response.status_code} - {response}")
             return f"Error: {response.status_code} - {response}"
+
+    def memory_init(self, filepath: str = "llmlight_memory.mp4", config: dict = None):
+        """Build QR code video and index from chunks with unified codec handling.
+
+        Parameters
+        ----------
+        filepath : str
+            Path to output video memory file.
+
+        """
+        logger.info(f'Initializing video memory: {filepath}')
+        # Get the absolute filepath
+        filepath = os.path.abspath(filepath)
+        # Get directory path (folder)
+        directory = os.path.dirname(filepath)
+        # full filename with extension
+        filename = os.path.basename(filepath)
+        # split name and extension
+        name, extension = os.path.splitext(filename)
+
+        # Store file names
+        self.memory_video_file = filepath
+        self.memory_index_file = os.path.join(directory, name) + '.json'
+
+        # Initialize new encoder
+        self.encoder = MemvidEncoder(config=config)
+        # Update config from memvid Encoder
+        self.memory_config = self.encoder.config
+
+    def memory_add(self, text: Union[str, List[str]] = None, input_files: Union[str, List[str]] = None, filetypes: List[str] = ['.pdf', '.txt', '.epub']):
+        """Add chunks to memory.
+
+        Parameters
+        ----------
+        input_files : (str, list)
+            Path to file(s).
+
+        """
+        # Make checks
+        if self.memory_video_file is None or self.memory_index_file is None:
+            logger.error('Memory is not yet initialized. Use client.memory_init() first')
+            raise AssertionError('Memory is not yet initialized. Use client.memory_init() first')
+
+        # Make lists
+        if isinstance(text, str): text = [text]
+        if isinstance(input_files, str): input_files = [input_files]
+
+        # Add text chunk to memory
+        if text is not None:
+            logger.info(f'Adding {len(text)} text chunks to memory.')
+            self.encoder.add_chunks(text)
+
+        # Run over all files
+        if input_files is not None:
+            for filepath in input_files:
+                if not os.path.isfile(filepath):
+                    logger.warning(f"File not found: {filepath}")
+                else:
+                    # full filename with extension
+                    filename = os.path.basename(filepath)
+                    # split name and extension
+                    name, ext = os.path.splitext(filename)
+                    # Add to encoder
+                    if (ext == '.pdf') and (ext in filetypes):
+                        self.encoder.add_pdf(filepath, chunk_size=self.chunks['size'], overlap=self.chunks['overlap'])
+                    elif ext == '.txt' and (ext in filetypes):
+                        with open(filepath, "r", encoding="utf-8", errors="replace") as f:
+                            text = f.read()
+                            self.encoder.add_text(text, chunk_size=self.chunks['size'], overlap=self.chunks['overlap'])
+                    elif ext == '.epub' and (ext in filetypes):
+                        self.encoder.add_epub(filepath, chunk_size=self.chunks['size'], overlap=self.chunks['overlap'])
+                    elif ext in filetypes:
+                        with open(filepath, "r", encoding="utf-8", errors="replace") as f:
+                            text = f.read()
+                            self.encoder.add_text(text, chunk_size=self.chunks['size'], overlap=self.chunks['overlap'])
+                    else:
+                        continue
+                    # Show message
+                    logger.info(f'Added to memory: {filename}')
+
+    def memory_save(self,
+                     codec: str = 'mp4v',
+                     auto_build_docker: bool = True,
+                     allow_fallback: bool = True,
+                     overwrite: bool = False,
+                     show_progress: bool = True,
+                     ):
+        """Build QR code video and index from chunks with unified codec handling.
+
+        Parameters
+        ----------
+        codec : str, optional
+            Video codec ('mp4v', 'h265', 'h264', etc.)
+            'mp4v': Default
+        auto_build_docker : bool (default: True)
+            Whether to auto-build Docker if needed.
+        allow_fallback : bool
+            Whether to fall back to MP4V if advanced codec fails.
+        show_progress : bool (default: True)
+
+        """
+        # Make checks
+        if not hasattr(self, 'encoder') or len(self.encoder.chunks) == 0:
+            logger.error('No chunks to encode. Use client.add_chunks() first')
+            raise AssertionError('No chunks to encode. Use client.add_chunks() first')
+
+        # Check
+        if os.path.isfile(self.memory_video_file) and not overwrite:
+            logger.warning(f'File already exists and not allowed to overwrite: {self.memory_video_file}')
+            return
+
+        # Remove file if already exist
+        if overwrite:
+            if os.path.isfile(self.memory_video_file):
+                logger.info(f'Video memory file is overwriten: {self.memory_video_file}')
+                os.remove(self.memory_video_file)
+            # Also remove the index file
+            if os.path.isfile(self.memory_index_file):
+                os.remove(self.memory_index_file)
+
+        logger.info(f'Building video-memory for {len(self.encoder.chunks)} chunks: {self.memory_video_file}')
+        # Build the by passing all parameters to the building proces
+        self.encoder.build_video(output_file=self.memory_video_file,
+                                 index_file=self.memory_index_file,
+                                 codec=codec,
+                                 show_progress=show_progress,
+                                 auto_build_docker=auto_build_docker,
+                                 allow_fallback=allow_fallback,
+                                 )
+
+        # Clear all chunks of text from list because it will use the video memory file.
+        self.encoder.chunks = []
 
     def task(self,
              query="Extract key insights while maintaining coherence of the previous summaries.",
@@ -404,32 +550,6 @@ class LLMlight:
         # Return
         return final_result
         # return {'summary': final_result, 'summary_per_chunk': results_total}
-
-    # def query_llm(self, prompt, system=None, task='full', stream=False, return_type='string'):
-    #     """Calls the LLM and returns the response."""
-    #     # Set defaults
-    #     headers = {"Content-Type": "application/json"}
-    #     # System
-    #     if system is None: system = "You are a helpful assistant."
-    #     # Messages
-    #     messages = [{"role": "system", "content": system}, {"role": "user", "content": prompt}]
-    #     # Compute tokens
-    #     used_tokens, max_tokens = compute_tokens(prompt, n_ctx=self.n_ctx, task=task)
-
-    #     data = {
-    #         "model": self.model,
-    #         "messages": messages,
-    #         "temperature": self.temperature,
-    #         "top_p": self.top_p,
-    #         "stream": stream,
-    #         "max_tokens": max_tokens,
-    #         }
-
-    #     # Send POST request
-    #     response = self.requests_post(headers, data, return_type=return_type)
-
-    #     # Return
-    #     return response
 
     def global_reasoning(self, query, context, instructions, system, return_per_chunk=False, rewrite_query=False, stream=False):
         """Global Reasoning.
@@ -665,7 +785,7 @@ class LLMlight:
         return final_response
         # return {'response': final_response, 'response_per_chunk': response_total}
 
-    def parse_large_document(self, query, context, return_type='string'):
+    def parse_large_document(self, query, context, return_type='string', top_chunks=None):
         """Splits large text into chunks and finds the most relevant ones."""
         # Create chunks
         chunks = utils.chunk_text(context, method=self.chunks['method'], chunk_size=self.chunks['size'], overlap=self.chunks['overlap'])
@@ -674,11 +794,9 @@ class LLMlight:
         # Compute similarity
         similarities = cosine_similarity(query_vector, chunk_vectors)[0]
         # Get top scoring chunks
-        if self.chunks['top_chunks'] is None:
+        if top_chunks is None:
             top_chunks = len(similarities)
             logger.info('Number of top chunks selected is set to: {top_chunks}')
-        else:
-            top_chunks = self.chunks['top_chunks']
 
         top_indices = np.argsort(similarities)[-top_chunks:][::-1]
 
@@ -735,13 +853,35 @@ class LLMlight:
         # Return
         return relevant_context
 
+    def get_video_memory(self, query, context):
+        # Get context from video Memory
+        if self.memory_video_file is not None and os.path.isfile(self.memory_video_file) and os.path.isfile(self.memory_index_file):
+            if len(self.encoder.chunks) > 0:
+                logger.warning('Documents are stored in the encoder but not saved into video memory! Information is only accessible after saving: client.memory_save()')
+            logger.info(f"Text retrieval from video memory for [{self.chunks['top_chunks']}] chunks.")
+            # Initialize retriever
+            retriever = MemvidRetriever(video_file=self.memory_video_file, index_file=self.memory_index_file, config=self.memory_config)
+            # Get relevant chunks
+            memory_chunks = retriever.search(query, top_k=self.chunks['top_chunks'])
+            # memory_chunks = retriever.index_manager.search(query, top_k=self.chunks['top_chunks'])
+            # Join the chunks in context
+            relevant_context = "\n---------\n".join(memory_chunks)
+
+            # Append context
+            if context is not None:
+                relevant_context = relevant_context + "\n---------\n" + context
+            # Return
+            return relevant_context
+        else:
+            return context
+
     def relevant_text_retrieval(self, query, context, instructions, system):
-        # Create advanced prompt using relevant chunks of text, the input query and instructions
         if context is not None:
+            # Create advanced prompt using relevant chunks of text, the input query and instructions
             if self.method == 'naive_RAG' and np.isin(self.embedding, ['tfidf', 'bow', 'bert', 'bge-small']):
                 # Find the best matching parts using simple retrieval method approach.
                 logger.info(f'[{self.method}] approach is applied with [{self.embedding}] embedding.')
-                relevant_context = self.parse_large_document(query, context, return_type='string')
+                relevant_context = self.parse_large_document(query, context, return_type='string', top_chunks=self.chunks['top_chunks'])
             elif self.method == 'RSE' and np.isin(self.embedding, ['bert', 'bge-small']):
                 logger.info(f'RAG approach [{self.method}] is applied.')
                 relevant_context = RAG_with_RSE(context, query, label=None, chunk_size=self.chunks['size'], irrelevant_chunk_penalty=0, embedding=self.embedding, device='cpu', batch_size=32)
@@ -749,7 +889,6 @@ class LLMlight:
                 logger.info(f'No method is applied: The entire context is used.')
                 relevant_context = context
         else:
-            # Default
             relevant_context = context
 
         # Return
@@ -1008,8 +1147,18 @@ def compute_max_tokens(used_tokens, n_ctx=4096, task="full"):
 
 
 def set_system_message(system):
-    return "You are a helpful assistant." if system is None else system
+    if system is None:
+        system = """You are a helpful AI assistant with access to a knowledge base. 
 
+        When answering questions:
+        1. Use the provided context from the knowledge base when relevant
+        2. Be clear about what information comes from the knowledge base vs. your general knowledge
+        3. If the context doesn't contain enough information, say so clearly
+        4. Provide helpful, accurate, and concise responses
+
+    The context will be provided with each query based on semantic similarity to the user's question."""
+
+    return system
 
 
 # %%

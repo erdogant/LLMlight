@@ -25,7 +25,6 @@ _log_handler.setLevel(logging.DEBUG)
 _logger.propagate = False
 
 
-
 # module level doc-string
 __doc__ = """
 LLMlight
