@@ -181,20 +181,20 @@ print(response)
 from LLMlight import LLMlight
 
 # Initialize with default settings
-client = LLMlight(embedding=None, chunks=None)
+client = LLMlight(preprocessing=None, retrieval_method=None)
 
-# Create new video memory
-client.memory_init(filepath="knowledge_base.mp4")
+# Load existing video memory
+client.memory_init(path_to_memory="knowledge_base.mp4")
 
-# Add PDF/txt/etc files
+# Append more documents: PDF/txt/etc files
 filepaths = [r'c://path_to_your_files//article_1.pdf', r'c://path_to_your_files//my_file.txt']
 client.memory_add(input_files=filepaths)
 
-# Add text chunks
+# Add text chunks if you like
 client.memory_add(text=['Apes like USB sticks', 'Trees are mainly yellow'])
 
-# Save Memory to disk
-client.memory_save(overwrite=False)
+# Save Memory to disk. You can either create new one or overwite existing one.
+client.memory_save(filepath="knowledge_base_with_more_data.mp4", overwrite=False)
 
 # Run a simple query
 response = client.prompt('What do apes like?', instructions='Only return the information from the context. Answer with maximum of 3 words, and starts with "Apes like: "')
@@ -216,7 +216,7 @@ print(response)
 from LLMlight import LLMlight
 
 # Initialize with default settings
-client = LLMlight(embedding=None, chunks=None, filepath="knowledge_base.mp4")
+client = LLMlight(preprocessing=None, retrieval_method=None, path_to_memory="knowledge_base.mp4")
 
 # Create queries
 response = client.prompt('What do apes like?', instructions='Only return the information from the context. Answer with maximum of 3 words, and starts with "Apes like: "')
