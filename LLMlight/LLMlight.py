@@ -139,8 +139,7 @@ class LLMlight:
         self.memory_index_file = None
         self.memory_config = None
         # Update parameters when memory video file exists.
-        if path_to_memory is not None and os.path.isfile(path_to_memory):
-            logger.info('Memory video file found.')
+        if path_to_memory is not None:
             self.memory_init(path_to_memory)
 
         # Set the correct name for the model.
@@ -218,6 +217,7 @@ class LLMlight:
         # Extract relevant text using retrieval method
         relevant_context = self.relevant_text_retrieval(query, processed_context, instructions, system)
         # Set the prompt
+        logger.debug(relevant_context)
         prompt = self.set_prompt(query, instructions, relevant_context, response_format=response_format)
 
         # Run model
@@ -335,7 +335,10 @@ class LLMlight:
             Path to output video memory file.
 
         """
-        logger.info(f'Initializing video memory: {filepath}')
+        if os.path.isfile(filepath):
+            logger.info(f'Initializing existing video memory: {filepath}')
+        else:
+            logger.info(f'Initializing new video memory: {filepath}')
         # Get the absolute filepath
         filepath = os.path.abspath(filepath)
         # Get directory path (folder)
@@ -844,7 +847,7 @@ class LLMlight:
                 # Analyze per chunk
                 relevant_context = self.chunk_wise(query, context, instructions, system, top_chunks=0, return_per_chunk=True)
             else:
-                logger.info(f'No method is applied: The entire context is used.')
+                logger.info(f'No preprocessing method is applied.')
                 relevant_context = context
         else:
             # Default
@@ -855,21 +858,20 @@ class LLMlight:
 
     def get_video_memory(self, query, context):
         # Get context from video Memory
-        if self.memory_video_file is not None and os.path.isfile(self.memory_video_file) and os.path.isfile(self.memory_index_file):
-            if len(self.encoder.chunks) > 0:
-                logger.warning('Documents are stored in the encoder but not saved into video memory! Information is only accessible after saving: client.memory_save()')
+        if hasattr(self, 'encoder') and len(self.encoder.chunks) > 0:
+            logger.warning('Documents are stored in the encoder but not saved into video memory! Use save first: client.memory_save() to include the information.')
+
+        if (self.memory_video_file is not None) and os.path.isfile(self.memory_video_file) and os.path.isfile(self.memory_index_file):
             logger.info(f"Text retrieval from video memory for [{self.chunks['top_chunks']}] chunks.")
             # Initialize retriever
             retriever = MemvidRetriever(video_file=self.memory_video_file, index_file=self.memory_index_file, config=self.memory_config)
             # Get relevant chunks
             memory_chunks = retriever.search(query, top_k=self.chunks['top_chunks'])
             # memory_chunks = retriever.index_manager.search(query, top_k=self.chunks['top_chunks'])
-            # Join the chunks in context
-            relevant_context = "\n---------\n".join(memory_chunks)
-
             # Append context
-            if context is not None:
-                relevant_context = relevant_context + "\n---------\n" + context
+            if context is not None and context != '': memory_chunks.append(context)
+            # Join the chunks in context
+            relevant_context = "\n\n---\n\n".join([f"### Chunk {i+1}:\n{s}" for i, s in enumerate(memory_chunks)])
             # Return
             return relevant_context
         else:
@@ -886,7 +888,7 @@ class LLMlight:
                 logger.info(f'RAG approach [{self.method}] is applied.')
                 relevant_context = RAG_with_RSE(context, query, label=None, chunk_size=self.chunks['size'], irrelevant_chunk_penalty=0, embedding=self.embedding, device='cpu', batch_size=32)
             else:
-                logger.info(f'No method is applied: The entire context is used.')
+                logger.info(f'No retrieval method is applied.')
                 relevant_context = context
         else:
             relevant_context = context
@@ -898,11 +900,11 @@ class LLMlight:
         # Default and update when context and instructions are available.
         prompt = (
             ("Context:\n" + context + "\n\n" if context else "")
-            + (f"Instructions:\n{instructions}\n\n" if instructions != '' else "")
-            + (f"Response format:\n{response_format}\n\n" if (response_format != '') and (response_format is not None) else "")
-            + f"User question:\n"
+            + ("Instructions:\n" + instructions + "\n\n" if instructions not in ("", None) else "")
+            + ("Response format:\n" + response_format + "\n\n" if response_format not in ("", None) else "")
+            + "User question:\n"
             + query
-            )
+        )
 
         # Return
         return prompt
