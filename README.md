@@ -23,7 +23,16 @@ LLMlight is a Python package for running Large Language Models (LLMs) locally wi
 ## 🌟 Key Features
 
 - **Local LLM Support**: Run LLMs locally with minimal dependencies
-- **Multiple Model Support**: Compatible with various models including:
+- **Full Promp Control**:
+  - Query
+  - Instructions
+  - System
+  - Context
+  - Response Format
+  - Automatic formatting
+  - Temperature
+  - Top P
+- **Single Endpoint will Connect All Local Models**: Compatible with various models including:
   - Hermes-3-Llama-3.2-3B
   - Mistral-7B-Grok
   - OpenHermes-2.5-Mistral-7B
@@ -36,8 +45,12 @@ LLMlight is a Python package for running Large Language Models (LLMs) locally wi
 - **Advanced Retrieval Methods**:
   - Naive RAG with fixed chunking
   - RSE (Relevant Segment Extraction)
+- **Advanced Preprocessing Methods**: Advanced reasoning capabilities for complex queries.
+  - Global-reasoning
+  - chunk-wise
+- **Local Memory**: 
+  - Video memory for storage 
 - **PDF Processing**: Built-in support for reading and processing PDF documents
-- **Global Reasoning**: Advanced reasoning capabilities for complex queries
 
 ## 📚 Documentation & Resources
 
