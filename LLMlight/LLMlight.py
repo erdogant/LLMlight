@@ -47,6 +47,57 @@ class LLMlight:
     5. Enable "server on local network" if you need.
     6. Enable Running.
 
+    How LLMlight Works
+    -----------------
+    LLMlight processes text through several key stages to generate intelligent responses:
+
+    1. Preprocessing Stage
+    ---------------------
+    The input context can be processed in different ways:
+    - No preprocessing: Uses the raw context directly
+    - Chunk-wise processing: Breaks down the context into manageable chunks, processes each chunk independently, and combines results
+    - Global reasoning: Creates a global summary of the context before processing
+
+    2. Retrieval Method Stage
+    ------------------------
+    Three main approaches for retrieving relevant information:
+    - Naive RAG: Splits text into chunks and uses similarity scoring to find the most relevant sections
+    - RSE (Relevant Segment Extraction): Identifies and extracts complete relevant text segments
+    - No retrieval: Uses the entire context directly
+
+    3. Embedding Stage
+    -----------------
+    Multiple embedding options for text representation:
+    - TF-IDF: Best for structured documents with matching query terms
+    - Bag of Words: Simple word frequency approach
+    - BERT: Advanced contextual embeddings for free-form text
+    - BGE-small: Efficient embedding model for general use
+
+    4. Prompting Stage
+    -----------------
+    The system constructs prompts by combining:
+    - System message: Defines the AI's role and behavior
+    - Context: Processed and retrieved relevant information
+    - User query: The specific question or request
+    - Instructions: Additional guidance for response generation
+
+    5. Response Generation
+    ---------------------
+    The model generates responses using:
+    - Temperature control: Adjusts response randomness (0.7 default)
+    - Top-p sampling: Controls response diversity
+    - Context window management: Handles token limits efficiently
+
+    The system can be configured through various parameters to optimize for different use cases, from simple Q&A to complex document analysis.
+
+    Processing Flow
+    --------------
+    The system follows a sequential processing flow where each stage builds upon the previous one. First, the input context undergoes preprocessing, where it can be either used as-is or transformed into chunks for more manageable processing. These chunks are then passed through the retrieval method stage, which determines how relevant information is extracted and organized.
+    During the embedding stage, the text is converted into numerical representations that capture its semantic meaning. This is crucial for the system to understand and process the content effectively. The embedding method chosen can significantly impact the system's ability to match queries with relevant content.
+    The prompting stage brings together all the processed information, combining it with the user's query and any specific instructions. This creates a comprehensive prompt that guides the model in generating an appropriate response. The final response generation stage uses this prompt to create a coherent and relevant output, with parameters like temperature and top-p sampling helping to control the response's characteristics.
+    Throughout this process, the system maintains flexibility through various configuration options, allowing it to adapt to different types of queries and contexts. This modular approach enables the system to handle everything from simple questions to complex document analysis tasks efficiently.
+
+
     Parameters
     ----------
     model : str
