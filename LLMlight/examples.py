@@ -3,6 +3,45 @@
 # print(dir(llm))
 # print(llm.__version__)
 
+#%%
+# import json
+# index_path = r'D:\REPOS\LLMlight\knowledge_base.json'
+# with open(index_path, 'r') as f:
+#     index_data = json.load(f)
+#     chunk_count = len(index_data.get('metadata', []))
+#     print(f"✅ Index contains {chunk_count} chunks")
+
+
+#%% Import files into video memory
+from LLMlight import LLMlight
+
+dirpath = r'D:\OneDrive - Tilburg University\TiU\PROJECTS\thesis_evaluation\data'
+dirpath = r'D:\Users\Documents\Hack'
+
+# Initialize with default settings
+client = LLMlight(retrieval_method=None, preprocessing=None, embedding='tfidf')
+# Create new memory
+client.memory_init(path_to_memory=r'D:\REPOS\LLMlight\knowledge_base.mp4')
+# Add dir recusrively
+# client.memory_add(dirpath=dirpath, overwrite=True)
+# Store memory to disk
+# client.memory_save(overwrite=True)
+# Query
+response = client.prompt('What is the Thesis Proposal of Samuel Christian Gobel and who is in the Committee?')
+print(response)
+
+#%%
+from LLMlight import LLMlight
+
+# Initialize with default settings
+client = LLMlight(retrieval_method=None, preprocessing='global-reasoning', chunks = {'method': 'chars', 'size': 1000, 'overlap': 200, 'top_chunks': 10})
+# Create new memory
+client.memory_init(path_to_memory='knowledge_base.mp4')
+# Query
+response = client.prompt('What is the Thesis Proposal of Samuel Christian Gobel, Burnout Classification')
+print(response)
+
+
 #%% Load video memory, append and store in other file. Then check if info exists
 from LLMlight import LLMlight
 
@@ -25,10 +64,6 @@ print(response)
 
 # Initialize with default settings
 client = LLMlight(retrieval_method=None, preprocessing=None, path_to_memory='knowledge_base.mp4')
-# Test for the floor
-response = client.prompt('What is the capital of France?', instructions='Do not argue with the information in the context. Only return the information from the context.')
-print(response)
-
 # NEW chunks can NOT be added!
 client.memory_add(text=['The floor is paper!'])
 # Store memory to disk
@@ -40,7 +75,6 @@ print(response)
 # Also test for Amsterdam
 response = client.prompt('What is the capital of France?', instructions='Do not argue with the information in the context. Only return the information from the context.')
 print(response)
-client.encoder.clear
 
 #%% No video memory usage
 from LLMlight import LLMlight
