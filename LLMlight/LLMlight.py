@@ -200,6 +200,16 @@ class LLMlight:
             'string': Return only the string answer (remove thinking strings using tags: <think> </think>).
             'string_with_thinking' Return the full response which includes the thinking proces (if available).
 
+        Examples
+        --------
+        >>> # Examples
+        >>> from LLMlight import LLMlight
+        >>> client =  LLMlight()
+        >>> client.prompt('hello, who are you?')
+        >>> system_message = "You are a helpful assistant."
+        >>> response = client.prompt('What is the capital of France?', system=system_message, top_p=0.9)
+        >>> print(response)
+
         Returns
         -------
         str
@@ -993,19 +1003,20 @@ class LLMlight:
 
         # Check each model whether it returns a response
         if validate:
-            logger.info("Validating models:")
+            logger.info("Validating the working of each available model. Be patient.")
             keys = copy.deepcopy(list(model_dict.keys()))
 
             for key in keys:
+                logger.info(f'Checking: {key}')
                 from LLMlight import LLMlight
-                llm = LLMlight(model=key)
-                response = llm.prompt('What is the capital of France?', system="You are a helpful assistant.", return_type='string')
+                llm = LLMlight(model=key, verbose=None)
+                response = llm.prompt('What is the capital of France?', instructions="You are only allowed to return one word.", return_type='string')
                 response = response[0:30].replace('\n', ' ').replace('\r', ' ').lower()
                 if 'error: 404' in response:
                     logger.error(f"{llm.model}: {response}")
                     model_dict.pop(key)
                 else:
-                    logger.info(f"{llm.model}: {response}")
+                    logger.debug(f"{llm.model}: {response}")
 
         return list(model_dict.keys())
 
