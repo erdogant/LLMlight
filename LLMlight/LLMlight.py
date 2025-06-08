@@ -103,6 +103,7 @@ class LLMlight:
     >>> client.prompt('hello, who are you?')
     >>> system_message = "You are a helpful assistant."
     >>> response = client.prompt('What is the capital of France?', system=system_message, top_p=0.9)
+    >>> print(response)
 
     """
     def __init__(self,
@@ -121,6 +122,7 @@ class LLMlight:
 
         # Set the logger
         set_logger(verbose)
+
         # Store data in self
         self.model = model
         self.preprocessing = preprocessing
@@ -129,10 +131,12 @@ class LLMlight:
         self.temperature = temperature
         self.top_p = top_p
         self.endpoint = endpoint
-        if chunks is None: chunks = {}
-        self.chunks = {**{'method': 'chars', 'size': 1000, 'overlap': 250, 'top_chunks': 5}, **chunks}
         self.n_ctx = n_ctx
         self.context = None
+
+        # Set chunk parameters
+        if chunks is None: chunks = {}
+        self.chunks = {**{'method': 'chars', 'size': 1000, 'overlap': 250, 'top_chunks': 5}, **chunks}
 
         # Memvid parameters
         self.memory_video_file = None
@@ -142,14 +146,15 @@ class LLMlight:
         if path_to_memory is not None:
             self.memory_init(path_to_memory)
 
-        # Set the correct name for the model.
+        # Set embedding model parameters.
         if embedding == 'bert':
             self.embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
         elif embedding == 'bge-small':
             self.embedding_model = SentenceTransformer('BAAI/bge-small-en')
         else:
             self.embedding_model = None
-        # Load local model
+
+        # Load local LLM gguf model
         if os.path.isfile(self.endpoint):
             self.llm = load_local_gguf_model(self.endpoint, n_ctx=self.n_ctx)
         logger.info('LLMlight is initialized.')
