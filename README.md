@@ -70,64 +70,83 @@ pip install LLMlight
 pip install git+https://github.com/erdogant/LLMlight
 ```
 
-### Basic Usage
+### Basic Usage with Endpoint
 
 ```python
 from LLMlight import LLMlight
 
 # Initialize with default settings
-model = LLMlight()
+client = LLMlight(endpoint='http://localhost:1234/v1/chat/completions')
 
 # Run a simple query
-response = model.prompt('What is the capital of France?', 
-                    system="You are a helpful assistant.")
+response = client.prompt('What is the capital of France?',
+                         context='The capital of France is Amsterdam.',
+                         instructions='Do not argue with the information in the context. Only return the information from the context.')
+print(response)
+# According to the provided context, the capital of France is Amsterdam.
 
-# Use with a local GGUF model
-model = LLMlight(endpoint='path/to/your/model.gguf')
-response = model.prompt('Tell me about quantum computing')
 ```
 
 ## 📊 Examples
 
-### 1. Using with LM Studio
+
+### 1. Basic Usage with Local GGUF
+
+```python
+from LLMlight import LLMlight
+
+# Use with a local GGUF client
+client = LLMlight(endpoint='path/to/your/client.gguf')
+
+# Run a simple query
+response = client.prompt('What is the capital of France?',
+                         context='The capital of France is Amsterdam.',
+                         instructions='Do not argue with the information in the context. Only return the information from the context.')
+print(response)
+# According to the provided context, the capital of France is Amsterdam.
+
+```
+
+### 2. Using with LM Studio
 
 ```python
 from LLMlight import LLMlight
 
 # Initialize with LM Studio endpoint
-model = LLMlight(endpoint="http://localhost:1234/v1/chat/completions")
+client = LLMlight(endpoint="http://localhost:1234/v1/chat/completions")
 
 # Run queries
-response = model.prompt('Explain quantum computing in simple terms')
+response = client.prompt('Explain quantum computing in simple terms')
 ```
 
-### 2. Validate Models
+### 3. Check Available Models at Endpoint
 
 ```python
 from LLMlight import LLMlight
 
-# Initialize model
+# Initialize client
 from LLMlight import LLMlight
-model = LLMlight(verbose='info')
+client = LLMlight(verbose='info')
 
-modelnames = model.get_available_models(validate=True)
+modelnames = client.get_available_models(validate=False)
 print(modelnames)
 
 ```
 
-### 3. Processing PDF Documents and Ask Questions
+### 3. Query against PDF files
 
 ```python
 from LLMlight import LLMlight
 
-# Initialize model
-model = LLMlight()
+# Initialize client
+client = LLMlight()
 
-# Read and process PDF
-model.read_pdf('path/to/document.pdf')
+# Read PDF
+context = client.read_pdf(r'path/to/document.pdf', return_type='string')
 
-# Query about the document
-response = model.prompt('Summarize the main points of this document')
+# Query the document
+response = client.prompt('Summarize the main points of this document', 
+                         context=context)
 
 print(response)
 
@@ -138,17 +157,70 @@ print(response)
 ```python
 from LLMlight import LLMlight
 
-# Initialize model
-model = LLMlight()
+# Initialize client
+client = LLMlight(preprocessing='global_reasoning')
 
-# Read and process PDF
-model.read_pdf('path/to/document.pdf')
+# Read PDF
+context = client.read_pdf(r'path/to/document.pdf', return_type='string')
 
 # Query about the document
-response = model.prompt('Summarize the main points of this document', global_reasoning=True)
+response = client.prompt('Summarize the main points of this document', 
+                         context=context,
+                         instructions='Do not argue with the information in the context. Only return the information from the context.')
 
 print(response)
 
+```
+
+
+### 5. Creating Local Memory Database
+
+```python
+
+# Import library
+from LLMlight import LLMlight
+
+# Initialize with default settings
+client = LLMlight(embedding=None, chunks=None)
+
+# Create new video memory
+client.memory_init(filepath="knowledge_base.mp4")
+
+# Add PDF/txt/etc files
+filepaths = [r'c://path_to_your_files//article_1.pdf', r'c://path_to_your_files//my_file.txt']
+client.memory_add(input_files=filepaths)
+
+# Add text chunks
+client.memory_add(text=['Apes like USB sticks', 'Trees are mainly yellow'])
+
+# Save Memory to disk
+client.memory_save(overwrite=False)
+
+# Run a simple query
+response = client.prompt('What do apes like?', instructions='Only return the information from the context. Answer with maximum of 3 words, and starts with "Apes like: "')
+print(response)
+
+response = client.prompt('What is the capital of France?', context='The capital of France is Amsterdam.', instructions='Do not argue with the information in the context. Only return the information from the context.')
+print(response)
+
+response = client.prompt('Provide a summary of HyperSpectral from the pdf or text file.', instructions='Do not argue with the information in the context. Only return the information from the context.')
+print(response)
+
+```
+
+### 6. Load Local Memory Database
+
+```python
+
+# Import library
+from LLMlight import LLMlight
+
+# Initialize with default settings
+client = LLMlight(embedding=None, chunks=None, filepath="knowledge_base.mp4")
+
+# Create queries
+response = client.prompt('What do apes like?', instructions='Only return the information from the context. Answer with maximum of 3 words, and starts with "Apes like: "')
+print(response)
 
 ```
 
