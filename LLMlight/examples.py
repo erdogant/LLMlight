@@ -7,19 +7,22 @@
 from LLMlight import LLMlight
 
 # Initialize with default settings
-client = LLMlight(embedding=None, chunks=None)
+client = LLMlight(embedding=None, chunks=None, verbose='debug')
 
 # Run a simple query
+# response = client.prompt('What is the capital of France?')
+# print(response)
+
 response = client.prompt('What is the capital of France?')
+print(response)
+
+response = client.prompt('What is the capital of France?', context='The capital of France is Amsterdam.', instructions='Do not argue with the information in the context. Only return the information from the context.')
 print(response)
 
 response = client.prompt('What do apes like?', instructions='Answer with maximum of 3 words, and starts with "Apes like: "')
 print(response)
 
 response = client.prompt('Provide a summary of HyperSpectral.')
-print(response)
-
-response = client.prompt('What is NDVI with related?', instructions='Use stricly information from the context. Return no information is nothing is found.')
 print(response)
 
 
@@ -40,10 +43,7 @@ print(response)
 response = client.prompt('What do apes like?', instructions='Answer with maximum of 3 words, and starts with "Apes like: "')
 print(response)
 
-response = client.prompt('Provide a summary of HyperSpectral.')
-print(response)
-
-response = client.prompt('What is NDVI with related?', instructions='Use stricly information from the context. Return no information is nothing is found.')
+response = client.prompt('Provide a summary of HyperSpectral.', instructions='Do not argue with the information in the context. Only return the information from the context.')
 print(response)
 
 
@@ -54,7 +54,7 @@ from LLMlight import LLMlight
 client = LLMlight(embedding=None, chunks=None, path_to_memory="knowledge_base.mp4")
 
 # Run a simple query
-response = client.prompt('What is the capital of France?', context='The capital of France is Amsterdam.')
+response = client.prompt('What is the capital of France?', context='The capital of France is Amsterdam.', instructions='Do not argue with the information in the context. Only return the information from the context.')
 print(response)
 
 response = client.prompt('What do apes like?')
@@ -64,12 +64,11 @@ response = client.prompt('Provide a summary of HyperSpectral.')
 print(response)
 
 
-
 #%% Create new video memory and use it with prompting
 from LLMlight import LLMlight
 
 # Initialize with default settings
-client = LLMlight(embedding=None, chunks=None)
+client = LLMlight(embedding=None, chunks=None, verbose='debug')
 
 # Create new memory
 client.memory_init(filepath="knowledge_base.mp4")
@@ -77,20 +76,19 @@ client.memory_init(filepath="knowledge_base.mp4")
 # Add chunks
 filepath = r'D:\Users\Documents\Hack\PCA on HyperSpectral Data. A Beginner friendly tutorial on… _ by Richa Dutt _ Towards Data Science.pdf'
 client.memory_add(input_files=filepath)
-# client.memory_add(text='The capital of France is Amsterdam.')
 client.memory_add(text=['Apes like USB sticks', 'Trees are mainly yellow'])
 
 # Build memory
 client.memory_save(overwrite=False)
 
 # Run a simple query
-response = client.prompt('What is the capital of France?', context='The capital of France is Amsterdam.')
+response = client.prompt('What is the capital of France?', context='The capital of France is Amsterdam.', instructions='Do not argue with the information in the context. Only return the information from the context.')
 print(response)
 
-response = client.prompt('What do apes like?', instructions='Answer with maximum of 3 words, and starts with "Apes like: "')
+response = client.prompt('What do apes like?', instructions='Only return the information from the context. Answer with maximum of 3 words, and starts with "Apes like: "')
 print(response)
 
-response = client.prompt('Provide a summary of HyperSpectral.')
+response = client.prompt('Provide a summary of HyperSpectral.', instructions='Do not argue with the information in the context. Only return the information from the context.')
 print(response)
 
 
