@@ -27,11 +27,11 @@ from sentence_transformers import SentenceTransformer
 from memvid import MemvidEncoder, MemvidRetriever
 # from memvid.config import get_default_config as memvid_get_default_config
 
-# from .RAG import RAG_with_RSE
-# from . import utils
+from .RAG import RAG_with_RSE
+from . import utils
 # DEBUG
-import utils
-from RAG import RAG_with_RSE
+# import utils
+# from RAG import RAG_with_RSE
 
 logger = logging.getLogger(__name__)
 
@@ -108,20 +108,24 @@ class LLMlight:
     system : str
         String of the system message.
         "I am a helpfull assistant"
-    retrieval_method : str (default: 'naive_RAG')
-         None:              No processing. The entire context is used for the query.
-        'naive_RAG':        Ideal for chats and when you need to answer specfic questions: Chunk of text are created. Use cosine similarity to for ranking. The top scoring chunks will be combined (n chunks) and used as input with the prompt.
-        'RSE':              Identify and extract entire segments of relevant text.
-    embedding : str (default: 'bert')
-        None
-        'tfidf': Best use when it is a structured documents and the words in the queries are matching.
-        'bow': Bag of words approach. Best use when you expect words in the document and queries to be matching.
-        'bert': Best use when document is more free text and the queries may not match exactly the words or sentences in the document.
+    retrieval_method : str (default: 'RAG_basic')
+        None:                   No processing. The entire context is used for the query.
+        'knowledge_base.mp4'    Local or absolute path to your (video) memory file.
+        'RAG_basic':            Context is processed using Navie RAG approach. Ideal for chats and when you need to answer specfic questions: Chunk of text are created. Use cosine similarity to for ranking. The top scoring chunks will be combined (n chunks) and used as input with the prompt.
+        'RSE':                  Context is processed using Navie RSE approach. Identify and extract entire segments of relevant text.
+    embedding : str, dict (default: 'automatic')
+        Specify the embedding. When using both video-memory and context, it can be specified with a dictionary: {'memory': 'memvid', 'RAG_basic': 'bert'}
+        'automatic':            {'memory': 'memvid', 'RAG_basic': 'bert'}
+        None:                   No embedding is performed.
+        'memvid':               This embedding can only be applied when using video-memory in the retrieval method.
+        'tfidf':                Best use when it is a structured documents and the words in the queries are matching.
+        'bow':                  Bag of words approach. Best use when you expect words in the document and queries to be matching.
+        'bert':                 Best use when document is more free text and the queries may not match exactly the words or sentences in the document.
         'bge-small':
     preprocessing : str (default: None)
-         None:              No pre-processing. The original context is used in the pipeline of retrieval_method, embedding and the response.
-        'chunk-wise':       The input context will be analyze chunkwise based on the query, instructions and system. The total set of answered-chunks is then returned. The normal pipeline proceeds for the query, instructions, system etc.
-        'global-reasoning': The input context will be summarized per chunk globally. The total set of summarized context is then returned. The normal pipeline proceeds for the query, instructions, system etc.
+         None:                  No pre-processing. The original context is used in the pipeline of retrieval_method, embedding and the response.
+        'global-reasoning':     The input context will be summarized per chunk globally. The total set of summarized context is then returned. The normal pipeline proceeds for the query, instructions, system etc.
+        'chunk-wise':           The input context will be analyze chunkwise based on the query, instructions and system. The total set of answered-chunks is then returned. The normal pipeline proceeds for the query, instructions, system etc.
     temperature : float, optional
         Sampling temperature.
         0.7: (default)
@@ -159,15 +163,14 @@ class LLMlight:
     """
     def __init__(self,
                  model: str = "hermes-3-llama-3.2-3b",
-                 retrieval_method: str = 'naive_RAG',
-                 embedding: str = 'bert',
+                 retrieval_method: str = 'RAG_basic',
+                 embedding: (str, dict) = {'memory': 'memvid', 'context': 'bert'},
                  preprocessing: str = None,
                  temperature: (int, float) = 0.7,
                  top_p: (int, float) = 1.0,
                  chunks: dict = {'method': 'chars', 'size': 1024, 'overlap': 200, 'top_chunks': 5},
                  endpoint: str = "http://localhost:1234/v1/chat/completions",
                  n_ctx: int = 4096,
-                 path_to_memory: str = None,
                  verbose: (str, int) = 'info',
                  ):
 
@@ -178,12 +181,12 @@ class LLMlight:
         self.model = model
         self.preprocessing = preprocessing
         self.retrieval_method = retrieval_method
-        self.embedding = embedding
         self.temperature = temperature
         self.top_p = top_p
         self.endpoint = endpoint
         self.n_ctx = n_ctx
         self.context = None
+        self.embedding = _set_embedding(embedding)
 
         # Set chunk parameters
         if chunks is None: chunks = {}
@@ -193,22 +196,19 @@ class LLMlight:
         self.memory_video_file = None
         self.memory_index_file = None
         self.memory_config = None
-        # Update parameters when memory video memory exists.
-        if path_to_memory is not None:
-            self.memory_init(path_to_memory)
-
-        # Set embedding model parameters.
-        if embedding == 'bert':
-            self.embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
-        elif embedding == 'bge-small':
-            self.embedding_model = SentenceTransformer('BAAI/bge-small-en')
-        else:
-            self.embedding_model = None
+        # Update parameters when video-memory exists.
+        if retrieval_method is not None and os.path.isfile(retrieval_method):
+            self.memory_init(retrieval_method)
 
         # Load local LLM gguf model
         if os.path.isfile(self.endpoint):
             self.llm = load_local_gguf_model(self.endpoint, n_ctx=self.n_ctx)
-        logger.info('LLMlight is initialized.')
+
+        logger.info('LLMlight is initialized!')
+        logger.info(f'Model: {self.model}')
+        logger.info(f'Preprocessing: {self.preprocessing or "disabled"}')
+        logger.info(f'Retrieval method: {self.retrieval_method or "disabled"}')
+        logger.info(f'Embedding: {self.embedding or "disabled"}')
 
     def prompt(self,
                query: str,
@@ -268,25 +268,33 @@ class LLMlight:
             The model's response or an error message if the request fails.
         """
         if verbose is not None: set_logger(verbose)
-        logger.info(f'{self.model} is loaded..')
+        logger.info(f'Creating response with {self.model}..')
 
+        if context is None: context = self.context
         if temperature is None: temperature = self.temperature
         if top_p is None: top_p = self.top_p
         self.task = 'full'
 
         # Set system message
         system = set_system_message(system)
-        # Get context
-        context = self._get_context(context)
+
         # Extract relevant text for video memory
-        context = self.get_video_memory(query, context)
-        # Preprocessing on the context
-        processed_context = self.compute_preprocessing(query, context, instructions, system)
+        relevant_memory = self.relevant_memory_retrieval(query, return_type='list')
+
         # Extract relevant text using retrieval method
-        relevant_context = self.relevant_text_retrieval(query, processed_context, instructions, system)
+        relevant_context = self.relevant_context_retrieval(query, context, return_type='list')
+
+        # Append the relevant chunks of texts
+        total_context = (relevant_memory or "") + (relevant_context or "")
+
+        # Preprocessing on the context
+        processed_context = self.compute_preprocessing(query, total_context, instructions, system)
+
         # Set the prompt
-        logger.debug(relevant_context)
-        prompt = self.set_prompt(query, instructions, relevant_context, response_format=response_format)
+        logger.debug(processed_context)
+
+        # Make the prompt
+        prompt = self.set_prompt(query, instructions, processed_context, response_format=response_format)
         logger.info('Running model now..')
 
         # Run model
@@ -296,16 +304,17 @@ class LLMlight:
         else:
             # Run LLM with http model
             response = self.requests_post_http(prompt, system, temperature=temperature, top_p=top_p, task=self.task, stream=stream, return_type=return_type)
+
         # Return
         return response
 
-    def _get_context(self, context):
-        # First get the context
-        if context is None:
-            context = self.context
-        if isinstance(context, dict):
-            context = '\n\n'.join(context.values())
-        return context
+    # def _get_context(self, context):
+    #     # First get the context
+    #     if context is None:
+    #         context = self.context
+    #     # if isinstance(context, dict):
+    #     #     context = '\n\n'.join(context.values())
+    #     return context
 
     def requests_post_gguf(self, prompt, system, temperature=0.8, top_p=1, headers=None, task='full', stream=False, return_type='string'):
         # Note that it is better to use messages_prompt instead of a dict (messages_dict) because most GGUF-based models don't have a tokenizer/parser that can interpret the JSON-style message structure.
@@ -395,7 +404,7 @@ class LLMlight:
             logger.error(f"{response.status_code} - {response}")
             return f"Error: {response.status_code} - {response}"
 
-    def memory_init(self, path_to_memory: str = "llmlight_memory.mp4", config: dict = None):
+    def memory_init(self, path_to_memory: str = "llmlight_memory.mp4", config: dict = None, embedding=None):
         """Build QR code video and index from chunks with unified codec handling.
 
         Parameters
@@ -406,12 +415,19 @@ class LLMlight:
             Dictionary containing configuration parameters.
 
         """
+        # Get absolute path
+        path_to_memory = os.path.abspath(path_to_memory)
         if os.path.isfile(path_to_memory):
             logger.info(f'Initializing existing video memory: {path_to_memory}')
         else:
             logger.info(f'Initializing new video memory: {path_to_memory}')
 
-        # Set memory path
+        # Set the embedding
+        if embedding is not None:
+            self.embedding['memory'] = embedding
+            logger.info(f'Embedding: {self.embedding or "disabled"}')
+
+        # Set memory path in self
         self._set_memory_path(path_to_memory)
 
         # Initialize new encoder
@@ -701,8 +717,12 @@ class LLMlight:
             new_query = query
 
         # Create chunks with overlapping parts to make sure we do not miss out
-        chunks = utils.chunk_text(context, method=self.chunks['method'], chunk_size=self.chunks['size'], overlap=self.chunks['overlap'])
-        logger.info(f'Total number of chunks created: {len(chunks)}')
+        if isinstance(context, str):
+            chunks = utils.chunk_text(context, method=self.chunks['method'], chunk_size=self.chunks['size'], overlap=self.chunks['overlap'])
+        else:
+            chunks = context
+
+        logger.info(f'Global-reasoning on {len(chunks)} chunks of text.')
 
         # Now summaries for the chunks
         summaries = []
@@ -729,7 +749,7 @@ class LLMlight:
             """
 
             # Summarize
-            response = self.requests_post_http(prompt, system, temperature=self.temperature, top_p=self.top_p, task='summarization', stream=stream, return_type='string')
+            response = self.requests_post_http(prompt, system, temperature=self.temperature, top_p=self.top_p, task='summarization', stream=stream)
             # Append
             summaries.append(response)
             # Show
@@ -785,8 +805,12 @@ class LLMlight:
 
         """
         # Create chunks with overlapping parts to make sure we do not miss out
-        chunks = utils.chunk_text(context, method=self.chunks['method'], chunk_size=self.chunks['size'], overlap=self.chunks['overlap'])
-        logger.info(f'Total number of chunks created: {len(chunks)}')
+        if isinstance(context, str):
+            chunks = utils.chunk_text(context, method=self.chunks['method'], chunk_size=self.chunks['size'], overlap=self.chunks['overlap'], return_type='list')
+        else:
+            chunks = context
+
+        logger.info(f'Chunk wise analysis on {len(chunks)} chunks of text.')
 
         # Build a structured prompt that includes all previous summaries
         response_list = []
@@ -909,10 +933,10 @@ class LLMlight:
         return final_response
         # return {'response': final_response, 'response_per_chunk': response_total}
 
-    def compute_distances(self, query: str, chunks: list, return_type: str = 'string', top_chunks: int = None):
+    def search(self, query: str, chunks: list, return_type: str = 'string', top_chunks: int = None, embedding: str = None):
         """Splits large text into chunks and finds the most relevant ones."""
         # Embedding
-        query_vector, chunk_vectors = self.fit_transform(query, chunks)
+        query_vector, chunk_vectors = self.fit_transform(query, chunks, embedding=embedding)
         # Compute similarity
         D = cosine_similarity(query_vector, chunk_vectors)[0]
         # Get top scoring chunks
@@ -936,27 +960,40 @@ class LLMlight:
         else:
             return "\n---------\n".join(relevant_chunks)
 
-    def fit_transform(self, query, chunks):
+    def fit_transform(self, query, chunks, embedding=None):
         """Converts context chunks and query into vector space representations based on the selected embedding method."""
-        if self.embedding == 'tfidf':
+        if embedding is None: embedding = self.embedding
+
+        # Set embedding model parameters.
+        if self.embedding['context'] == 'bert':
+            embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
+        elif self.embedding['context'] == 'bge-small':
+            embedding_model = SentenceTransformer('BAAI/bge-small-en')
+        else:
+            embedding_model = None
+
+        if embedding == 'tfidf':
             vectorizer = TfidfVectorizer()
             chunk_vectors = vectorizer.fit_transform(chunks)
             # dense_matrix = chunk_vectors.toarray()  # Converts to a NumPy array
             query_vector = vectorizer.transform([query])
-        elif self.embedding == 'bow':
+        elif embedding == 'bow':
             vectorizer = CountVectorizer()
             chunk_vectors = vectorizer.fit_transform(chunks)
             query_vector = vectorizer.transform([query])
-        # elif self.embedding_model is not None:
-        elif self.embedding == 'bert' or self.embedding == 'bge-small':
-            chunk_vectors = np.vstack([self.embedding_model.encode(chunk) for chunk in chunks])
-            query_vector = self.embedding_model.encode([query])
+        # elif embedding_model is not None:
+        elif embedding == 'bert' or embedding == 'bge-small':
+            chunk_vectors = np.vstack([embedding_model.encode(chunk) for chunk in chunks])
+            query_vector = embedding_model.encode([query])
             query_vector = query_vector.reshape(1, -1)
+        elif embedding == 'memvid':
+            logger.warning(f'Embedding method [{embedding}] can only be applied when retrieval method is set to memory-video path.')
         else:
+            logger.error(f'Available embedding methods: {get_embeddings()}')
             raise ValueError(f"Unsupported embedding method: {self.embedding}")
         # Return
         return query_vector, chunk_vectors
-
+        
     def compute_preprocessing(self, query, context, instructions, system):
         # Create advanced prompt using relevant chunks of text, the input query and instructions
         if context is not None:
@@ -976,48 +1013,53 @@ class LLMlight:
         # Return
         return relevant_context
 
-    def get_video_memory(self, query, context):
-        # Get context from video Memory
+    def relevant_memory_retrieval(self, query: str, return_type='list'):
+        relevant_context = None
+
+        # Show warning if chunks are not processed yet
         if hasattr(self, 'encoder') and len(self.encoder.chunks) > 0:
             logger.warning('Documents are stored in the encoder but not saved into video memory! Use save first: client.memory_save() to include the information.')
 
+        # Retrieve context from video memory
         if (self.memory_video_file is not None) and os.path.isfile(self.memory_video_file) and os.path.isfile(self.memory_index_file):
-            logger.info(f"Text retrieval from video memory for [{self.chunks['top_chunks']}] chunks.")
+            logger.info(f"Initialize retrieval from memory.. Collect [{self.chunks['top_chunks']}] chunks from video-memory using {self.embedding['memory']}.")
             # Initialize retriever
             retriever = MemvidRetriever(video_file=self.memory_video_file, index_file=self.memory_index_file, config=self.memory_config)
 
-            # self.embedding = 'bow'
-            # self.embedding = 'tfidf'
-            # Get relevant chunks
-            # chunks = retriever.index_manager.metadata
-            # chunks = list(map(lambda x: x.get('text'), retriever.index_manager.metadata))
-            # Compute distances and get top k chunks
-            # memory_chunks = self.compute_distances(query, chunks, top_chunks=self.chunks['top_chunks'], return_type='list')
+            # Retrieval based on embedding
+            if self.embedding['memory']=='memvid':
+                # Use the memvid search retriever
+                relevant_context = retriever.search(query, top_k=self.chunks['top_chunks'])
+                # relevant_context = retriever.index_manager.search(query, top_k=self.chunks['top_chunks'])
+            elif self.embedding['memory'] in get_embeddings():
+                # Use the classic retrievers
+                chunks = list(map(lambda x: x.get('text'), retriever.index_manager.metadata))
+                # Compute distances and get top k chunks
+                relevant_context = self.search(query, chunks, top_chunks=self.chunks['top_chunks'], embedding=self.embedding['memory'], return_type=return_type)
 
-            memory_chunks = retriever.search(query, top_k=self.chunks['top_chunks'])
-            # memory_chunks = retriever.index_manager.search(query, top_k=self.chunks['top_chunks'])
-            # Append context
-            if context is not None and context != '': memory_chunks.append(context)
-            # Join the chunks in context
-            relevant_context = "\n\n---\n\n".join([f"### Chunk {i+1}:\n{s}" for i, s in enumerate(memory_chunks)])
-            # Return
-            return relevant_context
-        else:
-            return context
+            if return_type=='string':
+                # Join the chunks in context
+                relevant_context = "\n\n---\n\n".join([f"### Chunk {i+1}:\n{s}" for i, s in enumerate(relevant_context)])
 
-    def relevant_text_retrieval(self, query, context, instructions, system):
+        # Return
+        return relevant_context
+
+    def relevant_context_retrieval(self, query, context: str, return_type='list'):
+        # Get context
+        # context = self._get_context(context)
+
         if context is not None:
-            # Create advanced prompt using relevant chunks of text, the input query and instructions
-            if self.retrieval_method == 'naive_RAG' and np.isin(self.embedding, ['tfidf', 'bow', 'bert', 'bge-small']):
+            # Get relevant context using RAG and embedding
+            if self.retrieval_method == 'RAG_basic' and self.embedding['context'] in get_embeddings():
                 # Find the best matching parts using simple retrieval method approach.
-                logger.info(f'[{self.retrieval_method}] method is applied with [{self.embedding}] embedding for text retrieval.')
+                logger.info(f"Initialize retrieval from context.. Collect [{self.chunks['top_chunks']}] chunks from context using {self.embedding['context']}.")
                 # Create chunks
                 chunks = utils.chunk_text(context, method=self.chunks['method'], chunk_size=self.chunks['size'], overlap=self.chunks['overlap'])
                 # Compute distances and get top k chunks
-                relevant_context = self.compute_distances(query, chunks, top_chunks=self.chunks['top_chunks'], return_type='string')
-            elif self.retrieval_method == 'RSE' and np.isin(self.embedding, ['bert', 'bge-small']):
+                relevant_context = self.search(query, chunks, top_chunks=self.chunks['top_chunks'], embedding=self.embedding['context'], return_type=return_type)
+            elif self.retrieval_method == 'RSE' and np.isin(self.embedding['context'], ['bert', 'bge-small']):
                 logger.info(f'RAG approach [{self.retrieval_method}] is applied.')
-                relevant_context = RAG_with_RSE(context, query, label=None, chunk_size=self.chunks['size'], irrelevant_chunk_penalty=0, embedding=self.embedding, device='cpu', batch_size=32)
+                relevant_context = RAG_with_RSE(context, query, label=None, chunk_size=self.chunks['size'], irrelevant_chunk_penalty=0, embedding=self.embedding['context'], device='cpu', batch_size=32)
             else:
                 logger.info(f'No retrieval method is applied.')
                 relevant_context = context
@@ -1027,8 +1069,11 @@ class LLMlight:
         # Return
         return relevant_context
 
-    def set_prompt(self, query, instructions, context, response_format=''):
+    def set_prompt(self, query: str, instructions: str, context: (str, list), response_format: str = None):
         # Default and update when context and instructions are available.
+        if isinstance(context, list):
+            context = "\n\n---\n\n".join([f"### Chunk {i+1}:\n{s}" for i, s in enumerate(context)])
+
         prompt = (
             ("Context:\n" + context + "\n\n" if context else "")
             + ("Instructions:\n" + instructions + "\n\n" if instructions not in ("", None) else "")
@@ -1141,6 +1186,27 @@ class LLMlight:
         logger.info('INFO')
         logger.warning('WARNING')
         logger.critical('CRITICAL')
+
+#%%
+def get_embeddings():
+    return ['tfidf', 'bow', 'bert', 'bge-small', 'memvid']
+
+def _set_embedding(embedding):
+    if isinstance(embedding, str):
+        if embedding == 'automatic':
+            embedding = {'memory': 'memvid', 'context': 'bert'}
+        elif embedding in get_embeddings():
+            embedding = {'memory': embedding, 'context': embedding}
+        else:
+            embedding = {'memory': 'memvid', 'context': 'bert'}
+
+    if embedding.get('context') == 'memvid':
+        embedding['context'] = 'tfidf'
+
+    embedding = {**{'memory': 'memvid', 'context': 'tfidf'}, **embedding}
+
+    # Return
+    return embedding
 
 #%%
 def convert_messages_to_model(messages, model='llama', add_assistant_start=True):

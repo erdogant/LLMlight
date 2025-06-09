@@ -88,7 +88,7 @@ Example
 >>> # Import library
 >>> from LLMlight import LLMlight
 >>> # Initialize with default settings
->>> client = LLMlight(embedding=None, chunks=None)
+>>> client = LLMlight(retrieval_method=None)
 >>> # Create new video memory
 >>> client.memory_init()
 >>> # Add pdf file
@@ -112,7 +112,7 @@ Example
 >>> # Import library
 >>> from LLMlight import LLMlight
 >>> # Initialize with default settings
->>> client = LLMlight(embedding=None, chunks=None, path_to_memory="knowledge_base.mp4")
+>>> client = LLMlight(retrieval_method="knowledge_base.mp4", embedding=None)
 >>> # Create queries
 >>> response = client.prompt('What do apes like?', instructions='Only return the information from the context. Answer with maximum of 3 words, and starts with "Apes like: "')
 >>> print(response)

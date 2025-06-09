@@ -15,19 +15,27 @@
 #%% Import files into video memory
 from LLMlight import LLMlight
 
-dirpath = r'D:\OneDrive - Tilburg University\TiU\PROJECTS\thesis_evaluation\data'
-dirpath = r'D:\Users\Documents\Hack'
+# dirpath = r'D:\OneDrive - Tilburg University\TiU\PROJECTS\thesis_evaluation\data'
+# dirpath = r'D:\Users\Documents\Hack'
 
 # Initialize with default settings
-client = LLMlight(retrieval_method=None, preprocessing=None, embedding='tfidf')
+client = LLMlight(retrieval_method='RAG_basic', preprocessing=None, embedding='tfidf')
+client = LLMlight(retrieval_method='RAG_basic', preprocessing='global-reasoning', embedding='tfidf')
+# client = LLMlight(retrieval_method='RAG_basic', preprocessing='global-reasoning')
+
+# Read and process PDF
+context = client.read_pdf(r'D://OneDrive - Tilburg University//TiU//Introduction new colleagues.pdf', return_type='string')
+
 # Create new memory
 client.memory_init(path_to_memory=r'D:\REPOS\LLMlight\knowledge_base.mp4')
+
 # Add dir recusrively
 # client.memory_add(dirpath=dirpath, overwrite=True)
 # Store memory to disk
 # client.memory_save(overwrite=True)
+
 # Query
-response = client.prompt('What is the Thesis Proposal of Samuel Christian Gobel and who is in the Committee?')
+response = client.prompt('Provide all relevant information about Samuel Christian Gobel', context=context)
 print(response)
 
 #%%
