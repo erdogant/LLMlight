@@ -27,8 +27,12 @@ from sentence_transformers import SentenceTransformer
 from memvid import MemvidEncoder, MemvidRetriever
 # from memvid.config import get_default_config as memvid_get_default_config
 
-from .RAG import RAG_with_RSE
+# import memory
+# import RAG
+# import utils
+from . import RAG
 from . import utils
+from . import memory
 # DEBUG
 # import utils
 # from RAG import RAG_with_RSE
@@ -166,9 +170,11 @@ class LLMlight:
                  retrieval_method: str = 'RAG_basic',
                  embedding: (str, dict) = {'memory': 'memvid', 'context': 'bert'},
                  preprocessing: str = None,
+                 alpha: float = 0.05,
+                 top_chunks: int = 5,
                  temperature: (int, float) = 0.7,
                  top_p: (int, float) = 1.0,
-                 chunks: dict = {'method': 'chars', 'size': 1024, 'overlap': 200, 'top_chunks': 5},
+                 chunks: dict = {'method': 'chars', 'size': 1024, 'overlap': 200},
                  endpoint: str = "http://localhost:1234/v1/chat/completions",
                  n_ctx: int = 4096,
                  verbose: (str, int) = 'info',
@@ -181,6 +187,8 @@ class LLMlight:
         self.model = model
         self.preprocessing = preprocessing
         self.retrieval_method = retrieval_method
+        self.alpha = alpha
+        self.top_chunks = top_chunks
         self.temperature = temperature
         self.top_p = top_p
         self.endpoint = endpoint
@@ -190,15 +198,10 @@ class LLMlight:
 
         # Set chunk parameters
         if chunks is None: chunks = {}
-        self.chunks = {**{'method': 'chars', 'size': 1000, 'overlap': 250, 'top_chunks': 5}, **chunks}
+        self.chunks = {**{'method': 'chars', 'size': 1000, 'overlap': 250}, **chunks}
 
-        # Memvid default parameters
-        self.memory_video_file = None
-        self.memory_index_file = None
-        self.memory_config = None
-        # Update parameters when video-memory exists.
-        if retrieval_method is not None and os.path.isfile(retrieval_method):
-            self.memory_init(retrieval_method)
+        # Set Memory parameters.
+        self.memory_init(retrieval_method)
 
         # Load local LLM gguf model
         if os.path.isfile(self.endpoint):
@@ -285,7 +288,7 @@ class LLMlight:
         relevant_context = self.relevant_context_retrieval(query, context, return_type='list')
 
         # Append the relevant chunks of texts
-        total_context = (relevant_memory or "") + (relevant_context or "")
+        total_context = (relevant_memory or []) + (relevant_context or [])
 
         # Preprocessing on the context
         processed_context = self.compute_preprocessing(query, total_context, instructions, system)
@@ -404,126 +407,40 @@ class LLMlight:
             logger.error(f"{response.status_code} - {response}")
             return f"Error: {response.status_code} - {response}"
 
-    def memory_init(self, path_to_memory: str = "llmlight_memory.mp4", config: dict = None, embedding=None):
+    def memory_init(self, file_path: str = "llmlight_memory.mp4", config: dict = None, embedding=None):
         """Build QR code video and index from chunks with unified codec handling.
 
         Parameters
         ----------
-        path_to_memory : str
+        file_path : str
             Path to output video memory file.
         config : dict
             Dictionary containing configuration parameters.
 
         """
-        # Get absolute path
-        path_to_memory = os.path.abspath(path_to_memory)
-        if os.path.isfile(path_to_memory):
-            logger.info(f'Initializing existing video memory: {path_to_memory}')
-        else:
-            logger.info(f'Initializing new video memory: {path_to_memory}')
+        # Default
+        self.memory = None
+
+        # Initialize video-memory
+        if file_path is not None and os.path.isfile(file_path):
+            self.memory = memory.memvid_llm(file_path, config=config)
 
         # Set the embedding
         if embedding is not None:
             self.embedding['memory'] = embedding
-            logger.info(f'Embedding: {self.embedding or "disabled"}')
+            logger.info(f'Memory embedding is set: {self.embedding or "disabled"}')
 
-        # Set memory path in self
-        self._set_memory_path(path_to_memory)
-
-        # Initialize new encoder
-        self.encoder = MemvidEncoder(config=config)
-        # Update config from memvid Encoder
-        self.memory_config = self.encoder.config
-
-    def memory_add(self,
-                   text: Union[str, List[str]] = None,
-                   input_files: Union[str, List[str]] = None,
-                   dirpath: str = None,
-                   filetypes: List[str] = ['.pdf', '.txt', '.epub', '.md', '.doc', '.docx', '.rtf', '.html', '.htm'],
-                   overwrite=False):
-        """Add chunks to memory.
-
-        Parameters
-        ----------
-        input_files : (str, list)
-            Path to file(s).
-
-        """
-        # Make checks
-        if not hasattr(self, 'encoder'):
-            logger.error('Memory is not yet initialized. Use client.memory_init() first')
-            raise AssertionError('Memory is not yet initialized. Use client.memory_init() first')
-        if os.path.isfile(self.memory_video_file) and not overwrite:
-            logger.warning(f'Video memory already exists appending is not possible: {self.memory_video_file}')
-            return
-
-        # Make lists
-        if isinstance(text, str): text = [text]
-        if isinstance(input_files, str): input_files = [input_files]
-
-        if dirpath is not None and os.path.isdir(dirpath):
-            if input_files is None: input_files = []
-            for root, _, files in os.walk(dirpath):
-                for file in files:
-                    if any(file.lower().endswith(ext) for ext in filetypes):
-                        input_files.append(os.path.join(root, file))
-
-        # Add text chunk to video-memory
-        if text is not None:
-            logger.info(f'Adding {len(text)} text chunks to memory.')
-            self.encoder.add_chunks(text)
-
-        # Run over all files
-        if input_files is not None:
-            logger.info(f'Adding {len(input_files)} into memory.')
-
-            for filepath in input_files:
-                if not os.path.isfile(filepath):
-                    logger.warning(f"File not found: {filepath}")
-                else:
-                    # full filename with extension
-                    filename = os.path.basename(filepath)
-                    # split name and extension
-                    name, ext = os.path.splitext(filename.lower())
-                    # Add to encoder
-                    if (ext == '.pdf') and (ext in filetypes):
-                        self.encoder.add_pdf(filepath, chunk_size=self.chunks['size'], overlap=self.chunks['overlap'])
-                    elif ext == '.epub' and (ext in filetypes):
-                        self.encoder.add_epub(filepath, chunk_size=self.chunks['size'], overlap=self.chunks['overlap'])
-                    elif ext == '.txt' and (ext in filetypes):
-                        with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
-                            text = f.read()
-                            self.encoder.add_text(text, chunk_size=self.chunks['size'], overlap=self.chunks['overlap'])
-                    elif ext in ['.html', '.htm']:
-                        # Process HTML with BeautifulSoup
-                        try:
-                            from bs4 import BeautifulSoup
-                        except ImportError:
-                            print(f"Warning: BeautifulSoup not available for HTML processing. Skipping {filepath}")
-                            continue
- 
-                        with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
-                            soup = BeautifulSoup(f.read(), 'html.parser')
-                            for script in soup(["script", "style"]):
-                                script.decompose()
-                            text = soup.get_text()
-                            lines = (line.strip() for line in text.splitlines())
-                            chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
-                            clean_text = ' '.join(chunk for chunk in chunks if chunk)
-                            if clean_text.strip():
-                                self.encoder.add_text(clean_text, chunk_size=self.chunks['size'], overlap=self.chunks['overlap'])
-
-                    elif ext in filetypes:
-                        with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
-                            text = f.read()
-                            self.encoder.add_text(text, chunk_size=self.chunks['size'], overlap=self.chunks['overlap'])
-                    else:
-                        continue
-                    # Show message
-                    logger.info(f'Added to memory: {filename}')
+    def memory_load(self, file_path: str = None):
+        # Initialize if not yet initialized
+        if not hasattr(self.memory, 'encoder'):
+            self.memory_init(file_path)
+        # Load the retriever
+        if not hasattr(self.memory, 'retriever'):
+            # Load video-memory
+            self.memory.load()
 
     def memory_save(self,
-                    filepath: str = None,
+                    file_path: str = None,
                     codec: str = 'mp4v',
                     auto_build_docker: bool = True,
                     allow_fallback: bool = True,
@@ -534,7 +451,7 @@ class LLMlight:
 
         Parameters
         ----------
-        filepath : str (default is the initialization memory-path)
+        file_path : str (default is the initialization memory-path)
             Path to output video memory file.
         codec : str, optional
             Video codec ('mp4v', 'h265', 'h264', etc.)
@@ -546,55 +463,67 @@ class LLMlight:
         show_progress : bool (default: True)
 
         """
-        # Make checks
-        if not hasattr(self, 'encoder') or len(self.encoder.chunks) == 0:
-            logger.error('No chunks to encode. Use client.add_chunks() first')
-            raise AssertionError('No chunks to encode. Use client.add_chunks() first')
+        self.memory.save(file_path=file_path, codec=codec, auto_build_docker=auto_build_docker, allow_fallback=allow_fallback, overwrite=overwrite, show_progress=show_progress)
 
-        if filepath is not None:
-            self._set_memory_path(filepath)
+    def memory_add(self,
+                   text: Union[str, List[str]] = None,
+                   input_files: Union[str, List[str]] = None,
+                   dirpath: str = None,
+                   filetypes: List[str] = ['.pdf', '.txt', '.epub', '.md', '.doc', '.docx', '.rtf', '.html', '.htm'],
+                   chunk_size: int = 512,
+                   chunk_overlap: int = 100,
+                   overwrite=False):
+        """Add chunks to memory.
 
-        # Check
-        if os.path.isfile(self.memory_video_file) and not overwrite:
-            logger.warning(f'File already exists and not allowed to overwrite: {self.memory_video_file}')
-            return
+        Parameters
+        ----------
+        input_files : (str, list)
+            Path to file(s).
 
-        # Remove files when overwrite
-        if overwrite:
-            if os.path.isfile(self.memory_video_file):
-                logger.info(f'Video memory file is overwriten: {self.memory_video_file}')
-                os.remove(self.memory_video_file)
-            # Also remove the index file
-            if os.path.isfile(self.memory_index_file):
-                os.remove(self.memory_index_file)
+        """
+        self.memory.add(text=text, input_files=input_files, dirpath=dirpath, filetypes=filetypes, chunk_size=chunk_size, chunk_overlap=chunk_overlap, overwrite=overwrite)
 
-        logger.info(f'Building video-memory for {len(self.encoder.chunks)} chunks: {self.memory_video_file}')
-        # Build the by passing all parameters to the building proces
-        self.encoder.build_video(output_file=self.memory_video_file,
-                                 index_file=self.memory_index_file,
-                                 codec=codec,
-                                 show_progress=show_progress,
-                                 auto_build_docker=auto_build_docker,
-                                 allow_fallback=allow_fallback,
-                                 )
+    def compute_probability(self, query, scores, embedding, n=5000):
+        if not hasattr(self.memory, 'retriever'):
+            logger.warning('No chunks to encode for null distribution. Use client.add_chunks() first')
 
-        # Clear all chunks of text from list because it will use the video memory file.
-        self.encoder.chunks = []
-        logger.info('✅ Video Memory saved to disk.')
+        logger.info('Creating random chunks of text with the same frequency distribution.')
+        if self.embedding['memory']=='memvid':
+            results = self.memory.retriever.index_manager.search(query, top_k=n)
+            random_scores = np.array(list(map(lambda x: x[1], results)))
+            bound = 'left'
+        else:
+            random_chunks = self.memory.get_random_chunks(n=n)
+            query_vector, chunk_vectors = self.fit_transform(query, random_chunks, embedding=embedding)
+            # Compute similarity
+            random_scores = cosine_similarity(query_vector, chunk_vectors)[0]
+            # Remove all scores with exactly value 0
+            random_scores = random_scores[random_scores!=0]
+            bound = 'right'
 
-    def _set_memory_path(self, path_to_memory):
-        """Set Memory paths."""
-        # Get the absolute filepath
-        filepath = os.path.abspath(path_to_memory)
-        # Get directory path (folder)
-        directory = os.path.dirname(filepath)
-        # full filename with extension
-        filename = os.path.basename(filepath)
-        # split name and extension
-        name, extension = os.path.splitext(filename)
-        # Store file names
-        self.memory_video_file = filepath
-        self.memory_index_file = os.path.join(directory, name) + '.json'
+        # Top indices
+        # top_indices = np.argsort(scores)[::-1]
+        # Join relevant chunks and send as prompt
+        # relevant_chunks = [random_chunks[i] for i in top_indices]
+        # relevant_scores = [scores[i] for i in top_indices]
+
+        from distfit import distfit
+        model = distfit(method='parametric', alpha=self.alpha, bound=bound, verbose='warning')
+        model.fit_transform(random_scores);
+
+        results = model.predict(scores, alpha=self.alpha, todf=False, multtest='fdr_bh')
+        # results['y_bool'] = results['P']<=self.alpha
+        # Store figure
+        fig, ax = model.plot(title=f'Retrieval method:{self.retrieval_method}, Embedding: {embedding}')
+
+        # Store
+        self.distfit = model
+        self.distfit.fig = fig
+        self.distfit.ax = ax
+        # Return
+        return results
+
+
 
     def task(self,
              query="Extract key insights while maintaining coherence of the previous summaries.",
@@ -636,7 +565,7 @@ class LLMlight:
             logger.info(f'Working on text chunk {i}/{len(chunks)}')
 
             # Keep last N summaries for context (this needs to be within the context-window otherwise it will return an error.)
-            previous_results = "\n---\n".join(response_list[-self.chunks['top_chunks']:])
+            previous_results = "\n---\n".join(response_list[-self.top_chunks:])
 
             prompt = (
             "### Context:\n"
@@ -662,7 +591,7 @@ class LLMlight:
             response_list.append(f"Results {i+1}:\n" + chunk_result)
 
         # Final summarization pass over all collected summaries
-        results_total = "\n---\n".join(response_list[-self.chunks['top_chunks']:])
+        results_total = "\n---\n".join(response_list[-self.top_chunks:])
         final_prompt = f"""
         ### Context:
         {results_total}
@@ -1021,21 +950,28 @@ class LLMlight:
             logger.warning('Documents are stored in the encoder but not saved into video memory! Use save first: client.memory_save() to include the information.')
 
         # Retrieve context from video memory
-        if (self.memory_video_file is not None) and os.path.isfile(self.memory_video_file) and os.path.isfile(self.memory_index_file):
-            logger.info(f"Initialize retrieval from memory.. Collect [{self.chunks['top_chunks']}] chunks from video-memory using {self.embedding['memory']}.")
+        if (self.memory.file_path is not None) and os.path.isfile(self.memory.file_path) and os.path.isfile(self.memory.index_path):
+            logger.info(f"Initialize retrieval from memory.. Collect [{self.top_chunks}] chunks from video-memory using {self.embedding['memory']}.")
             # Initialize retriever
-            retriever = MemvidRetriever(video_file=self.memory_video_file, index_file=self.memory_index_file, config=self.memory_config)
+            # retriever = self.memory.MemvidRetriever(video_file=self.memory.file_path, index_file=self.memory['index_path'], config=self.memory.config)
+            self.memory_load()
 
             # Retrieval based on embedding
             if self.embedding['memory']=='memvid':
                 # Use the memvid search retriever
-                relevant_context = retriever.search(query, top_k=self.chunks['top_chunks'])
-                # relevant_context = retriever.index_manager.search(query, top_k=self.chunks['top_chunks'])
+                # relevant_context = self.memory.retriever.search(query, top_k=self.top_chunks)
+                results = self.memory.retriever.index_manager.search(query, top_k=self.top_chunks)
+                scores = np.array(list(map(lambda x: x[1], results)))
+                relevant_context = list(map(lambda x: x[2]['text'], results))
             elif self.embedding['memory'] in get_embeddings():
                 # Use the classic retrievers
-                chunks = list(map(lambda x: x.get('text'), retriever.index_manager.metadata))
+                chunks = list(map(lambda x: x.get('text'), self.memory.retriever.index_manager.metadata))
                 # Compute distances and get top k chunks
-                relevant_context = self.search(query, chunks, top_chunks=self.chunks['top_chunks'], embedding=self.embedding['memory'], return_type=return_type)
+                results = self.search(query, chunks, top_chunks=self.top_chunks, embedding=self.embedding['memory'], return_type='score')
+                scores, relevant_context = map(list, zip(*results))
+
+            # Filter on Probability
+            relevant_context = self._filter_proba(query, scores, relevant_context)
 
             if return_type=='string':
                 # Join the chunks in context
@@ -1052,14 +988,19 @@ class LLMlight:
             # Get relevant context using RAG and embedding
             if self.retrieval_method == 'RAG_basic' and self.embedding['context'] in get_embeddings():
                 # Find the best matching parts using simple retrieval method approach.
-                logger.info(f"Initialize retrieval from context.. Collect [{self.chunks['top_chunks']}] chunks from context using {self.embedding['context']}.")
+                logger.info(f"Initialize retrieval from context.. Collect [{self.top_chunks}] chunks from context using {self.embedding['context']}.")
                 # Create chunks
                 chunks = utils.chunk_text(context, method=self.chunks['method'], chunk_size=self.chunks['size'], overlap=self.chunks['overlap'])
                 # Compute distances and get top k chunks
-                relevant_context = self.search(query, chunks, top_chunks=self.chunks['top_chunks'], embedding=self.embedding['context'], return_type=return_type)
+                results = self.search(query, chunks, top_chunks=self.top_chunks, embedding=self.embedding['context'], return_type='score')
+                # Unzip scores and context
+                scores, relevant_context = map(list, zip(*results))
+                # Filter on Probability
+                relevant_context = self._filter_proba(query, scores, relevant_context)
+
             elif self.retrieval_method == 'RSE' and np.isin(self.embedding['context'], ['bert', 'bge-small']):
                 logger.info(f'RAG approach [{self.retrieval_method}] is applied.')
-                relevant_context = RAG_with_RSE(context, query, label=None, chunk_size=self.chunks['size'], irrelevant_chunk_penalty=0, embedding=self.embedding['context'], device='cpu', batch_size=32)
+                relevant_context = RAG.RSE(context, query, label=None, chunk_size=self.chunks['size'], irrelevant_chunk_penalty=0, embedding=self.embedding['context'], device='cpu', batch_size=32)
             else:
                 logger.info(f'No retrieval method is applied.')
                 relevant_context = context
@@ -1069,10 +1010,26 @@ class LLMlight:
         # Return
         return relevant_context
 
+    # Compute probability
+    def _filter_proba(self, query, scores, relevant_context):
+        # Filter on significance
+        if self.alpha is not None:
+            logger.info(f'Computing probability distribution..')
+            # Compute probability
+            out = self.compute_probability(query, scores, embedding=self.embedding['memory'], n=1000)
+            # Only keep significant chunks
+            relevant_context = list(np.array(relevant_context)[out['y_bool']])
+            logger.info(f'{len(relevant_context)} significant chunks found with alpha<={self.alpha}')
+
+        # Return relevant context
+        return relevant_context
+
     def set_prompt(self, query: str, instructions: str, context: (str, list), response_format: str = None):
         # Default and update when context and instructions are available.
         if isinstance(context, list):
             context = "\n\n---\n\n".join([f"### Chunk {i+1}:\n{s}" for i, s in enumerate(context)])
+        if context=='':
+            logger.warning('No context is provided into the prompt.')
 
         prompt = (
             ("Context:\n" + context + "\n\n" if context else "")
@@ -1085,7 +1042,7 @@ class LLMlight:
         # Return
         return prompt
 
-    def read_pdf(self, filepath, title_pages=[1, 2], body_pages=[], reference_pages=[-1], return_type='dict'):
+    def read_pdf(self, file_path, title_pages=[1, 2], body_pages=[], reference_pages=[-1], return_type='dict'):
         """
         Reads a PDF file and extracts its text content as a string.
 
@@ -1096,16 +1053,16 @@ class LLMlight:
             str: Extracted text from the PDF.
 
         """
-        if os.path.isfile(filepath):
+        if os.path.isfile(file_path):
             # Read pdf
-            context = utils.read_pdf(filepath, title_pages=title_pages, body_pages=body_pages, reference_pages=reference_pages, return_type=return_type)
+            context = utils.read_pdf(file_path, title_pages=title_pages, body_pages=body_pages, reference_pages=reference_pages, return_type=return_type)
             # Return
             return context
             # if return_type=='dict':
             #     counts = utils.count_words(self.context['body'])
             #     self.context['body'] = self.context['body']
         else:
-            logger.error(f'Filepath does not exist: {filepath}')
+            logger.error(f'file_path does not exist: {file_path}')
 
     def get_available_models(self, validate=False):
         """Retrieve available models from the configured API endpoint.
@@ -1349,13 +1306,14 @@ def compute_max_tokens(used_tokens, n_ctx=4096, task="full"):
 
 def set_system_message(system):
     if system is None:
-        system = """You are a helpful AI assistant with access to a knowledge base. 
+        system = """You are a helpful AI assistant with access to a knowledge base.
 
         When answering questions:
         1. Use the provided context from the knowledge base when relevant
-        2. Be clear about what information comes from the knowledge base vs. your general knowledge
-        3. If the context doesn't contain enough information, say so clearly
-        4. Provide helpful, accurate, and concise responses
+        2. When multiple sections are in the context; ### chunk 1:, ### chunk 2: or ### summary 1:, ### summary 2: etc, then the higher ranked chunks contain more relevant information.
+        3. Be clear about what information comes from the knowledge base vs. your general knowledge
+        4. If the context doesn't contain enough information, say so clearly
+        5. Provide helpful, accurate, and concise responses
 
     The context will be provided with each query based on semantic similarity to the user's question."""
 

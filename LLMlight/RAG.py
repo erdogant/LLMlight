@@ -98,7 +98,7 @@ class SimpleVectorStore:
         return results
 
 
-def RAG_with_RSE(context, query, label=None, chunk_size=800, irrelevant_chunk_penalty=0.2, embedding_method='bert', device='cpu', batch_size=16):
+def RSE(context, query, label=None, chunk_size=800, irrelevant_chunk_penalty=0.2, embedding_method='bert', device='cpu', batch_size=16):
     """
     Complete RAG pipeline with Relevant Segment Extraction.
 

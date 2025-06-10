@@ -19,15 +19,16 @@ from LLMlight import LLMlight
 # dirpath = r'D:\Users\Documents\Hack'
 
 # Initialize with default settings
-client = LLMlight(retrieval_method='RAG_basic', preprocessing=None, embedding='tfidf')
-client = LLMlight(retrieval_method='RAG_basic', preprocessing='global-reasoning', embedding='tfidf')
+# client = LLMlight(retrieval_method='RAG_basic', preprocessing=None, embedding='tfidf', top_chunks=5, alpha=0.01)
+# client = LLMlight(retrieval_method='RAG_basic', preprocessing='global-reasoning', top_chunks=5, alpha=0.01)
+client = LLMlight(retrieval_method='RAG_basic', preprocessing='global-reasoning', embedding='tfidf', top_chunks=5, alpha=0.05)
 # client = LLMlight(retrieval_method='RAG_basic', preprocessing='global-reasoning')
 
 # Read and process PDF
 context = client.read_pdf(r'D://OneDrive - Tilburg University//TiU//Introduction new colleagues.pdf', return_type='string')
 
 # Create new memory
-client.memory_init(path_to_memory=r'D:\REPOS\LLMlight\knowledge_base.mp4')
+client.memory_load(file_path=r'D:\REPOS\LLMlight\knowledge_base.mp4')
 
 # Add dir recusrively
 # client.memory_add(dirpath=dirpath, overwrite=True)
@@ -38,31 +39,129 @@ client.memory_init(path_to_memory=r'D:\REPOS\LLMlight\knowledge_base.mp4')
 response = client.prompt('Provide all relevant information about Samuel Christian Gobel', context=context)
 print(response)
 
+# client.distfit.fig
+
 #%%
 from LLMlight import LLMlight
 
 # Initialize with default settings
-client = LLMlight(retrieval_method=None, preprocessing='global-reasoning', chunks = {'method': 'chars', 'size': 1000, 'overlap': 200, 'top_chunks': 10})
-# Create new memory
-client.memory_init(path_to_memory='knowledge_base.mp4')
-# Query
-response = client.prompt('What is the Thesis Proposal of Samuel Christian Gobel, Burnout Classification')
-print(response)
+client = LLMlight(retrieval_method=r'D:\REPOS\LLMlight\knowledge_base.mp4')
 
+# Load the memory
+client.memory_load()
+
+
+
+import random
+# chunks
+# client.memory.retriever.index_manager.metadata[1]
+chunks = list(map(lambda x: x.get('text'), client.memory.retriever.index_manager.metadata))
+
+# Step 1: Combine all words from every chunk
+combined_words = []
+for chunk in chunks:
+    # Split by newline, space, or tab to handle multi-line strings properly
+    combined_chunk = chunk.replace('\n', ' ').replace('\t', ' ')
+    words = combined_chunk.split()
+    combined_words.extend(words)
+
+# Step 2: Create new lists with random sets of words
+new_chunks = [[] for _ in range(len(chunks))]
+n_chunks = len(new_chunks)
+for word in combined_words:
+    # Choose a random index to place the current word into one of the chunks
+    chunk_index = random.randint(0, n_chunks - 1)
+    new_chunks[chunk_index].append(word)
+
+chunk_strings = [[] for _ in range(n_chunks)]
+for i, lst in enumerate(new_chunks):
+    chunk_strings[i] = ' '.join(lst)
+
+from distfit import distfit
+dist = distfit(method='parametric', alpha=0.05)
+dist.fit_transform()
+
+# print("Original chunks:")
+# for i, c in enumerate(chunks):
+#     print(f"Chunk {i}: has {len(c.split())} tokens")
+
+# print("\nNew chunks (each token independently randomly assigned):")
+# for i, lst in enumerate(new_chunks):
+#     # We are just printing the first few to avoid too long output?
+#     truncated = ' '.join(lst[:5] + ['...'] if len(lst)>5 else lst)
+#     print(f"Chunk {i}: has {len(lst)} tokens ({truncated})")
+
+
+
+
+#%% Import files into video memory
+from LLMlight import LLMlight
+
+dirpath = r'D:\OneDrive - Tilburg University\TiU\PROJECTS\thesis_evaluation\data'
+# dirpath = r'D:\Users\Documents\Hack'
+
+# Initialize with default settings
+client = LLMlight()
+
+# Read and process PDF
+# context = client.read_pdf(r'D://OneDrive - Tilburg University//TiU//Introduction new colleagues.pdf', return_type='string')
+
+# Load memory
+client.memory_load(r'D:\REPOS\LLMlight\knowledge_base.mp4')
+
+# Create new memory
+client.memory_init(r'D:\REPOS\LLMlight\knowledge_base.mp4')
+
+# Add dir recusrively
+# client.memory_add(dirpath=dirpath, overwrite=True)
+# Store memory to disk
+# client.memory_save(overwrite=True)
+
+# Query
+response = client.prompt('Provide all relevant information about Samuel Christian Gobel')
+print(response)
 
 #%% Load video memory, append and store in other file. Then check if info exists
 from LLMlight import LLMlight
 
 # Initialize with default settings
-client = LLMlight(retrieval_method=None, preprocessing=None)
+client = LLMlight(retrieval_method=None, preprocessing=None, verbose='info')
 # Create new memory
-client.memory_init(path_to_memory='knowledge_base.mp4')
+client.memory_init(file_path='knowledge_base_new.mp4')
 # Add chunks
-client.memory_add(text=['Apes like USB sticks', 'The capital of France is Amsterdam.'])
+client.memory_add(text=['Apes like USB sticks', 'The capital of France is Amsterdam.'], overwrite=True)
 # Store memory to disk
 client.memory_save(overwrite=True)
 # Query
 response = client.prompt('What is the capital of France?')
+print(response)
+response = client.prompt('What do Apes like?')
+print(response)
+
+client.memory.show_stats()
+
+#%% Load video memory, append and store in other file. Then check if info exists
+from LLMlight import LLMlight
+
+# Initialize with default settings
+client = LLMlight(retrieval_method='knowledge_base_new.mp4', preprocessing=None)
+# Query
+response = client.prompt('What is the capital of France?')
+print(response)
+response = client.prompt('What do Apes like?')
+print(response)
+
+
+
+#%%
+from LLMlight import LLMlight
+
+# Initialize with default settings
+client = LLMlight(retrieval_method=None, preprocessing='global-reasoning', top_chunks=10, chunks = {'method': 'chars', 'size': 1000, 'overlap': 200})
+# Create new memory
+client.memory_init(file_path='knowledge_base.mp4')
+# Query
+response = client.prompt('What is the Thesis Proposal of Samuel Christian Gobel, Burnout Classification')
 print(response)
 
 
@@ -70,8 +169,10 @@ print(response)
 
 
 
+
+
 # Initialize with default settings
-client = LLMlight(retrieval_method=None, preprocessing=None, path_to_memory='knowledge_base.mp4')
+client = LLMlight(retrieval_method=None, preprocessing=None, file_path='knowledge_base.mp4')
 # NEW chunks can NOT be added!
 client.memory_add(text=['The floor is paper!'])
 # Store memory to disk
@@ -88,7 +189,7 @@ print(response)
 from LLMlight import LLMlight
 
 # Initialize with default settings
-client = LLMlight(retrieval_method=None, preprocessing=None, path_to_memory="knowledge_base.mp4")
+client = LLMlight(retrieval_method="knowledge_base.mp4", preprocessing=None)
 
 # Run a simple query
 # response = client.prompt('What is the capital of France?')
@@ -111,7 +212,7 @@ print(response)
 from LLMlight import LLMlight
 
 # Initialize with default settings
-client = LLMlight(retrieval_method=None, preprocessing=None, path_to_memory="knowledge_base.mp4")
+client = LLMlight(retrieval_method="knowledge_base.mp4", preprocessing=None)
 
 # Add chunks
 filepath = r'D:\Users\Documents\Hack\Download and Visualize Land Surface Temperature and NDVI from Sentinel-3.pdf'
@@ -132,7 +233,7 @@ print(response)
 from LLMlight import LLMlight
 
 # Initialize with default settings
-client = LLMlight(retrieval_method=None, preprocessing=None, path_to_memory="knowledge_base.mp4")
+client = LLMlight(retrieval_method="knowledge_base.mp4", preprocessing=None)
 
 # Run query
 response = client.prompt('What do apes like?', instructions='Only return the information from the context. Answer with maximum of 3 words, and starts with "Apes like: "')

@@ -8,28 +8,20 @@ from LLMlight.LLMlight import (
     compute_tokens,
     )
 
-import logging
-
 __author__ = 'Erdogan Tasksen'
 __email__ = 'erdogant@gmail.com'
 __version__ = '0.3.0'
 
 # Setup root logger
+import logging
 _logger = logging.getLogger('LLMlight')
-# Remove only our specific handler if it exists
-if _logger.name == 'LLMlight':
-    for handler in _logger.handlers[:]:
-        if isinstance(handler, logging.StreamHandler) and handler.formatter and handler.formatter._fmt == '[{asctime}] [{name}] [{levelname}] {msg}':
-            _logger.removeHandler(handler)
-
 _log_handler = logging.StreamHandler()
 _fmt = '[{asctime}] [{name}] [{levelname}] {msg}'
 _formatter = logging.Formatter(fmt=_fmt, style='{', datefmt='%d-%m-%Y %H:%M:%S')
 _log_handler.setFormatter(_formatter)
-_logger.addHandler(_log_handler)
 _log_handler.setLevel(logging.DEBUG)
+_logger.addHandler(_log_handler)
 _logger.propagate = False
-
 
 # module level doc-string
 __doc__ = """
@@ -112,10 +104,23 @@ Example
 >>> # Import library
 >>> from LLMlight import LLMlight
 >>> # Initialize with default settings
->>> client = LLMlight(retrieval_method="knowledge_base.mp4", embedding=None)
+>>> client = LLMlight(retrieval_method="knowledge_base.mp4")
 >>> # Create queries
 >>> response = client.prompt('What do apes like?', instructions='Only return the information from the context. Answer with maximum of 3 words, and starts with "Apes like: "')
 >>> print(response)
+
+Example
+-------
+>>> # Example to use existing video memory
+>>> # Import library
+>>> from LLMlight import LLMlight
+>>> # Initialize with default settings
+>>> client = LLMlight(retrieval_method="knowledge_base.mp4", embedding={'memory': 'tifidf', 'context': 'bert'})
+>>> # Create queries
+>>> response = client.prompt('What do apes like?', instructions='Only return the information from the context. Answer with maximum of 3 words, and starts with "Apes like: "')
+>>> print(response)
+
+
 
 References
 ----------

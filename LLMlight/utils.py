@@ -71,7 +71,7 @@ def clean_text(text):
     # Return
     return text
 
-def read_pdf(filepath, title_pages=[1, 2], body_pages=[], reference_pages=[-1], return_type='dict'):
+def read_pdf(file_path, title_pages=[1, 2], body_pages=[], reference_pages=[-1], return_type='dict'):
     logger.info('Reading pdf')
     """
     Reads a PDF file and extracts its text content as a string.
@@ -83,10 +83,10 @@ def read_pdf(filepath, title_pages=[1, 2], body_pages=[], reference_pages=[-1], 
         str: Extracted text from the PDF.
 
     """
-    if not os.path.isfile(filepath):
-        logger.error(f'File not found on disk: {filepath}')
+    if not os.path.isfile(file_path):
+        logger.error(f'File not found on disk: {file_path}')
         return None
-    if not filepath.lower().endswith('.pdf'):
+    if not file_path.lower().endswith('.pdf'):
         logger.error("The provided file path is not a valid PDF file.")
         None
     if title_pages is None: title_pages = []
@@ -98,7 +98,7 @@ def read_pdf(filepath, title_pages=[1, 2], body_pages=[], reference_pages=[-1], 
 
     try:
         # Open pdf
-        doc = pymupdf.open(filepath)
+        doc = pymupdf.open(file_path)
         # Get the total number of pages
         num_pages = len(doc)
         # Replace negative indices with corresponding positive indices
