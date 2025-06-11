@@ -24,16 +24,10 @@ from LLMlight import LLMlight
 client = LLMlight(retrieval_method='RAG_basic', preprocessing='global-reasoning', embedding='tfidf', top_chunks=5, alpha=0.05)
 # client = LLMlight(retrieval_method='RAG_basic', preprocessing='global-reasoning')
 
-# Read and process PDF
+# Read PDF
 context = client.read_pdf(r'D://OneDrive - Tilburg University//TiU//Introduction new colleagues.pdf', return_type='string')
-
 # Create new memory
 client.memory_load(file_path=r'D:\REPOS\LLMlight\knowledge_base.mp4')
-
-# Add dir recusrively
-# client.memory_add(dirpath=dirpath, overwrite=True)
-# Store memory to disk
-# client.memory_save(overwrite=True)
 
 # Query
 response = client.prompt('Provide all relevant information about Samuel Christian Gobel', context=context)
