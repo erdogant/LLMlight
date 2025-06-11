@@ -418,12 +418,10 @@ class LLMlight:
             Dictionary containing configuration parameters.
 
         """
-        # Default
-        self.memory = None
-
         # Initialize video-memory
-        if file_path is not None and os.path.isfile(file_path):
-            self.memory = memory.memvid_llm(file_path, config=config)
+        if not os.path.isfile(file_path): file_path = None
+        # Initialize
+        self.memory = memory.memvid_llm(file_path, config=config)
 
         # Set the embedding
         if embedding is not None:
