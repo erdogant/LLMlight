@@ -7,6 +7,10 @@ __pycache__/
 *.so
 
 .pypirc
+*.json
+*.mp4
+*.faiss
+
 
 # Distribution / packaging
 .Python
