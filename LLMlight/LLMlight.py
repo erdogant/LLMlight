@@ -1147,6 +1147,7 @@ def get_embeddings():
     return ['tfidf', 'bow', 'bert', 'bge-small', 'memvid']
 
 def _set_embedding(embedding):
+    if embedding is None: embedding = {}
     if isinstance(embedding, str):
         if embedding == 'automatic':
             embedding = {'memory': 'memvid', 'context': 'bert'}
