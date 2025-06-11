@@ -27,12 +27,12 @@ from sentence_transformers import SentenceTransformer
 from memvid import MemvidEncoder, MemvidRetriever
 # from memvid.config import get_default_config as memvid_get_default_config
 
-import memory
-import RAG
-import utils
-# from . import RAG
-# from . import utils
-# from . import memory
+# import memory
+# import RAG
+# import utils
+from . import RAG
+from . import utils
+from . import memory
 # DEBUG
 # import utils
 # from RAG import RAG_with_RSE
