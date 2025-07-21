@@ -3,15 +3,6 @@
 # print(dir(llm))
 # print(llm.__version__)
 
-#%%
-# import json
-# index_path = r'D:\REPOS\LLMlight\knowledge_base.json'
-# with open(index_path, 'r') as f:
-#     index_data = json.load(f)
-#     chunk_count = len(index_data.get('metadata', []))
-#     print(f"✅ Index contains {chunk_count} chunks")
-
-
 #%% Import files into video memory
 from LLMlight import LLMlight
 
@@ -34,59 +25,6 @@ response = client.prompt('Provide all relevant information about Samuel Christia
 print(response)
 
 # client.distfit.fig
-
-#%%
-from LLMlight import LLMlight
-
-# Initialize with default settings
-client = LLMlight(retrieval_method=r'D:\REPOS\LLMlight\knowledge_base.mp4')
-
-# Load the memory
-client.memory_load()
-
-
-
-import random
-# chunks
-# client.memory.retriever.index_manager.metadata[1]
-chunks = list(map(lambda x: x.get('text'), client.memory.retriever.index_manager.metadata))
-
-# Step 1: Combine all words from every chunk
-combined_words = []
-for chunk in chunks:
-    # Split by newline, space, or tab to handle multi-line strings properly
-    combined_chunk = chunk.replace('\n', ' ').replace('\t', ' ')
-    words = combined_chunk.split()
-    combined_words.extend(words)
-
-# Step 2: Create new lists with random sets of words
-new_chunks = [[] for _ in range(len(chunks))]
-n_chunks = len(new_chunks)
-for word in combined_words:
-    # Choose a random index to place the current word into one of the chunks
-    chunk_index = random.randint(0, n_chunks - 1)
-    new_chunks[chunk_index].append(word)
-
-chunk_strings = [[] for _ in range(n_chunks)]
-for i, lst in enumerate(new_chunks):
-    chunk_strings[i] = ' '.join(lst)
-
-from distfit import distfit
-dist = distfit(method='parametric', alpha=0.05)
-dist.fit_transform()
-
-# print("Original chunks:")
-# for i, c in enumerate(chunks):
-#     print(f"Chunk {i}: has {len(c.split())} tokens")
-
-# print("\nNew chunks (each token independently randomly assigned):")
-# for i, lst in enumerate(new_chunks):
-#     # We are just printing the first few to avoid too long output?
-#     truncated = ' '.join(lst[:5] + ['...'] if len(lst)>5 else lst)
-#     print(f"Chunk {i}: has {len(lst)} tokens ({truncated})")
-
-
-
 
 #%% Import files into video memory
 from LLMlight import LLMlight
