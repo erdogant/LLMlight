@@ -1,0 +1,59 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "LLMlight"
+dynamic = ["version"]
+authors = [{ name = "Erdogan Taskesen", email = "erdogant@gmail.com" },]
+description = "LLMlight is a Python library for ..."
+readme = "README.md"
+requires-python = ">=3"
+license = "MIT"
+keywords = [
+    "Python",
+    "LLM",
+    "large language model",
+    "NLP",
+    "text generation",
+    "embedding",
+    "sentence transformer",
+    "document analysis",
+    "AI",
+    "machine learning",
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+    "Intended Audience :: Education",
+    "Intended Audience :: Science/Research",
+    "Operating System :: Unix",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: MacOS",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    'sentence_transformers',
+    'scikit-learn',
+    'llama-cpp-python',
+    'json-repair',
+    'pymupdf',
+    'torch',
+    'requests',
+    'memvid',
+    'ipywidgets',
+    # 'accelerate',
+    # 'bitsandbytes',
+    # 'flash_attn',
+]
+
+[project.urls]
+Homepage = "https://erdogant.github.io/LLMlight"
+Download = "https://github.com/erdogant/LLMlight/archive/{version}.tar.gz"
+
+[tool.setuptools]
+packages = ["LLMlight"]
+include-package-data = true
+
+[tool.setuptools.dynamic]
+version = { attr = "LLMlight.__version__" }

@@ -1,0 +1,184 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Background &mdash; LLMlight LLMlight documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=03e43079" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
+      <link rel="stylesheet" type="text/css" href="_static/css/custom.css?v=e0179649" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=f9eecb16"></script>
+      <script src="_static/doctools.js?v=9bcbadda"></script>
+      <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Installation" href="Installation.html" />
+    <link rel="prev" title="LLMlight’s documentation!" href="index.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            LLMlight
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+    
+              <p class="caption" role="heading"><span class="caption-text">Background</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Background</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#output">Output</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="#schematic-overview">Schematic Overview</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Installation</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="Installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Installation.html#uninstalling">Uninstalling</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Algorithm</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="Algorithm.html">Algorithm</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Algorithm.html#get-available-llm-models">Get Available LLM Models</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Algorithm.html#preprocessing-chunking">Preprocessing &amp; Chunking</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Algorithm.html#embedding-local-storage">Embedding &amp; Local Storage</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Algorithm.html#rag-with-statistical-validation">RAG with Statistical Validation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Examples.html">Quickstart</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Saving and Loading</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="Saving%20and%20Loading.html">Saving</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Saving%20and%20Loading.html#loading">Loading</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Documentation</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="Documentation.html">Coffee</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Documentation.html#medium-blog">Medium Blog</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Documentation.html#github">Github</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Documentation.html#citing">Citing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="LLMlight.LLMlight.html">API References</a></li>
+</ul>
+
+    <a href= "genindex.html">Index</a>
+  
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">LLMlight</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Background</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/Summary.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="background">
+<h1>Background<a class="headerlink" href="#background" title="Link to this heading"></a></h1>
+<p>LLMlight is a lightweight library designed to simplify working with language models locally while providing powerful tools for
+retrieval-augmented workflows. Its core functionalities include chunking, embedding, context aggregation, statistical validation,
+and memory storage.</p>
+<p>The goal of LLMlight is to enable both researchers and practitioners to quickly build and experiment with local language models without relying on cloud services. It provides:
+- Easy integration of local knowledge bases (FAISS, JSON, MemVid)
+- Reproducible training and retrieval pipelines
+- Tools for statistical validation to separate meaningful signals from noise
+- Visualization and plotting for better understanding of models and data</p>
+<section id="output">
+<h2>Output<a class="headerlink" href="#output" title="Link to this heading"></a></h2>
+<p>Using LLMlight, users can efficiently:
+- Train and save local language models for specific tasks
+- Load saved models for inference or further training without retraining
+- Perform retrieval-augmented queries with statistical significance testing
+- Build applications such as chat-with-your-PDF, email auto-reply engines, or personal document assistants
+- Visualize embeddings, layer usage, and memory retrieval via plotting tools</p>
+</section>
+</section>
+<section id="schematic-overview">
+<h1>Schematic Overview<a class="headerlink" href="#schematic-overview" title="Link to this heading"></a></h1>
+<p>The schematic overview of our approach is as follows:</p>
+<figure class="align-center" id="id1">
+<a class="reference internal image-reference" href="_images/schematic_overview.png"><img alt="LLMlight workflow schematic" src="_images/schematic_overview.png" style="width: 100%;" />
+</a>
+</figure>
+<p>The figure illustrates the end-to-end workflow:</p>
+<ul class="simple">
+<li><p>Input data or documents are preprocessed and chunked.</p></li>
+<li><p>Chunks are embedded and optionally stored in a local database.</p></li>
+<li><p>A language model uses the chunks and context aggregation strategies for inference.</p></li>
+<li><p>Retrieval results are statistically validated via null distribution modeling.</p></li>
+<li><p>Outputs can be visualized, saved, and reused in future sessions.</p></li>
+</ul>
+<hr>
+<center>
+        <script async src="https://media.ethicalads.io/media/client/ethicalads.min.js"></script>
+        <!-- Show an image ad -->
+        <!-- <div data-ea-publisher="erdogantgithubio" data-ea-type="image"></div> -->
+        <div data-ea-publisher="erdogantgithubio" data-ea-type="image" data-ea-style="stickybox"></div>
+</center>
+<hr></section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="index.html" class="btn btn-neutral float-left" title="LLMlight’s documentation!" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="Installation.html" class="btn btn-neutral float-right" title="Installation" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2022, Erdogan Taskesen.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

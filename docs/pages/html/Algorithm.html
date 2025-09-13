@@ -1,0 +1,250 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Algorithm &mdash; LLMlight LLMlight documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=03e43079" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
+      <link rel="stylesheet" type="text/css" href="_static/css/custom.css?v=e0179649" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=f9eecb16"></script>
+      <script src="_static/doctools.js?v=9bcbadda"></script>
+      <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Quickstart" href="Examples.html" />
+    <link rel="prev" title="Installation" href="Installation.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            LLMlight
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+    
+              <p class="caption" role="heading"><span class="caption-text">Background</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="Summary.html">Background</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Summary.html#schematic-overview">Schematic Overview</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Installation</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="Installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Installation.html#uninstalling">Uninstalling</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Algorithm</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Algorithm</a></li>
+<li class="toctree-l1"><a class="reference internal" href="#get-available-llm-models">Get Available LLM Models</a></li>
+<li class="toctree-l1"><a class="reference internal" href="#preprocessing-chunking">Preprocessing &amp; Chunking</a></li>
+<li class="toctree-l1"><a class="reference internal" href="#embedding-local-storage">Embedding &amp; Local Storage</a></li>
+<li class="toctree-l1"><a class="reference internal" href="#rag-with-statistical-validation">RAG with Statistical Validation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Examples.html">Quickstart</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Saving and Loading</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="Saving%20and%20Loading.html">Saving</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Saving%20and%20Loading.html#loading">Loading</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Documentation</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="Documentation.html">Coffee</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Documentation.html#medium-blog">Medium Blog</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Documentation.html#github">Github</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Documentation.html#citing">Citing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="LLMlight.LLMlight.html">API References</a></li>
+</ul>
+
+    <a href= "genindex.html">Index</a>
+  
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">LLMlight</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Algorithm</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/Algorithm.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="algorithm">
+<h1>Algorithm<a class="headerlink" href="#algorithm" title="Link to this heading"></a></h1>
+<p>The <code class="docutils literal notranslate"><span class="pre">LLMlight</span></code> method consists of several key components: <strong>Preprocessing &amp; Chunking</strong>, <strong>Embedding &amp; Local Storage</strong>, and <strong>Retrieval-Augmented Generation with Statistical Validation</strong>. Each component contributes to efficient, accurate, and reproducible handling of user queries over large document collections.</p>
+<p>The figure below illustrates the end-to-end workflow of LLMlight:</p>
+<figure class="align-center" id="id1">
+<a class="reference internal image-reference" href="_images/schematic_overview.png"><img alt="LLMlight Workflow" src="_images/schematic_overview.png" style="width: 100%;" />
+</a>
+<figcaption>
+<p><span class="caption-text">Schematic overview of the LLMlight workflow.</span><a class="headerlink" href="#id1" title="Link to this image"></a></p>
+</figcaption>
+</figure>
+<p><strong>Workflow Steps</strong></p>
+<ol class="arabic simple">
+<li><p><strong>Input Data or Documents</strong>: Raw documents (PDFs, text files, etc.) are preprocessed to remove noise such as headers, footers, and boilerplate text.</p></li>
+<li><p><strong>Chunking</strong>: Documents are split into meaningful chunks to ensure each contains enough context for embedding and retrieval.</p></li>
+<li><p><strong>Embedding &amp; Local Storage</strong>: Each chunk is transformed into vector embeddings and optionally stored in a local database (e.g., FAISS, MemVid) for offline, efficient, and portable retrieval.</p></li>
+<li><p><strong>Query Processing &amp; Retrieval</strong>: User queries are transformed into embeddings and compared against the stored chunks using similarity measures.</p></li>
+<li><p><strong>Statistical Validation</strong>: LLMlight constructs a null distribution to assess the statistical significance of retrieved chunks, separating true signal from noise.</p></li>
+<li><p><strong>Context Aggregation &amp; LLM Inference</strong>: Selected chunks are aggregated and provided as context to the local language model for generation of accurate and grounded responses.</p></li>
+<li><p><strong>Output &amp; Visualization</strong>: Results can be saved, reused, or visualized using the built-in plotting tools.</p></li>
+</ol>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>This schematic provides a clear picture of how LLMlight integrates preprocessing, embeddings, local storage, statistical validation, and language model inference into a robust retrieval-augmented generation system.</p>
+</div>
+</section>
+<section id="get-available-llm-models">
+<h1>Get Available LLM Models<a class="headerlink" href="#get-available-llm-models" title="Link to this heading"></a></h1>
+<p>LLMlight allows users to query which language models are available locally or for download. This is useful when you want to quickly switch models, validate compatibility, or explore alternative options for your use case.</p>
+<p>This method returns a list of model names that can be used in the <a class="reference internal" href="LLMlight.LLMlight.html#module-LLMlight.LLMlight" title="LLMlight.LLMlight"><code class="xref py py-class docutils literal notranslate"><span class="pre">LLMlight.LLMlight</span></code></a> initializer for creating local language models.
+Retrieving available models can be done via the <a class="reference internal" href="LLMlight.LLMlight.html#LLMlight.LLMlight.LLMlight.get_available_models" title="LLMlight.LLMlight.LLMlight.get_available_models"><code class="xref py py-func docutils literal notranslate"><span class="pre">LLMlight.LLMlight.LLMlight.get_available_models()</span></code></a> method.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">LLMlight</span><span class="w"> </span><span class="kn">import</span> <span class="n">LLMlight</span>
+
+<span class="c1"># Initialize LLMlight client</span>
+<span class="n">client</span> <span class="o">=</span> <span class="n">LLMlight</span><span class="p">(</span><span class="n">verbose</span><span class="o">=</span><span class="s1">&#39;info&#39;</span><span class="p">)</span>
+
+<span class="c1"># Get a list of available models</span>
+<span class="n">modelnames</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">get_available_models</span><span class="p">(</span><span class="n">validate</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+
+<span class="c1"># Print available models</span>
+<span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Available models:&quot;</span><span class="p">,</span> <span class="n">modelnames</span><span class="p">)</span>
+</pre></div>
+</div>
+<ul class="simple">
+<li><p><strong>validate=False</strong>: Skips checking the integrity or availability of models, making retrieval faster.</p></li>
+<li><p><strong>verbose=’info’</strong>: Shows additional information during model retrieval, such as download progress or caching messages.</p></li>
+</ul>
+</section>
+<section id="preprocessing-chunking">
+<h1>Preprocessing &amp; Chunking<a class="headerlink" href="#preprocessing-chunking" title="Link to this heading"></a></h1>
+<p>The first step is <strong>Preprocessing &amp; Chunking</strong>. Input documents are split into manageable chunks to allow efficient embedding and retrieval. Headers, footers, and boilerplate text are removed to reduce noise. Chunks are sized appropriately (typically &gt;200 characters) to avoid hallucinations.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">LLMlight</span><span class="w"> </span><span class="kn">import</span> <span class="n">LLMlight</span>
+
+<span class="c1"># Initialize with default settings</span>
+<span class="n">client</span> <span class="o">=</span> <span class="n">LLMlight</span><span class="p">(</span><span class="n">model</span><span class="o">=</span><span class="s1">&#39;mistralai/mistral-small-3.2&#39;</span><span class="p">,</span> <span class="n">file_path</span><span class="o">=</span><span class="s1">&#39;local_database.mp4&#39;</span><span class="p">)</span>
+
+<span class="c1"># Example PDFs to process</span>
+<span class="n">url1</span> <span class="o">=</span> <span class="s1">&#39;https://proceedings.neurips.cc/paper_files/paper/2017/file/3f5ee243547dee91fbd053c1c4a845aa-Paper.pdf&#39;</span>
+<span class="n">url2</span> <span class="o">=</span> <span class="s1">&#39;https://erdogant.github.io/publications/papers/2020%20-%20Taskesen</span><span class="si">%20e</span><span class="s1">t</span><span class="si">%20a</span><span class="s1">l%20-%20HNet%20Hypergeometric%20Networks.pdf&#39;</span>
+</pre></div>
+</div>
+</section>
+<section id="embedding-local-storage">
+<h1>Embedding &amp; Local Storage<a class="headerlink" href="#embedding-local-storage" title="Link to this heading"></a></h1>
+<p>In <strong>Embedding &amp; Local Storage</strong>, each chunk is transformed into a vector representation. These embeddings are stored in local databases such as FAISS or MemVid, making retrieval fast, offline-friendly, and portable. Users can also add small text chunks or entire directories.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Add multiple PDF files to the database</span>
+<span class="n">client</span><span class="o">.</span><span class="n">memory_add</span><span class="p">(</span><span class="n">files</span><span class="o">=</span><span class="p">[</span><span class="n">url1</span><span class="p">,</span> <span class="n">url2</span><span class="p">])</span>
+
+<span class="c1"># Add additional text chunks</span>
+<span class="n">client</span><span class="o">.</span><span class="n">memory_add</span><span class="p">(</span><span class="n">text</span><span class="o">=</span><span class="p">[</span>
+    <span class="s1">&#39;Small chunk that is also added to the database.&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;The capital of France is Amsterdam.&#39;</span>
+<span class="p">],</span> <span class="n">overwrite</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+<span class="c1"># Add all supported file types from a directory</span>
+<span class="n">client</span><span class="o">.</span><span class="n">memory_add</span><span class="p">(</span>
+    <span class="n">dirpath</span><span class="o">=</span><span class="s1">&#39;c:/my_documents/&#39;</span><span class="p">,</span>
+    <span class="n">filetypes</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;.pdf&#39;</span><span class="p">,</span> <span class="s1">&#39;.txt&#39;</span><span class="p">,</span> <span class="s1">&#39;.epub&#39;</span><span class="p">,</span> <span class="s1">&#39;.md&#39;</span><span class="p">,</span> <span class="s1">&#39;.doc&#39;</span><span class="p">,</span> <span class="s1">&#39;.docx&#39;</span><span class="p">,</span> <span class="s1">&#39;.rtf&#39;</span><span class="p">,</span> <span class="s1">&#39;.html&#39;</span><span class="p">,</span> <span class="s1">&#39;.htm&#39;</span><span class="p">]</span>
+<span class="p">)</span>
+
+<span class="c1"># Store the database to disk</span>
+<span class="n">client</span><span class="o">.</span><span class="n">memory_save</span><span class="p">()</span>
+</pre></div>
+</div>
+</section>
+<section id="rag-with-statistical-validation">
+<h1>RAG with Statistical Validation<a class="headerlink" href="#rag-with-statistical-validation" title="Link to this heading"></a></h1>
+<p>During <strong>Retrieval-Augmented Generation (RAG)</strong>, queries are compared against stored chunks using similarity measures. LLMlight constructs a null distribution of scores to evaluate statistical significance. Only chunks that are likely relevant are selected and aggregated for the language model to generate grounded responses.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Load database for inference</span>
+<span class="n">client</span> <span class="o">=</span> <span class="n">LLMlight</span><span class="p">(</span><span class="n">model</span><span class="o">=</span><span class="s1">&#39;mistralai/mistral-small-3.2&#39;</span><span class="p">,</span> <span class="n">file_path</span><span class="o">=</span><span class="s1">&#39;local_database.mp4&#39;</span><span class="p">)</span>
+
+<span class="c1"># Inspect top 5 chunks</span>
+<span class="n">client</span><span class="o">.</span><span class="n">memory_chunks</span><span class="p">(</span><span class="n">n</span><span class="o">=</span><span class="mi">5</span><span class="p">)</span>
+
+<span class="c1"># Search through chunks using queries</span>
+<span class="n">out1</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">memory</span><span class="o">.</span><span class="n">retriever</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="s1">&#39;Attention Is All You Need&#39;</span><span class="p">,</span> <span class="n">top_k</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
+<span class="n">out2</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">memory</span><span class="o">.</span><span class="n">retriever</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="s1">&#39;Enrichment analysis, Hypergeometric Networks&#39;</span><span class="p">,</span> <span class="n">top_k</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
+<span class="n">out3</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">memory</span><span class="o">.</span><span class="n">retriever</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="s1">&#39;Capital of Amsterdam&#39;</span><span class="p">,</span> <span class="n">top_k</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
+</pre></div>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>This approach separates true signal from coincidental patterns, making retrieval robust and ensuring that responses are based on meaningful content rather than surface-level similarity.</p>
+</div>
+<hr>
+<center>
+        <script async src="https://media.ethicalads.io/media/client/ethicalads.min.js"></script>
+        <!-- Show an image ad -->
+        <!-- <div data-ea-publisher="erdogantgithubio" data-ea-type="image"></div> -->
+        <div data-ea-publisher="erdogantgithubio" data-ea-type="image" data-ea-style="stickybox"></div>
+</center>
+<hr></section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="Installation.html" class="btn btn-neutral float-left" title="Installation" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="Examples.html" class="btn btn-neutral float-right" title="Quickstart" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2022, Erdogan Taskesen.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>
