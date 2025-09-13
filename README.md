@@ -32,7 +32,7 @@ LLMlight is a Python package for running Large Language Models (LLMs) locally wi
 |---------|-------------|
 | [**Local LLM Support**](https://erdogant.github.io/LLMlight/pages/html/Algorithm.html#get-available-llm-models) | Run LLMs locally with minimal dependencies. |
 | [**Full Prompt Control**]() | Fine-grained control over prompts including Query, Instructions, System, Context, Response Format, Automatic formatting, Temperature, and Top P. |
-| [**Single Endpoint for All Local Models**](https://erdogant.github.io/LLMlight/pages/html/Algorithm.html#get-available-llm-models) | One unified endpoint to connect different local models, supporting Hermes-3-Llama-3.2-3B, Mistral-7B-Grok, OpenHermes-2.5-Mistral-7B, Gemma-2-9B-IT, and more. |
+| [**Single Endpoint for All Local Models**](https://erdogant.github.io/LLMlight/pages/html/Algorithm.html#get-available-llm-models) | One unified endpoint to connect different local models. |
 | [**Flexible Embedding Methods**](https://erdogant.github.io/LLMlight/pages/html/Algorithm.html#preprocessing-chunking) | Multiple embedding strategies: TF-IDF for structured documents, Bag of Words (BOW), BERT for free text, BGE-Small. |
 | [**Advanced Retrieval Methods**](https://erdogant.github.io/LLMlight/pages/html/Algorithm.html#rag-with-statistical-validation) | Supports Naive RAG with fixed chunking and RSE (Relevant Segment Extraction). |
 | [**Context Strategies**](https://erdogant.github.io/LLMlight/pages/html/Algorithm.html#rag-with-statistical-validation) | Advanced reasoning for complex queries using Global-reasoning and Chunk-wise approaches. |
