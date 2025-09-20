@@ -55,24 +55,7 @@ LLMlight is a Python package for running Large Language Models (LLMs) locally wi
 # Install from PyPI
 pip install LLMlight
 
-# Install from GitHub
-pip install git+https://github.com/erdogant/LLMlight
 ```
-
-### Basic Usage with Endpoint
-
-```python
-from LLMlight import LLMlight
-
-# Initialize with default settings
-client = LLMlight(endpoint='http://localhost:1234/v1/chat/completions')
-
-# Run a simple query
-response = client.prompt('What is the capital of France?',
-                         context='The capital of France is Amsterdam.',
-                         instructions='Do not argue with the information in the context. Only return the information from the context.')
-print(response)
-# According to the provided context, the capital of France is Amsterdam.
 
 ```
 
@@ -95,13 +78,13 @@ print(modelnames)
 
 ```
 
-### 2. Basic Usage with Local GGUF
+### 2. Basic Usage with Endpoint
 
 ```python
 from LLMlight import LLMlight
 
-# Use with a local GGUF client
-client = LLMlight(endpoint='path/to/your/client.gguf')
+# Initialize with default settings
+client = LLMlight(model='openai/gpt-oss-20b', endpoint='http://localhost:1234/v1/chat/completions')
 
 # Run a simple query
 response = client.prompt('What is the capital of France?',
@@ -110,7 +93,7 @@ response = client.prompt('What is the capital of France?',
 print(response)
 # According to the provided context, the capital of France is Amsterdam.
 
-```
+
 
 ### 3. Using with LM Studio
 
@@ -166,7 +149,7 @@ pdf_text = client.read_pdf(path, return_type='text')
 
 # Make a prompt
 response = client.prompt('What is an attention network?',
-                         context=context,
+                         context=pdf_text,
                          instructions='Answer the question using only the information from the context. If the answer can not be found, tell that.')
 print(response)
 
@@ -239,14 +222,6 @@ print(response)
 
 ```
 
-### Contributors
-Thank the contributors!
-
-<p align="left">
-  <a href="https://github.com/erdogant/llmlight/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=erdogant/llmlight" />
-  </a>
-</p>
 
 ### Maintainer
 * Erdogan Taskesen, github: [erdogant](https://github.com/erdogant)
