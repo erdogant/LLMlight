@@ -11,3 +11,4 @@ distfit
 ipywidgets
 llama-cpp-python
 # flash_attn
+distfit

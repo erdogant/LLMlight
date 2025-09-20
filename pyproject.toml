@@ -42,6 +42,7 @@ dependencies = [
     'requests',
     'memvid',
     'ipywidgets',
+    'distfit',
     # 'accelerate',
     # 'bitsandbytes',
     # 'flash_attn',
