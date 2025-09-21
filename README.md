@@ -47,7 +47,6 @@ LLMlight is a Python package for running Large Language Models (LLMs) locally wi
 - [Blog Posts](https://erdogant.github.io/LLMlight/pages/html/Documentation.html#medium-blog)
 - [GitHub Issues](https://github.com/erdogant/LLMlight/issues)
 
-## Quick Start
 
 ### Installation
 
@@ -57,9 +56,7 @@ pip install LLMlight
 
 ```
 
-```
-
-## Examples
+## Quick Start
 
 
 ### 1. Check Available Models at Endpoint
