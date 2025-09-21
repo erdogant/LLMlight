@@ -1,4 +1,21 @@
 # %%
+
+# =============================================================================
+# Make a summary
+# =============================================================================
+
+from LLMlight import LLMlight
+
+client = LLMlight(model='mistralai/mistral-small-3.2', top_chunks=5)
+
+# Add multiple PDF files to the database
+url = 'https://proceedings.neurips.cc/paper_files/paper/2017/file/3f5ee243547dee91fbd053c1c4a845aa-Paper.pdf'
+pdf_text = client.read_pdf(url)
+
+
+summary_text = client.summarize(context=pdf_text)
+
+# %%
 # New example
 
 from LLMlight import LLMlight

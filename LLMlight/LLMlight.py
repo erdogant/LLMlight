@@ -274,7 +274,7 @@ class LLMlight:
             Whether to enable streaming (default is False).
         return_type: bool, optional
             Return dictionary in case the output is a json
-            'full': Output the full json
+            'max': Output the full json
             'dict': Convert json into dictionary.
             'string': Return only the string answer (remove thinking strings using tags: <think> </think>).
             'string_with_thinking' Return the full response which includes the thinking proces (if available).
@@ -300,7 +300,7 @@ class LLMlight:
         if context is None: context = self.context
         if temperature is None: temperature = self.temperature
         if top_p is None: top_p = self.top_p
-        self.task = 'full'
+        self.task = 'max'
 
         # Set system message
         system = set_system_message(system)
@@ -344,7 +344,7 @@ class LLMlight:
     #     #     context = '\n\n'.join(context.values())
     #     return context
 
-    def requests_post_gguf(self, prompt, system, temperature=0.8, top_p=1, headers=None, task='full', stream=False, return_type='string'):
+    def requests_post_gguf(self, prompt, system, temperature=0.8, top_p=1, headers=None, task='max', stream=False, return_type='string'):
         # Note that it is better to use messages_prompt instead of a dict (messages_dict) because most GGUF-based models don't have a tokenizer/parser that can interpret the JSON-style message structure.
         # Prepare data for request.
         if headers is None: headers = {"Content-Type": "application/json"}
@@ -374,7 +374,7 @@ class LLMlight:
         # Return
         return response
 
-    def requests_post_http(self, prompt, system, temperature=0.8, top_p=1, headers=None, task='full', stream=False, return_type='string', max_tokens=None):
+    def requests_post_http(self, prompt, system, temperature=0.8, top_p=1, headers=None, task='max', stream=False, return_type='string', max_tokens=None):
         # Prepare data for request.
         if headers is None: headers = {"Content-Type": "application/json"}
         # Prepare messages
@@ -604,22 +604,41 @@ class LLMlight:
         # Return
         return results
 
-
-
-    def task(self,
+    def summarize(self,
              query="Extract key insights while maintaining coherence of the previous summaries.",
-             instructions="",
-             system="You are a helpfull assistant.",
-             response_format="**comprehensive, structured document covering all key insights**",
-             task='question',
+             instructions="Extract key insights from the **new text chunk** while maintaining coherence with **Previous summaries",
+             system="You are a professional summarizer with over two decades of experience. Your strength is that you know how to deal with partial and incomplete texts but you do not make up new stuff. Keep the focus on the original input.",
+             response_format="**Make a comprehensive, structured document covering all key insights**",
              context=None,
              return_type='string',
              ):
         """
-        Analyze the large text in an iterative, coherent manner.
-        - Each chunk is processed while keeping track of previous summaries.
-        - After all chunks are processed, a final coherent text is made.
-        - The query can for example be to summarize the text or to extract key insights.
+        Summarize large documents iteratively while maintaining coherence across text chunks.
+        
+        This function splits the input text into smaller chunks and processes each part in sequence.
+        For every chunk, it generates a partial summary while incorporating the context of the
+        previous summaries. After all chunks have been processed, the function combines the partial
+        results into a final, coherent, and structured summary.  
+
+        Parameters
+        ----------
+        query : str, optional
+            The guiding task or question for summarization (default extracts key insights).  
+        instructions : str, optional
+            Additional instructions for the summarizer, tailored to each chunk.  
+        system : str
+            System message that sets the role and behavior of the summarizer.  
+        response_format : str, optional
+            Defines the format of the final output (default is a structured document).  
+        context : str or dict, optional
+            Input text or structured content to be summarized. If None, uses `self.context`.  
+        return_type : str, optional
+            Format of the returned result (default "string").  
+        
+        Returns
+        -------
+        str
+        A comprehensive, coherent summary that integrates insights across all chunks.  
 
         """
         if system is None:
@@ -635,10 +654,10 @@ class LLMlight:
             else:
                 context = self.context
 
-        logger.info(f'Processing the document for the given task..')
-
         # Create chunks based on words
         chunks = utils.chunk_text(context, method=self.chunks['method'], chunk_size=self.chunks['size'], overlap=self.chunks['overlap'])
+
+        logger.info(f'Processing the document using {len(chunks)} for the given task..')
 
         # Build a structured prompt that includes all previous summaries
         response_list = []
@@ -656,10 +675,9 @@ class LLMlight:
             + f"{chunk}\n\n"
 
             "### Instructions:\n"
-            + "- Extract key insights from the **new text chunk** while maintaining coherence with **Previous summaries**.\n"
-            + f"{instructions}\n\n"
+            + f"{instructions}**.\n\n"
 
-            f"### {task}:\n"
+            f"### Question:\n"
             f"{query}\n\n"
 
             "### Improved Results:\n"
@@ -667,7 +685,7 @@ class LLMlight:
 
             # Get the summary for the current chunk
             # chunk_result = self.query_llm(prompt, system=system)
-            chunk_result= self.requests_post_http(prompt, system, temperature=self.temperature, top_p=self.top_p, task='full', stream=False, return_type='string')
+            chunk_result = self.requests_post_http(prompt, system, temperature=self.temperature, top_p=self.top_p, task='max', stream=False, return_type='string')
 
             response_list.append(f"Results {i+1}:\n" + chunk_result)
 
@@ -678,23 +696,20 @@ class LLMlight:
         {results_total}
 
         ### Task:
-        Connect the result parts in context into a **coherent, well-structured document**.
+        Your task is to connect all the parts into a **coherent, well-structured document**. Make sure it becomes is a very good summary.
 
         ### Instructions:
         - Maintain as much as possible the key insights but ensure logical flow.
         - Connect insights smoothly while keeping essential details intact.
-
-        {response_format}
-
-        f"### {task}:\n"
-        {query}\n\n
+        - Only use bulletpoints when really needed.
+        - {response_format}
 
         Begin your response below:
         """
         logger.info('Combining all information to create a single coherent output..')
         # Create the final summary.
         # final_result = self.query_llm(final_prompt, system=system, return_type=return_type)
-        final_result = self.requests_post_http(final_prompt, system, temperature=self.temperature, top_p=self.top_p, task='full', stream=False, return_type=return_type)
+        final_result = self.requests_post_http(final_prompt, system, temperature=self.temperature, top_p=self.top_p, task='max', stream=False, return_type=return_type)
         # Return
         return final_result
         # return {'summary': final_result, 'summary_per_chunk': results_total}
@@ -1352,7 +1367,7 @@ def load_local_gguf_model(model_path: str, n_ctx: int=4096, n_threads: int=8, n_
     # Return
     return llm
 
-def compute_tokens(string, n_ctx=4096, task='full'):
+def compute_tokens(string, n_ctx=4096, task='max'):
     tokenizer = AutoTokenizer.from_pretrained("gpt2")
     # Tokenize the input string
     tokens = tokenizer.encode(string, truncation=True, max_length=n_ctx)
@@ -1366,7 +1381,7 @@ def compute_tokens(string, n_ctx=4096, task='full'):
     return used_tokens, max_tokens
 
 
-def compute_max_tokens(used_tokens, n_ctx=4096, task="full"):
+def compute_max_tokens(used_tokens, n_ctx=4096, task="max"):
     """
     Compute the maximum number of tokens that can be generated for a given task,
     taking into account the number of tokens already used and the model's context window.
@@ -1384,7 +1399,7 @@ def compute_max_tokens(used_tokens, n_ctx=4096, task="full"):
         - "chat": Use up to 60% of the context window, minimum 128 tokens.
         - "code": Use up to 75% of the context window, minimum 128 tokens.
         - "longform": Use up to 90% of the context window, minimum 256 tokens.
-        - "full": Use all remaining tokens.
+        - "max": Use all remaining tokens.
         Any unrecognized task defaults to a safe fallback using 50% of the context window.
 
     Returns
@@ -1405,7 +1420,7 @@ def compute_max_tokens(used_tokens, n_ctx=4096, task="full"):
         max_tokens = max(min(available_tokens, int(n_ctx * 0.75)), 128)
     elif task == "longform":
         max_tokens = max(min(available_tokens, int(n_ctx * 0.9)), 256)
-    elif task == "full":
+    elif task == "max":
         max_tokens = available_tokens
     else:
         # Default to safe fallback

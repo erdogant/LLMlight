@@ -52,9 +52,14 @@ Content
 
 .. toctree::
    :maxdepth: 1
-   :caption: Algorithm
+   :caption: Functions
    
    Algorithm
+
+.. toctree::
+   :maxdepth: 1
+   :caption: Examples
+   
    Examples
 
 
