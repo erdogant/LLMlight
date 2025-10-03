@@ -90,134 +90,18 @@ response = client.prompt('What is the capital of France?',
 print(response)
 # According to the provided context, the capital of France is Amsterdam.
 
-
+```
 
 ### 3. Using with LM Studio
 
-```python
-# Import library
-from LLMlight import LLMlight
-
-# Initialize with LM Studio endpoint
-client = LLMlight(model='mistralai/mistral-small-3.2',
-                  endpoint="http://localhost:1234/v1/chat/completions")
-
-# Run queries
-response = client.prompt('Explain quantum computing in simple terms')
-
-```
+https://erdogant.github.io/LLMlight/pages/html/Algorithm.html#get-available-llm-models
 
 ### 3. Query against PDF files
+https://erdogant.github.io/LLMlight/pages/html/Examples.html#working-with-files-pdfs
 
-```python
+### 4. Creating Local Memory Database
 
-# Load library
-from LLMlight import LLMlight
-
-# Initialize with default settings
-client = LLMlight(model='mistralai/mistral-small-3.2',
-                  context_strategy='chunk-wise',
-                  retrieval_method='naive_rag',
-                  embedding={'memory': 'memvid', 'context': 'bert'},
-                  top_chunks=5)
-
-# Read pdf
-path = 'https://proceedings.neurips.cc/paper_files/paper/2017/file/3f5ee243547dee91fbd053c1c4a845aa-Paper.pdf'
-pdf_text = client.read_pdf(path, return_type='text')
-context = pdf_text + '\n More text can be appended in this manner'
-
-# Make a prompt
-response = client.prompt('What is an attention network?',
-                         context=context,
-                         instructions='Answer the question using only the information from the context. If the answer can not be found, tell that.')
-
-print(response)
-
-```
-
-### 4. Global Reasoning
-
-```python
-from LLMlight import LLMlight
-client = LLMlight(model='microsoft/phi-4', context_strategy='global-reasoning')
-
-path = 'https://proceedings.neurips.cc/paper_files/paper/2017/file/3f5ee243547dee91fbd053c1c4a845aa-Paper.pdf'
-pdf_text = client.read_pdf(path, return_type='text')
-
-# Make a prompt
-response = client.prompt('What is an attention network?',
-                         context=pdf_text,
-                         instructions='Answer the question using only the information from the context. If the answer can not be found, tell that.')
-print(response)
-
-
-```
-
-
-### 5. Creating Local Memory Database
-
-```python
-
-# Load library
-from LLMlight import LLMlight
-
-# Initialize with default settings
-client = LLMlight(model='mistralai/mistral-small-3.2', file_path='local_database.mp4')
-
-url1 = 'https://proceedings.neurips.cc/paper_files/paper/2017/file/3f5ee243547dee91fbd053c1c4a845aa-Paper.pdf'
-url2 = 'https://erdogant.github.io/publications/papers/2020%20-%20Taskesen%20et%20al%20-%20HNet%20Hypergeometric%20Networks.pdf'
-
-# Add multiple PDF files to the database
-client.memory_add(files=[url1, url2])
-
-# Add more chunks of information
-client.memory_add(text=['Small chunk that is also added to the database.',
-                        'The capital of France is Amsterdam.'],
-                  overwrite=True)
-
-# Add all file types from a directory
-client.memory_add(dirpath='c:/my_documents/',
-                  filetypes = ['.pdf', '.txt', '.epub', '.md', '.doc', '.docx', '.rtf', '.html', '.htm'],
-                  )
-
-# Store to disk
-client.memory_save()
-
-
-# =============================================================================
-# Load from database
-# =============================================================================
-
-# Import
-from LLMlight import LLMlight
-# Initialize with local database
-client = LLMlight(model='mistralai/mistral-small-3.2', file_path='local_database.mp4')
-
-# Get the top 5 chunks
-client.memory_chunks(n=5)
-
-# Search through the chunks using a query
-out1 = client.memory.retriever.search('Attention Is All You Need', top_k=3)
-out2 = client.memory.retriever.search('Enrichment analysis, Hypergeometric Networks', top_k=3)
-out3 = client.memory.retriever.search('Capital of Amsterdam', top_k=3)
-
-```
-
-### 6. Load Local Memory Database
-
-```python
-
-# Import library
-from LLMlight import LLMlight
-
-# Initialize with default settings
-client = LLMlight(preprocessing=None, retrieval_method=None, path_to_memory="knowledge_base.mp4")
-
-# Create queries
-response = client.prompt('What do apes like?', instructions='Only return the information from the context. Answer with maximum of 3 words, and starts with "Apes like: "')
-print(response)
-
-```
+https://erdogant.github.io/LLMlight/pages/html/Saving%20and%20Loading.html#memory-management
 
 
 ### Maintainer
