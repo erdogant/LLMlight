@@ -20,7 +20,7 @@ LLMlight is a Python package for running Large Language Models (LLMs) locally wi
 
 ---
 <p align="left">
-  <a href="https://erdogant.github.io/llmlight/">
+  <a href="https://erdogant.github.io/LLMlight/">
     <img src="https://raw.githubusercontent.com/erdogant/llmlight/master/docs/figs/schematic_overview.png" width="600" alt="Schematic Overview" />
   </a>
 </p>
