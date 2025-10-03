@@ -10,7 +10,7 @@ from LLMlight.LLMlight import (
 
 __author__ = 'Erdogan Tasksen'
 __email__ = 'erdogant@gmail.com'
-__version__ = '0.5.0'
+__version__ = '0.5.1'
 
 # Setup root logger
 # Setup package-level logger
