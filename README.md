@@ -10,8 +10,7 @@
 [![Forks](https://img.shields.io/github/forks/erdogant/LLMlight.svg)](https://github.com/erdogant/LLMlight/network)
 [![Issues](https://img.shields.io/github/issues/erdogant/LLMlight.svg)](https://github.com/erdogant/LLMlight/issues)
 [![Project Status](http://www.repostatus.org/badges/latest/active.svg)](http://www.repostatus.org/#active)
-[![Medium](https://img.shields.io/badge/Medium-Blog-black)](https://erdogant.github.io/LLMlight/pages/html/Documentation.html#medium-blog)
-[![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://erdogant.github.io/LLMlight/pages/html/Documentation.html#colab-notebook)
+[![Medium](https://img.shields.io/badge/Medium-Blog-black)](https://medium.com/@erdogant/build-your-private-language-model-local-and-specialized-for-your-tasks-f94a3f611869)
 [![Donate](https://img.shields.io/badge/Support%20this%20project-grey.svg?logo=github%20sponsors)](https://erdogant.github.io/LLMlight/pages/html/Documentation.html#)
 
 <div>
