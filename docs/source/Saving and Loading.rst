@@ -1,4 +1,3 @@
-
 Saving
 ################
 
@@ -43,21 +42,9 @@ Loading
 
 Loading a previously saved model can be done using the function :func:`LLMlight.LLMlight.LLMlight.memory_load`. This restores the model into memory, ready for predictions or further analysis.
 
-.. code:: python
 
-    # Import
-    from LLMlight import LLMlight
+https://erdogant.github.io/LLMlight/pages/html/Saving%20and%20Loading.html#loading
 
-    # Initialize with local database
-    client = LLMlight(model='mistralai/mistral-small-3.2', file_path='local_database.mp4')
-    
-    # Get the top 5 chunks
-    client.memory_chunks(n=5)
-    
-    # Search through the chunks using a query
-    out1 = client.memory.retriever.search('Attention Is All You Need', top_k=3)
-    out2 = client.memory.retriever.search('Enrichment analysis, Hypergeometric Networks', top_k=3)
-    out3 = client.memory.retriever.search('Capital of Amsterdam', top_k=3)
 
 .. note::
     - Ensure that the version of LLMlight used for loading is compatible with the version used to save the model.

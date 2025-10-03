@@ -21,7 +21,7 @@
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
     <link rel="next" title="Coffee" href="Documentation.html" />
-    <link rel="prev" title="Quickstart" href="Examples.html" /> 
+    <link rel="prev" title="Basic Prompting" href="Examples.html" /> 
 </head>
 
 <body class="wy-body-for-nav"> 
@@ -54,19 +54,26 @@
 <li class="toctree-l1"><a class="reference internal" href="Installation.html">Installation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="Installation.html#uninstalling">Uninstalling</a></li>
 </ul>
-<p class="caption" role="heading"><span class="caption-text">Algorithm</span></p>
+<p class="caption" role="heading"><span class="caption-text">Functions</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="Algorithm.html">Algorithm</a></li>
 <li class="toctree-l1"><a class="reference internal" href="Algorithm.html#get-available-llm-models">Get Available LLM Models</a></li>
 <li class="toctree-l1"><a class="reference internal" href="Algorithm.html#preprocessing-chunking">Preprocessing &amp; Chunking</a></li>
 <li class="toctree-l1"><a class="reference internal" href="Algorithm.html#embedding-local-storage">Embedding &amp; Local Storage</a></li>
 <li class="toctree-l1"><a class="reference internal" href="Algorithm.html#rag-with-statistical-validation">RAG with Statistical Validation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="Examples.html">Quickstart</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Examples</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="Examples.html">Basic Prompting</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Examples.html#working-with-files-pdfs">Working with Files (PDFs)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Examples.html#create-summaries">Create Summaries</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Saving and Loading</span></p>
 <ul class="current">
 <li class="toctree-l1 current"><a class="current reference internal" href="#">Saving</a></li>
 <li class="toctree-l1"><a class="reference internal" href="#loading">Loading</a></li>
+<li class="toctree-l1"><a class="reference internal" href="#memory-management">Memory Management</a></li>
+<li class="toctree-l1"><a class="reference internal" href="#advanced-load-existing-memory-and-continue">Advanced: Load Existing Memory and Continue</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Documentation</span></p>
 <ul>
@@ -103,9 +110,9 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
              
-  <p>LLMlight allows you to persist both your learned models and local knowledge databases, enabling reproducibility and easy sharing across projects. Saving a model ensures that all learned parameters, preprocessing settings, embeddings, and context strategies are stored, so that you can later reload the model without retraining. This is particularly useful when working with large datasets or when fine-tuning local models for specialized tasks.</p>
-<section id="saving">
+  <section id="saving">
 <h1>Saving<a class="headerlink" href="#saving" title="Link to this heading"></a></h1>
+<p>LLMlight allows you to persist both your learned models and local knowledge databases, enabling reproducibility and easy sharing across projects. Saving a model ensures that all learned parameters, preprocessing settings, embeddings, and context strategies are stored, so that you can later reload the model without retraining. This is particularly useful when working with large datasets or when fine-tuning local models for specialized tasks.</p>
 <p>Saving a learned model can be done using the function <a class="reference internal" href="LLMlight.LLMlight.html#LLMlight.LLMlight.LLMlight.memory_save" title="LLMlight.LLMlight.LLMlight.memory_save"><code class="xref py py-func docutils literal notranslate"><span class="pre">LLMlight.LLMlight.LLMlight.memory_save()</span></code></a>. This stores the model on disk under a specified file name or path. It is recommended to include versioning in the filename to track updates over time.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Load library</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">LLMlight</span><span class="w"> </span><span class="kn">import</span> <span class="n">LLMlight</span>
@@ -144,21 +151,7 @@
 <section id="loading">
 <h1>Loading<a class="headerlink" href="#loading" title="Link to this heading"></a></h1>
 <p>Loading a previously saved model can be done using the function <a class="reference internal" href="LLMlight.LLMlight.html#LLMlight.LLMlight.LLMlight.memory_load" title="LLMlight.LLMlight.LLMlight.memory_load"><code class="xref py py-func docutils literal notranslate"><span class="pre">LLMlight.LLMlight.LLMlight.memory_load()</span></code></a>. This restores the model into memory, ready for predictions or further analysis.</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Import</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">LLMlight</span><span class="w"> </span><span class="kn">import</span> <span class="n">LLMlight</span>
-
-<span class="c1"># Initialize with local database</span>
-<span class="n">client</span> <span class="o">=</span> <span class="n">LLMlight</span><span class="p">(</span><span class="n">model</span><span class="o">=</span><span class="s1">&#39;mistralai/mistral-small-3.2&#39;</span><span class="p">,</span> <span class="n">file_path</span><span class="o">=</span><span class="s1">&#39;local_database.mp4&#39;</span><span class="p">)</span>
-
-<span class="c1"># Get the top 5 chunks</span>
-<span class="n">client</span><span class="o">.</span><span class="n">memory_chunks</span><span class="p">(</span><span class="n">n</span><span class="o">=</span><span class="mi">5</span><span class="p">)</span>
-
-<span class="c1"># Search through the chunks using a query</span>
-<span class="n">out1</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">memory</span><span class="o">.</span><span class="n">retriever</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="s1">&#39;Attention Is All You Need&#39;</span><span class="p">,</span> <span class="n">top_k</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
-<span class="n">out2</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">memory</span><span class="o">.</span><span class="n">retriever</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="s1">&#39;Enrichment analysis, Hypergeometric Networks&#39;</span><span class="p">,</span> <span class="n">top_k</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
-<span class="n">out3</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">memory</span><span class="o">.</span><span class="n">retriever</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="s1">&#39;Capital of Amsterdam&#39;</span><span class="p">,</span> <span class="n">top_k</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
-</pre></div>
-</div>
+<p><a class="reference external" href="https://erdogant.github.io/LLMlight/pages/html/Saving%20and%20Loading.html#loading">https://erdogant.github.io/LLMlight/pages/html/Saving%20and%20Loading.html#loading</a></p>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
 <ul class="simple">
@@ -166,6 +159,41 @@
 <li><p>Loading a model does not require retraining, which can save substantial time for large or complex models.</p></li>
 <li><p>Models saved with additional local knowledge (MemVid databases) can be loaded with their memory intact, allowing immediate retrieval-augmented tasks.</p></li>
 </ul>
+</div>
+</section>
+<section id="memory-management">
+<h1>Memory Management<a class="headerlink" href="#memory-management" title="Link to this heading"></a></h1>
+<p>Create, add to, and query a persistent memory:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">LLMlight</span><span class="w"> </span><span class="kn">import</span> <span class="n">LLMlight</span>
+
+<span class="n">client</span> <span class="o">=</span> <span class="n">LLMlight</span><span class="p">()</span>
+<span class="c1"># Initialize a new video memory file</span>
+<span class="n">client</span><span class="o">.</span><span class="n">memory_init</span><span class="p">(</span><span class="n">file_path</span><span class="o">=</span><span class="s1">&#39;knowledge_base.mp4&#39;</span><span class="p">)</span>
+
+<span class="c1"># Add knowledge (as chunks of text)</span>
+<span class="n">client</span><span class="o">.</span><span class="n">memory_add</span><span class="p">(</span><span class="n">text</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;Apes like USB sticks&#39;</span><span class="p">,</span> <span class="s1">&#39;The capital of France is Paris.&#39;</span><span class="p">],</span> <span class="n">overwrite</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+<span class="c1"># Store memory to disk</span>
+<span class="n">client</span><span class="o">.</span><span class="n">memory_save</span><span class="p">()</span>
+
+<span class="c1"># Query from the memory</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">client</span><span class="o">.</span><span class="n">prompt</span><span class="p">(</span><span class="s1">&#39;What do apes like?&#39;</span><span class="p">))</span>
+
+<span class="c1"># Show memory stats</span>
+<span class="n">client</span><span class="o">.</span><span class="n">memory</span><span class="o">.</span><span class="n">show_stats</span><span class="p">()</span>
+</pre></div>
+</div>
+</section>
+<section id="advanced-load-existing-memory-and-continue">
+<h1>Advanced: Load Existing Memory and Continue<a class="headerlink" href="#advanced-load-existing-memory-and-continue" title="Link to this heading"></a></h1>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">LLMlight</span><span class="w"> </span><span class="kn">import</span> <span class="n">LLMlight</span>
+
+<span class="c1"># Load previously saved video memory</span>
+<span class="n">client</span> <span class="o">=</span> <span class="n">LLMlight</span><span class="p">(</span><span class="n">model</span><span class="o">=</span><span class="s1">&#39;mistralai/mistral-small-3.2&#39;</span><span class="p">,</span> <span class="n">retrieval_method</span><span class="o">=</span><span class="s1">&#39;knowledge_base.mp4&#39;</span><span class="p">)</span>
+
+<span class="c1"># Query from loaded memory</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">client</span><span class="o">.</span><span class="n">prompt</span><span class="p">(</span><span class="s1">&#39;What is the capital of France?&#39;</span><span class="p">))</span>
+</pre></div>
 </div>
 <hr>
 <center>
@@ -180,7 +208,7 @@
            </div>
           </div>
           <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
-        <a href="Examples.html" class="btn btn-neutral float-left" title="Quickstart" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="Examples.html" class="btn btn-neutral float-left" title="Basic Prompting" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
         <a href="Documentation.html" class="btn btn-neutral float-right" title="Coffee" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
     </div>
 

@@ -1,20 +1,7 @@
-Quickstart
-==========
+Basic Prompting
+################
 
 LLMlight is a library for lightweight, modular and efficient use of LLM and RAG workflows. Below are quick examples using the main functions of the library.
-
-Installation
---------------
-
-.. code-block:: bash
-
-    pip install LLMlight
-
-Basic Usage
------------
-
-Initialize and Simple Prompting
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 .. code-block:: python
 
@@ -27,45 +14,24 @@ Initialize and Simple Prompting
     response = client.prompt('What is the capital of France?')
     print(response)
 
-Memory Management (Video Memory)
----------------------------------
-
-Create, add to, and query a persistent video memory:
-
-.. code-block:: python
-
-    from LLMlight import LLMlight
-
-    client = LLMlight()
-    # Initialize a new video memory file
-    client.memory_init(file_path='knowledge_base.mp4')
-
-    # Add knowledge (as chunks of text)
-    client.memory_add(text=['Apes like USB sticks', 'The capital of France is Paris.'], overwrite=True)
-
-    # Store memory to disk
-    client.memory_save()
-
-    # Query from the memory
-    print(client.prompt('What do apes like?'))
-
-    # Show memory stats
-    client.memory.show_stats()
 
 Working with Files (PDFs)
---------------------------
+################################
 
 Add the content of a PDF to memory:
 
 .. code-block:: python
 
+    # Import library
     from LLMlight import LLMlight
 
+    # Initialize model and memory
     client = LLMlight(model='mistralai/mistral-small-3.2')
     client.memory_init(file_path='knowledge_base.mp4')
 
     # Add a PDF file to the memory (extracts and chunks text automatically)
     client.memory_add(files='https://erdogant.github.io/publications/papers/2020%20-%20Taskesen%20et%20al%20-%20HNet%20Hypergeometric%20Networks.pdf')
+
     # Store memory to disk
     client.memory_save(overwrite=True)
 
@@ -74,18 +40,25 @@ Add the content of a PDF to memory:
     print(response)
 
 
-Advanced: Load Existing Memory and Continue
---------------------------------------------
+Create Summaries
+###################################
+
+Creating summaries can be done using the summary functionality. In this example, a sliding window with the last 5 chunks is kept in memory and expanded.
 
 .. code-block:: python
 
+    # Import library
     from LLMlight import LLMlight
+    
+    # Initialize    
+    client = LLMlight(model='mistralai/mistral-small-3.2', top_chunks=5)
+    
+    # Add multiple PDF files to the database
+    url = 'https://proceedings.neurips.cc/paper_files/paper/2017/file/3f5ee243547dee91fbd053c1c4a845aa-Paper.pdf'
+    pdf_text = client.read_pdf(url)
 
-    # Load previously saved video memory
-    client = LLMlight(model='mistralai/mistral-small-3.2', retrieval_method='knowledge_base.mp4')
-    # Query from loaded memory
-    print(client.prompt('What is the capital of France?'))
-
+    # Create summary
+    text_summary = client.summarize(context=pdf_text)
 
 
 .. include:: add_bottom.add

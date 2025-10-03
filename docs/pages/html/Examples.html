@@ -6,7 +6,7 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Quickstart &mdash; LLMlight LLMlight documentation</title>
+  <title>Basic Prompting &mdash; LLMlight LLMlight documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=03e43079" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
       <link rel="stylesheet" type="text/css" href="_static/css/custom.css?v=e0179649" />
@@ -54,29 +54,26 @@
 <li class="toctree-l1"><a class="reference internal" href="Installation.html">Installation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="Installation.html#uninstalling">Uninstalling</a></li>
 </ul>
-<p class="caption" role="heading"><span class="caption-text">Algorithm</span></p>
-<ul class="current">
+<p class="caption" role="heading"><span class="caption-text">Functions</span></p>
+<ul>
 <li class="toctree-l1"><a class="reference internal" href="Algorithm.html">Algorithm</a></li>
 <li class="toctree-l1"><a class="reference internal" href="Algorithm.html#get-available-llm-models">Get Available LLM Models</a></li>
 <li class="toctree-l1"><a class="reference internal" href="Algorithm.html#preprocessing-chunking">Preprocessing &amp; Chunking</a></li>
 <li class="toctree-l1"><a class="reference internal" href="Algorithm.html#embedding-local-storage">Embedding &amp; Local Storage</a></li>
 <li class="toctree-l1"><a class="reference internal" href="Algorithm.html#rag-with-statistical-validation">RAG with Statistical Validation</a></li>
-<li class="toctree-l1 current"><a class="current reference internal" href="#">Quickstart</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="#installation">Installation</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#basic-usage">Basic Usage</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#initialize-and-simple-prompting">Initialize and Simple Prompting</a></li>
 </ul>
-</li>
-<li class="toctree-l2"><a class="reference internal" href="#memory-management-video-memory">Memory Management (Video Memory)</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#working-with-files-pdfs">Working with Files (PDFs)</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#advanced-load-existing-memory-and-continue">Advanced: Load Existing Memory and Continue</a></li>
-</ul>
-</li>
+<p class="caption" role="heading"><span class="caption-text">Examples</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Basic Prompting</a></li>
+<li class="toctree-l1"><a class="reference internal" href="#working-with-files-pdfs">Working with Files (PDFs)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="#create-summaries">Create Summaries</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Saving and Loading</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="Saving%20and%20Loading.html">Saving</a></li>
 <li class="toctree-l1"><a class="reference internal" href="Saving%20and%20Loading.html#loading">Loading</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Saving%20and%20Loading.html#memory-management">Memory Management</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Saving%20and%20Loading.html#advanced-load-existing-memory-and-continue">Advanced: Load Existing Memory and Continue</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Documentation</span></p>
 <ul>
@@ -103,7 +100,7 @@
           <div role="navigation" aria-label="Page navigation">
   <ul class="wy-breadcrumbs">
       <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
-      <li class="breadcrumb-item active">Quickstart</li>
+      <li class="breadcrumb-item active">Basic Prompting</li>
       <li class="wy-breadcrumbs-aside">
             <a href="_sources/Examples.rst.txt" rel="nofollow"> View page source</a>
       </li>
@@ -113,19 +110,9 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
              
-  <section id="quickstart">
-<h1>Quickstart<a class="headerlink" href="#quickstart" title="Link to this heading"></a></h1>
+  <section id="basic-prompting">
+<h1>Basic Prompting<a class="headerlink" href="#basic-prompting" title="Link to this heading"></a></h1>
 <p>LLMlight is a library for lightweight, modular and efficient use of LLM and RAG workflows. Below are quick examples using the main functions of the library.</p>
-<section id="installation">
-<h2>Installation<a class="headerlink" href="#installation" title="Link to this heading"></a></h2>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>install<span class="w"> </span>LLMlight
-</pre></div>
-</div>
-</section>
-<section id="basic-usage">
-<h2>Basic Usage<a class="headerlink" href="#basic-usage" title="Link to this heading"></a></h2>
-<section id="initialize-and-simple-prompting">
-<h3>Initialize and Simple Prompting<a class="headerlink" href="#initialize-and-simple-prompting" title="Link to this heading"></a></h3>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">LLMlight</span><span class="w"> </span><span class="kn">import</span> <span class="n">LLMlight</span>
 
 <span class="c1"># Initialize an LLMlight client (default settings)</span>
@@ -137,40 +124,19 @@
 </pre></div>
 </div>
 </section>
-</section>
-<section id="memory-management-video-memory">
-<h2>Memory Management (Video Memory)<a class="headerlink" href="#memory-management-video-memory" title="Link to this heading"></a></h2>
-<p>Create, add to, and query a persistent video memory:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">LLMlight</span><span class="w"> </span><span class="kn">import</span> <span class="n">LLMlight</span>
-
-<span class="n">client</span> <span class="o">=</span> <span class="n">LLMlight</span><span class="p">()</span>
-<span class="c1"># Initialize a new video memory file</span>
-<span class="n">client</span><span class="o">.</span><span class="n">memory_init</span><span class="p">(</span><span class="n">file_path</span><span class="o">=</span><span class="s1">&#39;knowledge_base.mp4&#39;</span><span class="p">)</span>
-
-<span class="c1"># Add knowledge (as chunks of text)</span>
-<span class="n">client</span><span class="o">.</span><span class="n">memory_add</span><span class="p">(</span><span class="n">text</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;Apes like USB sticks&#39;</span><span class="p">,</span> <span class="s1">&#39;The capital of France is Paris.&#39;</span><span class="p">],</span> <span class="n">overwrite</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-
-<span class="c1"># Store memory to disk</span>
-<span class="n">client</span><span class="o">.</span><span class="n">memory_save</span><span class="p">()</span>
-
-<span class="c1"># Query from the memory</span>
-<span class="nb">print</span><span class="p">(</span><span class="n">client</span><span class="o">.</span><span class="n">prompt</span><span class="p">(</span><span class="s1">&#39;What do apes like?&#39;</span><span class="p">))</span>
-
-<span class="c1"># Show memory stats</span>
-<span class="n">client</span><span class="o">.</span><span class="n">memory</span><span class="o">.</span><span class="n">show_stats</span><span class="p">()</span>
-</pre></div>
-</div>
-</section>
 <section id="working-with-files-pdfs">
-<h2>Working with Files (PDFs)<a class="headerlink" href="#working-with-files-pdfs" title="Link to this heading"></a></h2>
+<h1>Working with Files (PDFs)<a class="headerlink" href="#working-with-files-pdfs" title="Link to this heading"></a></h1>
 <p>Add the content of a PDF to memory:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">LLMlight</span><span class="w"> </span><span class="kn">import</span> <span class="n">LLMlight</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Import library</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">LLMlight</span><span class="w"> </span><span class="kn">import</span> <span class="n">LLMlight</span>
 
+<span class="c1"># Initialize model and memory</span>
 <span class="n">client</span> <span class="o">=</span> <span class="n">LLMlight</span><span class="p">(</span><span class="n">model</span><span class="o">=</span><span class="s1">&#39;mistralai/mistral-small-3.2&#39;</span><span class="p">)</span>
 <span class="n">client</span><span class="o">.</span><span class="n">memory_init</span><span class="p">(</span><span class="n">file_path</span><span class="o">=</span><span class="s1">&#39;knowledge_base.mp4&#39;</span><span class="p">)</span>
 
 <span class="c1"># Add a PDF file to the memory (extracts and chunks text automatically)</span>
 <span class="n">client</span><span class="o">.</span><span class="n">memory_add</span><span class="p">(</span><span class="n">files</span><span class="o">=</span><span class="s1">&#39;https://erdogant.github.io/publications/papers/2020%20-%20Taskesen</span><span class="si">%20e</span><span class="s1">t</span><span class="si">%20a</span><span class="s1">l%20-%20HNet%20Hypergeometric%20Networks.pdf&#39;</span><span class="p">)</span>
+
 <span class="c1"># Store memory to disk</span>
 <span class="n">client</span><span class="o">.</span><span class="n">memory_save</span><span class="p">(</span><span class="n">overwrite</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 
@@ -180,14 +146,21 @@
 </pre></div>
 </div>
 </section>
-<section id="advanced-load-existing-memory-and-continue">
-<h2>Advanced: Load Existing Memory and Continue<a class="headerlink" href="#advanced-load-existing-memory-and-continue" title="Link to this heading"></a></h2>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">LLMlight</span><span class="w"> </span><span class="kn">import</span> <span class="n">LLMlight</span>
+<section id="create-summaries">
+<h1>Create Summaries<a class="headerlink" href="#create-summaries" title="Link to this heading"></a></h1>
+<p>Creating summaries can be done using the summary functionality. In this example, a sliding window with the last 5 chunks is kept in memory and expanded.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Import library</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">LLMlight</span><span class="w"> </span><span class="kn">import</span> <span class="n">LLMlight</span>
 
-<span class="c1"># Load previously saved video memory</span>
-<span class="n">client</span> <span class="o">=</span> <span class="n">LLMlight</span><span class="p">(</span><span class="n">model</span><span class="o">=</span><span class="s1">&#39;mistralai/mistral-small-3.2&#39;</span><span class="p">,</span> <span class="n">retrieval_method</span><span class="o">=</span><span class="s1">&#39;knowledge_base.mp4&#39;</span><span class="p">)</span>
-<span class="c1"># Query from loaded memory</span>
-<span class="nb">print</span><span class="p">(</span><span class="n">client</span><span class="o">.</span><span class="n">prompt</span><span class="p">(</span><span class="s1">&#39;What is the capital of France?&#39;</span><span class="p">))</span>
+<span class="c1"># Initialize</span>
+<span class="n">client</span> <span class="o">=</span> <span class="n">LLMlight</span><span class="p">(</span><span class="n">model</span><span class="o">=</span><span class="s1">&#39;mistralai/mistral-small-3.2&#39;</span><span class="p">,</span> <span class="n">top_chunks</span><span class="o">=</span><span class="mi">5</span><span class="p">)</span>
+
+<span class="c1"># Add multiple PDF files to the database</span>
+<span class="n">url</span> <span class="o">=</span> <span class="s1">&#39;https://proceedings.neurips.cc/paper_files/paper/2017/file/3f5ee243547dee91fbd053c1c4a845aa-Paper.pdf&#39;</span>
+<span class="n">pdf_text</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">read_pdf</span><span class="p">(</span><span class="n">url</span><span class="p">)</span>
+
+<span class="c1"># Create summary</span>
+<span class="n">text_summary</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">summarize</span><span class="p">(</span><span class="n">context</span><span class="o">=</span><span class="n">pdf_text</span><span class="p">)</span>
 </pre></div>
 </div>
 <hr>
@@ -198,7 +171,6 @@
         <div data-ea-publisher="erdogantgithubio" data-ea-type="image" data-ea-style="stickybox"></div>
 </center>
 <hr></section>
-</section>
 
 
            </div>
