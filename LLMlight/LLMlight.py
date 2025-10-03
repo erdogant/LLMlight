@@ -199,9 +199,11 @@ class LLMlight:
         # Make checks
         if model is None:
             models = self.get_available_models(validate=False)
-            logger.error(f'Model must be set.')
-            logger.info(f'Available models: {models}')
-            raise AssertionError('Model must be set.')
+            if models is not None:
+                logger.info(f'Available models: {models}')
+                logger.info(f'Set model before proceeding: Example: client = LLMlight(model="{models[0]}", endpoint="{endpoint}").')
+                self.models = models
+            return
 
         # Create tempdir
         if not os.path.isdir(self.tempdir):
@@ -1210,15 +1212,17 @@ class LLMlight:
         - Relies on the `LLMlight` class for validation (must be importable).
         """
         base_url = '/'.join(self.endpoint.split('/')[:3]) + '/'
-        logger.info(f'Collecting models in the API endpoint: {self.endpoint}')
+        logger.info(f'Collecting models at API endpoint: {self.endpoint}')
+        models = None
 
         try:
             model_url = base_url.rstrip('/') + '/v1/models'
             response = requests.get(model_url, timeout=10)
             if response.status_code == 200:
                 try:
-                    models = response.json()["data"]
-                    model_dict = {model["id"]: model for model in models}
+                    get_models = response.json()["data"]
+                    model_dict = {model["id"]: model for model in get_models}
+                    models = list(model_dict.keys())
                 except (KeyError, ValueError) as e:
                     logger.error("Error parsing model data:", e)
             else:
@@ -1227,9 +1231,11 @@ class LLMlight:
 
         except requests.exceptions.RequestException as e:
             logger.error("Request error:", e)
+            logger.error(f'No connection could be made with the endpoint: {model_url}')
+            return None
 
         # Check each model whether it returns a response
-        if validate:
+        if validate and models:
             logger.info("Validating the working of each available model. Be patient.")
             keys = copy.deepcopy(list(model_dict.keys()))
 
@@ -1244,8 +1250,11 @@ class LLMlight:
                     model_dict.pop(key)
                 else:
                     logger.debug(f"{llm.model}: {response}")
+        
+        if not models:
+            logger.error(f'No models could be detected at endpoint. <return>')
 
-        return list(model_dict.keys())
+        return models
 
     def check_logger(self):
         """Check the verbosity."""
