@@ -20,12 +20,11 @@ LLMlight's documentation!
 
 
 .. tip::
-	`Medium Blog: How To Build Your Language Model: Local, Private, and Specialized for Specific Tasks. <https://erdogant.medium.com/>`_
-
------------------------------------
+	`Medium Blog: How To Build Your Language Model: Local, Private, and Specialized for Specific Tasks. <https://erdogant.github.io/LLMlight/pages/html/Documentation.html#medium-blog>`_
 
 .. note::
-	**The LLMLight library is for free but powered by caffeine!** Like it? Chip in what it's worth ❤️ and keep me developing cool stuff that you can use!
+	**The LLMLight library is for free but powered by caffeine!** Like it? Chip in what it's worth ❤ and keep me developing cool stuff that you can use!
+
 
 .. code-block:: console
 

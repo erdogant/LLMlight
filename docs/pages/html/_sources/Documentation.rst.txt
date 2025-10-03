@@ -8,7 +8,7 @@ Medium Blog
 ############
 
 .. note::
-	`Medium Blogs <https://erdogant.medium.com>`_
+	`Build Your Private Language Model: Local and Specialized For Your Tasks. <https://medium.com/@erdogant/build-your-private-language-model-local-and-specialized-for-your-tasks-f94a3f611869>`_
 
 Github
 ############
