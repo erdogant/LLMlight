@@ -6,7 +6,7 @@
 
 from LLMlight import LLMlight
 
-client = LLMlight(model='mistralai/mistral-small-3.2', top_chunks=5)
+client = LLMlight(model='unsloth/gemma-4-26b-a4b-it', top_chunks=5)
 
 # Add multiple PDF files to the database
 url = 'https://proceedings.neurips.cc/paper_files/paper/2017/file/3f5ee243547dee91fbd053c1c4a845aa-Paper.pdf'
@@ -20,7 +20,7 @@ summary_text = client.summarize(context=pdf_text)
 
 from LLMlight import LLMlight
 
-client = LLMlight(model='mistralai/mistral-small-3.2')
+client = LLMlight(model='unsloth/gemma-4-26b-a4b-it')
 client.memory_init(file_path='knowledge_base.mp4')
 
 # Add a PDF file to the memory (extracts and chunks text automatically)
@@ -41,7 +41,7 @@ print(response)
 from LLMlight import LLMlight
 
 # Initialize with default settings
-client = LLMlight(model='mistralai/mistral-small-3.2')
+client = LLMlight(model='unsloth/gemma-4-26b-a4b-it')
 
 # Add multiple PDF files to the database
 url = 'https://proceedings.neurips.cc/paper_files/paper/2017/file/3f5ee243547dee91fbd053c1c4a845aa-Paper.pdf'
@@ -67,19 +67,19 @@ for temp in [0.99, 0.99, 0.99, 0.99, 0.99, 0.1, 0.1, 0.1, 0.1, 0.1]:
 from LLMlight import LLMlight
 
 # Initialize
-client = LLMlight(model='mistralai/mistral-small-3.2', file_path='local_database.mp4', context_strategy=None)
+client = LLMlight(model='unsloth/gemma-4-26b-a4b-it', file_path='local_database.mp4', context_strategy=None)
 # Make a prompt
 response = client.prompt('What are Graphical Hypergeometric Networks?', instructions='Answer the question using the information from the context.')
 print(response)
 
 # Initialize
-client = LLMlight(model='mistralai/mistral-small-3.2', file_path='local_database.mp4', context_strategy='chunk-wise')
+client = LLMlight(model='unsloth/gemma-4-26b-a4b-it', file_path='local_database.mp4', context_strategy='chunk-wise')
 # Make a prompt
 response = client.prompt('What are Graphical Hypergeometric Networks?', instructions='Answer the question using the information from the context.')
 print(response)
 
 # Initialize
-client = LLMlight(model='mistralai/mistral-small-3.2', file_path='local_database.mp4', context_strategy='global-reasoning')
+client = LLMlight(model='unsloth/gemma-4-26b-a4b-it', file_path='local_database.mp4', context_strategy='global-reasoning')
 # Make a prompt
 response = client.prompt('What are Graphical Hypergeometric Networks?', instructions='Answer the question using the information from the context.')
 print(response)
@@ -94,7 +94,7 @@ print(response)
 from LLMlight import LLMlight
 
 # Initialize with default settings
-client = LLMlight(model='mistralai/mistral-small-3.2', file_path='local_database.mp4')
+client = LLMlight(model='unsloth/gemma-4-26b-a4b-it', file_path='local_database.mp4')
 
 url1 = 'https://proceedings.neurips.cc/paper_files/paper/2017/file/3f5ee243547dee91fbd053c1c4a845aa-Paper.pdf'
 url2 = 'https://erdogant.github.io/publications/papers/2020%20-%20Taskesen%20et%20al%20-%20HNet%20Hypergeometric%20Networks.pdf'
@@ -123,7 +123,7 @@ client.memory_save()
 # Import
 from LLMlight import LLMlight
 # Initialize with local database
-client = LLMlight(model='mistralai/mistral-small-3.2', file_path='local_database.mp4')
+client = LLMlight(model='unsloth/gemma-4-26b-a4b-it', file_path='local_database.mp4')
 
 # Get the top 5 chunks
 client.memory_chunks(n=5)
@@ -191,7 +191,7 @@ out3 = client.memory.retriever.search('Capital of Amsterdam', top_k=3)
 from LLMlight import LLMlight
 
 # Initialize with default settings
-client = LLMlight(model='mistralai/mistral-small-3.2',
+client = LLMlight(model='google/gemma-3-12b',
                   context_strategy='chunk-wise',
                   retrieval_method='naive_rag',
                   embedding={'memory': 'memvid', 'context': 'bert'},
@@ -220,7 +220,7 @@ print(response)
 from LLMlight import LLMlight
 
 # Initialize with default settings
-client = LLMlight(model='mistralai/mistral-small-3.2', context_strategy=None)
+client = LLMlight(model='unsloth/gemma-4-26b-a4b-it', context_strategy=None)
 
 # Read pdf
 path = 'https://proceedings.neurips.cc/paper_files/paper/2017/file/3f5ee243547dee91fbd053c1c4a845aa-Paper.pdf'
@@ -260,7 +260,7 @@ print(response)
 from LLMlight import LLMlight
 
 # Initialize with default settings
-client = LLMlight(model='microsoft/phi-4', file_path="knowledge_base.mp4", context_strategy=None)
+client = LLMlight(model='unsloth/gemma-4-26b-a4b-it', file_path="knowledge_base.mp4", context_strategy=None)
 
 # response = client.prompt('What is the capital of France?')
 # print(response)
@@ -303,7 +303,7 @@ from LLMlight import LLMlight
 from LLMlight import LLMlight
 
 # Initialize with default settings
-client = LLMlight(model='mistralai/mistral-small-3.2', retrieval_method=None, context_strategy=None, file_path='test.mp4')
+client = LLMlight(model='unsloth/gemma-4-26b-a4b-it', retrieval_method=None, context_strategy=None, file_path='test.mp4')
 client.memory_chunks(n=40)
 
 
@@ -773,6 +773,12 @@ def download_and_load_gguf_model(
         logger.info(f"Using cached model at: {model_path}")
 
     # Load with llama-cpp
+    if 'Llama' not in globals() or Llama is None:
+        raise ImportError(
+            "llama-cpp-python is not installed. Install it with `pip install llama-cpp-python` "
+            "or install the package extra: `pip install -e '.[llamacpp]'` to enable local llama models."
+        )
+
     llm = Llama(
         model_path=model_path,
         n_ctx=n_ctx,
