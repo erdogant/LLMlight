@@ -12,7 +12,11 @@ import requests
 import logging
 import os
 import numpy as np
-from llama_cpp import Llama
+# llama-cpp-python is an optional native dependency. Import lazily and give a helpful error if missing.
+try:
+    from llama_cpp import Llama  # type: ignore
+except Exception:
+    Llama = None
 from transformers import AutoTokenizer
 import copy
 import re
@@ -105,7 +109,7 @@ class LLMlight:
     Parameters
     ----------
     model : str
-        'mistralai/mistral-small-3.2'
+        'unsloth/gemma-4-26b-a4b-it'
         'qwen/qwen3-coder-30b'
         'openai/gpt-oss-20b'
     system : str
@@ -1363,6 +1367,12 @@ def load_local_gguf_model(model_path: str, n_ctx: int=4096, n_threads: int=8, n_
 
     logger.info(f"Loading model from {model_path}")
     logger.info(f"Context length: {n_ctx}, Threads: {n_threads}, GPU layers: {n_gpu_layers}")
+
+    if Llama is None:
+        raise ImportError(
+            "llama-cpp-python is not installed. Install it with `pip install llama-cpp-python` "
+            "or install the package extra: `pip install -e '.[llamacpp]'` to enable local llama models."
+        )
 
     llm = Llama(
         model_path=model_path,
