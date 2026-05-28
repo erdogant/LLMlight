@@ -35,7 +35,6 @@ classifiers = [
 dependencies = [
     'sentence_transformers',
     'scikit-learn',
-    'llama-cpp-python',
     'json-repair',
     'pymupdf',
     'torch',
@@ -46,6 +45,11 @@ dependencies = [
     # 'accelerate',
     # 'bitsandbytes',
     # 'flash_attn',
+]
+
+[project.optional-dependencies]
+llamacpp = [
+    "llama-cpp-python",
 ]
 
 [project.urls]
