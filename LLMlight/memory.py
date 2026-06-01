@@ -1,8 +1,5 @@
 """Memory functionalities for LLMlight."""
 
-from memvid import MemvidEncoder, MemvidRetriever
-# from memvid.config import get_default_config as memvid_get_default_config
-
 import logging
 from typing import List, Union
 import os
@@ -15,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 
 #%%
-class memvid_llm:
+class MemvidLLM:
     """Video Memory."""
 
     def __init__(self, file_path: str = "llmlight_memory.mp4", config: dict = None):
@@ -44,7 +41,12 @@ class memvid_llm:
 
         # Set memory path in self
         self._set_memory_path(file_path)
-        # Initialize new encoder
+        # Initialize new encoder (lazy import of memvid)
+        try:
+            from memvid import MemvidEncoder
+        except Exception as e:
+            raise ImportError("memvid is required to initialize video memory. Install via 'pip install memvid'") from e
+
         self.encoder = MemvidEncoder(config=config)
         # Update config from memvid Encoder
         self.config = self.encoder.config
@@ -94,6 +96,11 @@ class memvid_llm:
         logger.info(f"  📋 Index: {self.index_path}")
 
         # Loading
+        try:
+            from memvid import MemvidRetriever
+        except Exception as e:
+            raise ImportError("memvid is required to load video memory. Install via 'pip install memvid'") from e
+
         self.retriever = MemvidRetriever(video_file=self.file_path, index_file=self.index_path, config=self.config)
 
     def add(self,
@@ -149,8 +156,8 @@ class memvid_llm:
                         file_path = os.path.join(tempdir, filename)
                         context = LLMlight.wget.download(input_file, file_path)
                         files_clean.append(file_path)
-                    except:
-                        logger.warning(f'Could not download file from {input_file}')
+                    except Exception as e:
+                        logger.warning(f'Could not download file from {input_file}: {e}')
                 elif os.path.isfile(input_file):
                     files_clean.append(input_file)
             # final list

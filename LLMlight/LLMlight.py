@@ -17,7 +17,6 @@ try:
     from llama_cpp import Llama  # type: ignore
 except Exception:
     Llama = None
-from transformers import AutoTokenizer
 import copy
 import re
 from tqdm import tqdm
@@ -27,18 +26,18 @@ from typing import List, Union
 
 from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
-from sentence_transformers import SentenceTransformer
-from distfit import distfit
+# sentence_transformers and distfit are optional heavy dependencies; import them only when needed.
 
-from memvid import MemvidEncoder, MemvidRetriever
-# from memvid.config import get_default_config as memvid_get_default_config
+# memvid is an optional memory backend; import within memory module when used.
 
 try:
     from . import RAG
     from . import utils
     from . import memory
-except:
-    # DEBUG
+except Exception as e:
+    import logging as _logging
+    _logger = _logging.getLogger(__name__)
+    _logger.debug(f"Relative imports failed: {e}. Falling back to top-level imports.")
     import memory
     import RAG
     import utils
@@ -389,8 +388,6 @@ class LLMlight:
         # Convert messages to string prompt
         prompt = convert_messages_to_model(messages, model=self.model)
 
-        # Create full prompt
-        prompt = messages[0]['content'] + messages[1]['content']
         # Compute tokens
         if max_tokens is None:
             used_tokens, max_tokens = compute_tokens(prompt, n_ctx=self.n_ctx, task=task)
@@ -432,7 +429,8 @@ class LLMlight:
                     return response_text
                 else:
                     return response.json()
-            except:
+            except Exception as e:
+                logger.debug(f"Failed to parse JSON response: {e}")
                 return response
         else:
             logger.error(f"{response.status_code} - {response}")
@@ -594,6 +592,11 @@ class LLMlight:
         # Join relevant chunks and send as prompt
         # relevant_chunks = [random_chunks[i] for i in top_indices]
         # relevant_scores = [scores[i] for i in top_indices]
+
+        try:
+            from distfit import distfit
+        except Exception as e:
+            raise ImportError("distfit is required for compute_probability. Install via 'pip install distfit'") from e
 
         model = distfit(method='parametric', alpha=self.alpha, bound=bound, verbose='warning')
         _ = model.fit_transform(random_scores)
@@ -997,8 +1000,16 @@ class LLMlight:
 
         # Set embedding model parameters.
         if self.embedding['context'] == 'bert':
+            try:
+                from sentence_transformers import SentenceTransformer
+            except Exception as e:
+                raise ImportError("sentence-transformers is required for 'bert' embeddings. Install via 'pip install sentence-transformers'") from e
             embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
         elif self.embedding['context'] == 'bge-small':
+            try:
+                from sentence_transformers import SentenceTransformer
+            except Exception as e:
+                raise ImportError("sentence-transformers is required for 'bge-small' embeddings. Install via 'pip install sentence-transformers'") from e
             embedding_model = SentenceTransformer('BAAI/bge-small-en')
         else:
             embedding_model = None
@@ -1387,6 +1398,11 @@ def load_local_gguf_model(model_path: str, n_ctx: int=4096, n_threads: int=8, n_
     return llm
 
 def compute_tokens(string, n_ctx=4096, task='max'):
+    try:
+        from transformers import AutoTokenizer
+    except Exception as e:
+        raise ImportError("transformers is required for token counting. Install via 'pip install transformers'") from e
+
     tokenizer = AutoTokenizer.from_pretrained("gpt2")
     # Tokenize the input string
     tokens = tokenizer.encode(string, truncation=True, max_length=n_ctx)

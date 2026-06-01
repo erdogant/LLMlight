@@ -3,13 +3,13 @@ import os
 import numpy as np
 import json
 import re
-from sentence_transformers import SentenceTransformer
 import logging
 
 try:
     from . import utils
-except:
-    # DEBUG
+except Exception as e:
+    logger = logging.getLogger(__name__)
+    logger.debug(f"Relative import of utils failed: {e}")
     import utils
 
 logger = logging.getLogger(__name__)
@@ -185,6 +185,11 @@ def create_embeddings(texts, model_path="BAAI/bge-small-en", batch_size=32, devi
         return []
 
     # Load the model once and reuse it
+    try:
+        from sentence_transformers import SentenceTransformer
+    except Exception as e:
+        raise ImportError("sentence-transformers is required for embeddings. Install via 'pip install sentence-transformers'") from e
+
     model = SentenceTransformer(model_path, device=device)
 
     # Compute embeddings
