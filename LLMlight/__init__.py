@@ -10,7 +10,7 @@ from LLMlight.LLMlight import (
 
 __author__ = 'Erdogan Tasksen'
 __email__ = 'erdogant@gmail.com'
-__version__ = '0.5.1'
+__version__ = '0.6.0'
 
 # Setup root logger
 # Setup package-level logger
@@ -23,7 +23,7 @@ _log_handler.setLevel(logging.DEBUG)
 # avoid duplicate handlers if re-imported
 if not _logger.hasHandlers(): _logger.addHandler(_log_handler)
 _logger.setLevel(logging.DEBUG)
-_logger.propagate = True  # allow submodules to inherit this handler
+_logger.propagate = False  # prevent duplicate log lines when root logger also has a handler
 
 # module level doc-string
 __doc__ = """

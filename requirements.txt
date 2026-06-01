@@ -12,3 +12,5 @@ ipywidgets
 llama-cpp-python
 # flash_attn
 distfit
+hnswlib
+pysqlite3

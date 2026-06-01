@@ -1,4 +1,21 @@
-"""Memory functionalities for LLMlight."""
+"""Memory backends for LLMlight.
+
+Public API (backend-agnostic)
+------------------------------
+create_memory_backend(store_path, config, backend)
+    Factory that returns a backend instance.  Callers never need to import a
+    concrete backend class.
+
+Every backend exposes the same interface:
+    .store_path  (str)  – resolved absolute path to the persisted store
+    .add(text, input_files, dirpath, ...)
+    .load()
+    .save(...)
+    .search(query, top_k)  -> list[str]
+    .get_all_chunks()      -> list[str]
+    .get_random_chunks(n)  -> list[str]
+    .show_stats()
+"""
 
 import logging
 from typing import List, Union
@@ -11,367 +28,498 @@ import LLMlight
 logger = logging.getLogger(__name__)
 
 
-#%%
-class MemvidLLM:
-    """Video Memory."""
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
 
-    def __init__(self, file_path: str = "llmlight_memory.mp4", config: dict = None):
-        """Build QR code video and index from chunks with unified codec handling.
+def _resolve_store_path(store_path: str, backend: str) -> str:
+    """Return an absolute path appropriate for the requested backend.
 
-        Parameters
-        ----------
-        file_path : str
-            Path to output video memory file.
-        config : dict
-            Dictionary containing configuration parameters.
+    Rules
+    -----
+    - None / empty  → use cwd with a sensible default filename.
+    - Relative path → kept as-is (caller already resolved to tempdir if needed).
+    - Extension is normalised so the backend always gets what it expects:
+        memvid  : .mp4
+        sqlite  : .db
+    """
+    if not store_path:
+        ext = '.mp4' if backend == 'memvid' else '.db'
+        store_path = os.path.join(os.getcwd(), f'llmlight_store{ext}')
 
-        """
-        self.file_path = None
+    store_path = os.path.abspath(store_path)
+    base, ext = os.path.splitext(store_path)
+
+    if backend == 'memvid':
+        # Ensure a video-compatible extension
+        if ext.lower() not in ('.mp4', '.avi', '.mkv'):
+            store_path = base + '.mp4'
+    else:
+        # sqlite backend always uses .db
+        store_path = base + '.db'
+
+    return store_path
+
+
+# ---------------------------------------------------------------------------
+# Memvid backend
+# ---------------------------------------------------------------------------
+
+class MemvidBackend:
+    """Memory backend that encodes chunks into a QR-code video file.
+
+    This wraps the *memvid* library.  It is selected when
+    ``backend='memvid'`` is passed to :func:`create_memory_backend`.
+    """
+
+    # The public attribute every backend must expose.
+    store_path: str = None
+
+    def __init__(self, store_path: str, config: dict = None):
+        self.store_path = None
         self.index_path = None
-        # Return if file path is None
-        if file_path is None:
+
+        if store_path is None:
             return
 
-        # Get absolute path
-        file_path = os.path.abspath(file_path)
-        if os.path.isfile(file_path):
-            logger.info(f'Initializing existing video memory: {file_path}')
-        else:
-            logger.info(f'Initializing new video memory: {file_path}')
+        self._set_store_path(store_path)
 
-        # Set memory path in self
-        self._set_memory_path(file_path)
-        # Initialize new encoder (lazy import of memvid)
+        if os.path.isfile(self.store_path):
+            logger.info(f'Initializing existing memory store: {self.store_path}')
+        else:
+            logger.info(f'Initializing new memory store: {self.store_path}')
+
         try:
             from memvid import MemvidEncoder
         except Exception as e:
-            raise ImportError("memvid is required to initialize video memory. Install via 'pip install memvid'") from e
+            raise ImportError(
+                "The 'memvid' package is required for the memvid backend. "
+                "Install it with: pip install memvid"
+            ) from e
 
         self.encoder = MemvidEncoder(config=config)
-        # Update config from memvid Encoder
         self.config = self.encoder.config
 
-    def _set_memory_path(self, file_path):
-        """Set Memory paths."""
-        # Get the absolute file_path
-        file_path = os.path.abspath(file_path)
-        # Get directory path (folder)
-        directory = os.path.dirname(file_path)
-        # full filename with extension
-        filename = os.path.basename(file_path)
-        # split name and extension
-        name, extension = os.path.splitext(filename)
-        # Make check
-        if extension not in ['.mp4', '.avi', '.mkv']:
-            logger.error(f"File path to memory should be of type: ['.mp4', '.avi', '.mkv']")
-            raise ValueError(f"File path to memory should be of type: ['.mp4', '.avi', '.mkv']")
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
 
-        # Store file names
-        self.file_path = file_path
+    def _set_store_path(self, store_path: str):
+        """Derive and store the video path and its companion index path."""
+        store_path = os.path.abspath(store_path)
+        directory = os.path.dirname(store_path)
+        name, extension = os.path.splitext(os.path.basename(store_path))
+
+        if extension.lower() not in ('.mp4', '.avi', '.mkv'):
+            raise ValueError(
+                f"Memvid backend expects a video file (.mp4 / .avi / .mkv), "
+                f"got: '{extension}'"
+            )
+
+        self.store_path = store_path
+        # Keep index alongside the video with the same stem
         self.index_path = os.path.join(directory, name) + '.json'
 
+    # ------------------------------------------------------------------
+    # Backend interface
+    # ------------------------------------------------------------------
+
     def load(self):
-        """Load video-memory files."""
-        # Validate files exist and are readable
-        if not hasattr(self, 'file_path') or not os.path.isfile(self.file_path):
-            logger.warning(f"Video file not found: {self.file_path}.")
+        """Load the video and its index so the retriever is ready."""
+        if not self.store_path or not os.path.isfile(self.store_path):
+            logger.warning(f'Store file not found, skipping load: {self.store_path}')
             return
+
         if not os.path.isfile(self.index_path):
-            raise ValueError(f"Index file not found: {self.index_path}")
+            raise FileNotFoundError(f'Index file missing: {self.index_path}')
 
-        # Validate file integrity
+        # Basic integrity check
         try:
-            with open(self.index_path, 'r') as f:
-                index_data = json.load(f)
+            with open(self.index_path, 'r') as fh:
+                index_data = json.load(fh)
             chunk_count = len(index_data.get('metadata', []))
-        except Exception as e:
-            raise ValueError(f"Index file corrupted: {e}")
+        except Exception as exc:
+            raise ValueError(f'Index file corrupted: {exc}') from exc
 
-        # Check video file size
-        file_path = Path(self.file_path)
-        video_size_mb = file_path.stat().st_size / (1024 * 1024)
-        logger.info(f"✅ Video file: {video_size_mb:.1f} MB, containing {chunk_count} chunks")
-        logger.info(f"Loading memory:")
-        logger.info(f"  📁 Video: {self.file_path}")
-        logger.info(f"  📋 Index: {self.index_path}")
+        size_mb = Path(self.store_path).stat().st_size / (1024 * 1024)
+        logger.info(f'Loading memory store ({size_mb:.1f} MB, {chunk_count} chunks):')
+        logger.info(f'  store : {self.store_path}')
+        logger.info(f'  index : {self.index_path}')
 
-        # Loading
         try:
             from memvid import MemvidRetriever
-        except Exception as e:
-            raise ImportError("memvid is required to load video memory. Install via 'pip install memvid'") from e
+        except Exception as exc:
+            raise ImportError(
+                "The 'memvid' package is required to load the memory store. "
+                "Install it with: pip install memvid"
+            ) from exc
 
-        self.retriever = MemvidRetriever(video_file=self.file_path, index_file=self.index_path, config=self.config)
+        self.retriever = MemvidRetriever(
+            video_file=self.store_path,
+            index_file=self.index_path,
+            config=self.config,
+        )
 
     def add(self,
             text: Union[str, List[str]] = None,
             input_files: Union[str, List[str]] = None,
             dirpath: str = None,
-            filetypes: List[str] = ['.pdf', '.txt', '.epub', '.md', '.doc', '.docx', '.rtf', '.html', '.htm'],
+            filetypes: List[str] = None,
             chunk_size: int = 512,
             chunk_overlap: int = 100,
-            overwrite=True,
-            tempdir=None):
-        """Add chunks to memory.
+            overwrite: bool = True,
+            tempdir: str = None):
+        """Add text chunks or files to the pending encoder buffer."""
+        if filetypes is None:
+            filetypes = ['.pdf', '.txt', '.epub', '.md', '.doc', '.docx',
+                         '.rtf', '.html', '.htm']
 
-        Parameters
-        ----------
-        input_files : (str, list)
-            Path to file(s).
-
-        """
-        # Make checks
-        if not hasattr(self, 'file_path') or not hasattr(self, 'encoder'):
-            logger.error('Memory is not yet initialized. Use client.memory_init() first')
-            raise AssertionError('Memory is not yet initialized. Use client.memory_init() first')
-        if os.path.isfile(self.file_path) and not overwrite:
-            logger.warning(f'Video memory already exists appending is not possible: {self.file_path}')
+        if not hasattr(self, 'encoder'):
+            raise RuntimeError(
+                'Memory store is not initialised. Call memory_init() first.'
+            )
+        if self.store_path and os.path.isfile(self.store_path) and not overwrite:
+            logger.warning(f'Store already exists and overwrite=False: {self.store_path}')
             return
 
-        # Make lists
-        if isinstance(text, str): text = [text]
-        if isinstance(input_files, str): input_files = [input_files]
+        if isinstance(text, str):
+            text = [text]
+        if isinstance(input_files, str):
+            input_files = [input_files]
 
-        if dirpath is not None and os.path.isdir(dirpath):
-            if input_files is None: input_files = []
+        # Collect files from a directory
+        if dirpath and os.path.isdir(dirpath):
+            if input_files is None:
+                input_files = []
             for root, _, files in os.walk(dirpath):
-                for file in files:
-                    if any(file.lower().endswith(ext) for ext in filetypes):
-                        input_files.append(os.path.join(root, file))
+                for fname in files:
+                    if any(fname.lower().endswith(ext) for ext in filetypes):
+                        input_files.append(os.path.join(root, fname))
 
-        # Add text chunk to video-memory
-        if text is not None:
-            logger.info(f'Adding {len(text)} text chunks to memory.')
+        # Add raw text chunks
+        if text:
+            logger.info(f'Adding {len(text)} text chunks to memory buffer.')
             self.encoder.add_chunks(text)
 
-        # If url, then download first
-        if input_files is not None:
-            if isinstance(input_files, str): input_files = [input_files]
-            files_clean = []
-            for input_file in input_files:
-                if 'http' in input_file[0:5]:
+        # Download URLs, then process files
+        if input_files:
+            resolved = []
+            for path in input_files:
+                if path.startswith('http'):
                     try:
-                        logger.info('Downloading file from url..')
-                        filename = LLMlight.wget.filename_from_url(input_file)
-                        file_path = os.path.join(tempdir, filename)
-                        context = LLMlight.wget.download(input_file, file_path)
-                        files_clean.append(file_path)
-                    except Exception as e:
-                        logger.warning(f'Could not download file from {input_file}: {e}')
-                elif os.path.isfile(input_file):
-                    files_clean.append(input_file)
-            # final list
-            input_files = files_clean
-
-        # Run over all input_files
-        if input_files is not None:
-            logger.info(f'Adding {len(input_files)} into memory.')
-
-            for file_path in input_files:
-                if not os.path.isfile(file_path):
-                    logger.warning(f"File not found: {file_path}")
+                        logger.info(f'Downloading: {path}')
+                        fname = LLMlight.wget.filename_from_url(path)
+                        dest = os.path.join(tempdir or os.getcwd(), fname)
+                        LLMlight.wget.download(path, dest)
+                        resolved.append(dest)
+                    except Exception as exc:
+                        logger.warning(f'Download failed for {path}: {exc}')
+                elif os.path.isfile(path):
+                    resolved.append(path)
                 else:
-                    # full filename with extension
-                    filename = os.path.basename(file_path)
-                    # split name and extension
-                    name, ext = os.path.splitext(filename.lower())
-                    # Add to encoder
-                    if (ext == '.pdf') and (ext in filetypes):
-                        self.encoder.add_pdf(file_path, chunk_size=chunk_size, overlap=chunk_overlap)
-                    elif ext == '.epub' and (ext in filetypes):
-                        self.encoder.add_epub(file_path, chunk_size=chunk_size, overlap=chunk_overlap)
-                    elif ext == '.txt' and (ext in filetypes):
-                        with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
-                            text = f.read()
-                            self.encoder.add_text(text, chunk_size=chunk_size, overlap=chunk_overlap)
-                    elif ext in ['.html', '.htm']:
-                        # Process HTML with BeautifulSoup
-                        try:
-                            from bs4 import BeautifulSoup
-                        except ImportError:
-                            logger.warning(f"BeautifulSoup not available for HTML processing. Skipping {file_path}")
-                            continue
+                    logger.warning(f'File not found, skipping: {path}')
 
-                        with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
-                            soup = BeautifulSoup(f.read(), 'html.parser')
-                            for script in soup(["script", "style"]):
-                                script.decompose()
-                            text = soup.get_text()
-                            lines = (line.strip() for line in text.splitlines())
-                            chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
-                            clean_text = ' '.join(chunk for chunk in chunks if chunk)
-                            if clean_text.strip():
-                                self.encoder.add_text(clean_text, chunk_size=chunk_size, overlap=chunk_overlap)
+            logger.info(f'Adding {len(resolved)} file(s) to memory buffer.')
+            for fpath in resolved:
+                self._ingest_file(fpath, filetypes, chunk_size, chunk_overlap)
 
-                    elif ext in filetypes:
-                        with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
-                            text = f.read()
-                            self.encoder.add_text(text, chunk_size=chunk_size, overlap=chunk_overlap)
-                    else:
-                        continue
-                    # Show message
-                    logger.info(f'Added to memory: {filename}')
+    def _ingest_file(self, file_path, filetypes, chunk_size, chunk_overlap):
+        """Add a single file to the encoder buffer."""
+        filename = os.path.basename(file_path)
+        _, ext = os.path.splitext(filename.lower())
+
+        if ext == '.pdf' and ext in filetypes:
+            self.encoder.add_pdf(file_path, chunk_size=chunk_size, overlap=chunk_overlap)
+        elif ext == '.epub' and ext in filetypes:
+            self.encoder.add_epub(file_path, chunk_size=chunk_size, overlap=chunk_overlap)
+        elif ext in ('.html', '.htm') and ext in filetypes:
+            try:
+                from bs4 import BeautifulSoup
+            except ImportError:
+                logger.warning(f'BeautifulSoup not available, skipping HTML: {file_path}')
+                return
+            with open(file_path, 'r', encoding='utf-8', errors='ignore') as fh:
+                soup = BeautifulSoup(fh.read(), 'html.parser')
+                for tag in soup(['script', 'style']):
+                    tag.decompose()
+                raw = soup.get_text()
+                lines = (ln.strip() for ln in raw.splitlines())
+                phrases = (ph.strip() for ln in lines for ph in ln.split('  '))
+                clean = ' '.join(ph for ph in phrases if ph)
+                if clean.strip():
+                    self.encoder.add_text(clean, chunk_size=chunk_size, overlap=chunk_overlap)
+        elif ext in filetypes:
+            with open(file_path, 'r', encoding='utf-8', errors='ignore') as fh:
+                self.encoder.add_text(fh.read(), chunk_size=chunk_size, overlap=chunk_overlap)
+        else:
+            logger.debug(f'Skipping unsupported file type: {filename}')
+            return
+
+        logger.info(f'Added to memory buffer: {filename}')
 
     def save(self,
-             file_path: str = None,
+             store_path: str = None,
              codec: str = 'mp4v',
              auto_build_docker: bool = False,
              allow_fallback: bool = True,
-             overwrite: bool = False,
-             show_progress: bool = True,
-             ):
-        """Build QR code video and index from chunks with unified codec handling.
+             overwrite: bool = True,
+             show_progress: bool = True):
+        """Encode buffered chunks and write the store to disk."""
+        if not hasattr(self, 'store_path') or not self.store_path:
+            raise RuntimeError('Memory store path is not set. Call memory_init() first.')
 
-        Parameters
-        ----------
-        file_path : str (default is the initialization memory-path)
-            Path to output video memory file.
-        codec : str, optional
-            Video codec ('mp4v', 'h265', 'h264', etc.)
-            'mp4v': Default
-        auto_build_docker : bool (default: True)
-            Whether to auto-build Docker if needed.
-        allow_fallback : bool
-            Whether to fall back to MP4V if advanced codec fails.
-        show_progress : bool (default: True)
-
-        """
-        if not hasattr(self, 'file_path'):
-            logger.error('Memory is not yet initialized. Use client.memory_init() first')
-            raise AssertionError('Memory is not yet initialized. Use client.memory_init() first')
-
-        self.build_stats = {}
-        # Make checks
         if not hasattr(self, 'encoder') or len(self.encoder.chunks) == 0:
-            logger.warning('No chunks to encode. Use client.add_chunks() first')
+            logger.warning('No chunks in buffer — nothing to save. Use memory_add() first.')
             return
 
-        if file_path is not None:
-            self._set_memory_path(file_path)
+        if store_path:
+            self._set_store_path(store_path)
 
-        # Check
-        if os.path.isfile(self.file_path) and not overwrite:
-            logger.warning(f'File already exists and not allowed to overwrite: {self.file_path}')
+        if os.path.isfile(self.store_path) and not overwrite:
+            logger.warning(f'Store exists and overwrite=False: {self.store_path}')
             return
 
-        # Remove files when overwrite
+        # Remove old files when overwriting
         if overwrite:
-            if os.path.isfile(self.file_path):
-                logger.info(f'Video memory file is overwriten: {self.file_path}')
-                os.remove(self.file_path)
-            # Also remove the index file
-            if os.path.isfile(self.index_path):
-                os.remove(self.index_path)
+            for fpath in (self.store_path, self.index_path):
+                if fpath and os.path.isfile(fpath):
+                    os.remove(fpath)
 
-        logger.info(f"🎬 Building video-memory: {self.file_path}")
-        logger.info(f"📊 Total chunks to encode: {len(self.encoder.chunks)}")
-        encoding_start = time.time()
-        try:
-            if hasattr(self, 'retriever'):
-                chunks_memory = list(map(lambda x: x.get('text'), self.retriever.index_manager.metadata))
-                chunks_encoder = self.encoder.chunks
-                self.encoder.clear()
-                if len(chunks_memory) > 0:
-                    self.encoder.chunks =  chunks_memory + chunks_encoder
+        # Merge previously-saved chunks with new buffer (for incremental saves)
+        if hasattr(self, 'retriever'):
+            existing = [m.get('text') for m in self.retriever.index_manager.metadata]
+            merged = list(set(existing + self.encoder.chunks))
+            self.encoder.clear()
+            self.encoder.chunks = merged
 
-                self.encoder.chunks = set(self.encoder.chunks)
-                # print(len(self.encoder.chunks))
-                # print(len(self.retriever.index_manager.metadata))
+        logger.info(f'Saving memory store: {self.store_path}')
+        logger.info(f'Total chunks to encode: {len(self.encoder.chunks)}')
 
-            # Build the by passing all parameters to the building proces
-            build_stats = self.encoder.build_video(output_file=self.file_path,
-                                                   index_file=self.index_path,
-                                                   codec=codec,
-                                                   show_progress=show_progress,
-                                                   auto_build_docker=auto_build_docker,
-                                                   allow_fallback=allow_fallback,
-                                                   )
+        t0 = time.time()
+        build_stats = self._build_with_fallback(
+            codec=codec,
+            show_progress=show_progress,
+            auto_build_docker=auto_build_docker,
+            allow_fallback=allow_fallback,
+        )
+        build_stats['encoding_time'] = time.time() - t0
 
-        except Exception as e:
-            error_str = str(e)
-            if "is_trained" in error_str or "IndexIVFFlat" in error_str or "training" in error_str.lower():
-                logger.warning(f"⚠️  FAISS IVF training failed: {e}")
-                logger.warning(f"🔄 Auto-switching to Flat index for compatibility...")
-
-                # Override config to use Flat index
-                original_index_type = self.encoder.config["index"]["type"]
-                self.encoder.config["index"]["type"] = "Flat"
-
-                try:
-                    # Recreate the index manager with Flat index
-                    self.encoder._setup_index()
-                    # Build the by passing all parameters to the building proces
-                    build_stats = self.encoder.build_video(output_file=self.file_path,
-                                                           index_file=self.index_path,
-                                                           codec=codec,
-                                                           show_progress=show_progress,
-                                                           auto_build_docker=auto_build_docker,
-                                                           allow_fallback=allow_fallback,
-                                                           )
-
-                    logger.info(f"✅ Successfully created memory using Flat index")
-                    return build_stats
-                except Exception as fallback_error:
-                    logger.error(f"❌ Fallback also failed: {fallback_error}")
-                    raise
-            else:
-                raise
-
-        # Time
-        build_stats['encoding_time'] = time.time() - encoding_start
-        # Clear all chunks of text from list because it will use the video memory file.
-        logger.info('Added chunks are cleared.')
         self.encoder.chunks = []
         self.encoder.clear()
         self.build_stats = build_stats
-        logger.info(f'✅ Video Memory saved to disk: {self.file_path}')
+        logger.info(f'Memory store saved: {self.store_path}')
 
-    def get_random_chunks(self, n=1000):
+    def _build_with_fallback(self, codec, show_progress, auto_build_docker, allow_fallback):
+        """Attempt build_video, falling back to Flat index on FAISS IVF errors."""
+        kwargs = dict(
+            output_file=self.store_path,
+            index_file=self.index_path,
+            codec=codec,
+            show_progress=show_progress,
+            auto_build_docker=auto_build_docker,
+            allow_fallback=allow_fallback,
+        )
+        try:
+            return self.encoder.build_video(**kwargs)
+        except Exception as exc:
+            err = str(exc)
+            if any(tok in err for tok in ('is_trained', 'IndexIVFFlat', 'training')):
+                logger.warning(f'FAISS IVF training failed, retrying with Flat index: {exc}')
+                self.encoder.config['index']['type'] = 'Flat'
+                self.encoder._setup_index()
+                return self.encoder.build_video(**kwargs)
+            raise
+
+    def search(self, query: str, top_k: int = 5) -> List[str]:
+        """Return the top-k most relevant chunks for *query*."""
         if not hasattr(self, 'retriever'):
-            logger.info('No chunks to encode for null distribution. Use client.add_chunks() first.')
-            return
+            logger.warning('No retriever loaded. Call load() or save() first.')
+            return []
+        results = self.retriever.index_manager.search(query, top_k=top_k)
+        return [r[2]['text'] for r in results]
 
+    def search_with_scores(self, query: str, top_k: int = 5):
+        """Return (score, text) tuples for the top-k results."""
+        if not hasattr(self, 'retriever'):
+            logger.warning('No retriever loaded. Call load() or save() first.')
+            return []
+        results = self.retriever.index_manager.search(query, top_k=top_k)
+        return [(r[1], r[2]['text']) for r in results]
+
+    def get_all_chunks(self) -> List[str]:
+        """Return all stored chunks from disk."""
+        if not hasattr(self, 'retriever'):
+            return []
+        return [m.get('text') for m in self.retriever.index_manager.metadata]
+
+    def get_random_chunks(self, n: int = 1000) -> List[str]:
+        """Return *n* chunks with shuffled words (used to build a null distribution)."""
         import random
-        # Get all chunks
-        chunks = list(map(lambda x: x.get('text'), self.retriever.index_manager.metadata))[0:n]
+        chunks = self.get_all_chunks()[:n]
+        if not chunks:
+            return []
 
-        # Step 1: Combine all words from every chunk
-        combined_words = []
+        all_words = []
         for chunk in chunks:
-            # Split by newline, space, or tab to handle multi-line strings properly
-            combined_chunk = chunk.replace('\n', ' ').replace('\t', ' ')
-            words = combined_chunk.split()
-            combined_words.extend(words)
+            all_words.extend(chunk.replace('\n', ' ').replace('\t', ' ').split())
 
-        # Step 2: Create new lists with random sets of words
-        new_chunks = [[] for _ in range(len(chunks))]
-        n_chunks = len(new_chunks)
-        for word in combined_words:
-            # Choose a random index to place the current word into one of the chunks
-            chunk_index = random.randint(0, n_chunks - 1)
-            new_chunks[chunk_index].append(word)
+        buckets: List[List[str]] = [[] for _ in chunks]
+        for word in all_words:
+            buckets[random.randint(0, len(buckets) - 1)].append(word)
 
-        chunk_strings = [[] for _ in range(n_chunks)]
-        for i, lst in enumerate(new_chunks):
-            chunk_strings[i] = ' '.join(lst)
-
-        return chunk_strings
-
+        return [' '.join(b) for b in buckets]
 
     def show_stats(self):
-        # Enhanced statistics
+        """Log a summary of the last save operation."""
         if not hasattr(self, 'build_stats'):
-            logger.warning('No video-memory statistics found.')
+            logger.warning('No build statistics available — call save() first.')
             return
 
-        build_stats = self.build_stats
-        video_path = Path(self.file_path)
-        encoding_time = build_stats.get('encoding_time')
+        stats = self.build_stats
+        size_mb = Path(self.store_path).stat().st_size / (1024 * 1024) if (
+            self.store_path and os.path.isfile(self.store_path)
+        ) else 0.0
+        enc_time = stats.get('encoding_time')
 
-        logger.info(f"\n🎉 Memory created successfully!")
-        logger.info(f"  📁 Video: {self.file_path}")
-        logger.info(f"  📋 Index: {self.index_path}")
-        logger.info(f"  📊 Chunks: {build_stats.get('total_chunks', 'unknown')}")
-        logger.info(f"  🎞️  Frames: {build_stats.get('total_frames', 'unknown')}")
-        logger.info(f"  📏 Video size: {video_path.stat().st_size / (1024 * 1024):.1f} MB")
-        logger.info(f"  ⏱️  Encoding time: {encoding_time:.2f} seconds" if encoding_time is not None else "  ⏱️  Encoding time: unknown")
+        logger.info('Memory store statistics:')
+        logger.info(f'  store   : {self.store_path}')
+        logger.info(f'  index   : {self.index_path}')
+        logger.info(f'  chunks  : {stats.get("total_chunks", "unknown")}')
+        logger.info(f'  frames  : {stats.get("total_frames", "unknown")}')
+        logger.info(f'  size    : {size_mb:.1f} MB')
+        if enc_time is not None:
+            logger.info(f'  encoded : {enc_time:.2f}s')
+
+
+# ---------------------------------------------------------------------------
+# SQLite+HNSW backend  (thin wrapper — the real class lives in db_backends/)
+# ---------------------------------------------------------------------------
+
+class SqliteBackend:
+    """Memory backend that stores chunks in a local SQLite database with an
+    optional HNSW index for fast approximate-nearest-neighbour search.
+
+    This is the default backend.  It is selected when ``backend='sqlite'``
+    (or any string starting with ``'sqlite'``) is passed to
+    :func:`create_memory_backend`.
+    """
+
+    def __init__(self, store_path: str, config: dict = None):
+        # Attempt to instantiate the sqlite backend implementation. If the
+        # optional dependencies are missing, fall back to the Memvid backend
+        # (when available) instead of raising an ImportError immediately.
+        try:
+            try:
+                from sqlite_hnsw import SqliteHnswLLM as _Impl
+            except ImportError:
+                try:
+                    from sqlite_hnsw import SqliteHnswLLM as _Impl
+                except Exception:
+                    from sqlite_hnsw import SqliteHnswLLM as _Impl
+
+            self._impl = _Impl(store_path, config=config)
+            self.store_path = store_path
+        except ImportError as exc_sqlite:
+            # Log and fallback to memvid backend if possible.
+            logger.warning("sqlite backend optional deps not installed; falling back to memvid backend.")
+            try:
+                self._impl = MemvidBackend(store_path, config=config)
+                self.store_path = store_path
+            except Exception:
+                # re-raise the original sqlite error to make the root cause visible
+                raise ImportError(
+                    "The sqlite+hnsw backend requires optional dependencies. "
+                    "Install them or switch to backend='memvid'."
+                ) from exc_sqlite
+
+    # Delegate everything to the wrapped implementation
+    def __getattr__(self, name):
+        # Only called when the attribute is NOT found on SqliteBackend itself,
+        # so self._impl is always available via __dict__ lookup.
+        return getattr(self._impl, name)
+
+    def load(self):
+        if hasattr(self._impl, 'load'):
+            self._impl.load()
+
+    def search(self, query: str, top_k: int = 5) -> List[str]:
+        return self._impl.search(query, top_k=top_k)
+
+    def search_with_scores(self, query: str, top_k: int = 5):
+        if hasattr(self._impl, 'search_with_scores'):
+            return self._impl.search_with_scores(query, top_k=top_k)
+        # Fallback: call plain search and return (1.0, text) pairs
+        return [(1.0, t) for t in self.search(query, top_k=top_k)]
+
+    def get_all_chunks(self) -> List[str]:
+        if hasattr(self._impl, 'get_all_chunks'):
+            return self._impl.get_all_chunks()
+        # Fallback via metadata if the impl exposes a retriever
+        if hasattr(self._impl, 'retriever') and hasattr(self._impl.retriever, 'index_manager'):
+            return [m.get('text') for m in self._impl.retriever.index_manager.metadata]
+        return []
+
+    def get_random_chunks(self, n: int = 1000) -> List[str]:
+        if hasattr(self._impl, 'get_random_chunks'):
+            return self._impl.get_random_chunks(n)
+        import random
+        chunks = self.get_all_chunks()[:n]
+        all_words = []
+        for chunk in chunks:
+            all_words.extend(chunk.replace('\n', ' ').replace('\t', ' ').split())
+        buckets: List[List[str]] = [[] for _ in chunks]
+        for word in all_words:
+            buckets[random.randint(0, len(buckets) - 1)].append(word)
+        return [' '.join(b) for b in buckets]
+
+    def show_stats(self):
+        if hasattr(self._impl, 'show_stats'):
+            self._impl.show_stats()
+
+
+# ---------------------------------------------------------------------------
+# Public factory
+# ---------------------------------------------------------------------------
+
+def create_memory_backend(store_path: str = None,
+                          config: dict = None,
+                          backend: str = 'sqlite') -> Union[MemvidBackend, SqliteBackend]:
+    """Create and return a memory backend instance.
+
+    Parameters
+    ----------
+    store_path : str, optional
+        Path for the persistent store.  Relative paths are kept as-is
+        (the caller is responsible for resolving them to an absolute path
+        before calling here).  If *None*, a default filename is created in
+        the current working directory.
+    config : dict, optional
+        Backend-specific configuration dict passed straight through.
+    backend : str
+        ``'sqlite'`` (default) — SQLite + HNSW index, no extra dependencies.
+        ``'memvid'``           — QR-code video store, requires *memvid*.
+        Any string starting with ``'sqlite'`` selects the sqlite backend.
+
+    Returns
+    -------
+    MemvidBackend or SqliteBackend
+        A backend instance with a uniform interface.
+    """
+    if backend is None:
+        backend = 'sqlite'
+    backend = backend.lower().strip()
+
+    resolved = _resolve_store_path(store_path, backend)
+
+    if backend == 'memvid':
+        logger.info(f'Creating memvid backend: {resolved}')
+        return MemvidBackend(resolved, config=config)
+
+    if backend.startswith('sqlite'):
+        logger.info(f'Creating sqlite backend: {resolved}')
+        return SqliteBackend(resolved, config=config)
+
+    raise ValueError(
+        f"Unknown memory backend: '{backend}'. "
+        f"Valid choices: 'sqlite' (default), 'memvid'."
+    )

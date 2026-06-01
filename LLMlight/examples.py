@@ -1,5 +1,44 @@
 # %%
 
+# Load library
+from LLMlight import LLMlight
+# normal init
+client = LLMlight(model='mistralai/mistral-small-3.2', alpha=1)
+# Initialize a local SQLite+HNSW memory (default backend)
+client.memory_init(store_path='knowledge_store.db')  # creates 'knowledge_store.db'
+# Initialize memvid backend (video-memory)
+# client.memory_init(file_path='my_video_memory.mp4', backend='memvid')
+
+# Add chunks
+client.memory_add(text=['Apes like USB sticks.', 'The capital of France is Amsterdam.'])
+
+# should return the inserted chunks
+client.memory_chunks(n=5)  
+                  
+# Save index (saves ANN index if hnswlib is present)
+# client.memory_save()
+# Query memory
+results = client.relevant_memory_retrieval('Tell me about Apes.')  # will use sqlite+hnsw by default
+
+print(results)
+
+# %%
+
+
+from LLMlight import LLMlight
+client = LLMlight(alpha=1)
+client.memory_init(store_path='knowledge_store.db')
+client.memory_add(text=['Apes like USB sticks', 'Trees are mainly yellow'])
+
+# Rebuild the ANN index (requires sentence-transformers + hnswlib)
+client.memory.retriever.index_manager.backend.reindex(batch_size=64, save_index=True)
+results = client.relevant_memory_retrieval('What do apes like?', return_type='list')
+print(results)
+
+
+
+# %%
+
 # =============================================================================
 # Make a summary
 # =============================================================================
@@ -7,29 +46,18 @@
 from LLMlight import LLMlight
 
 client = LLMlight(model='unsloth/gemma-4-26b-a4b-it', top_chunks=5)
+client = LLMlight(model='mistralai/mistral-small-3.2', alpha=1)
+client.memory_init(file_path='neurips_store.db')  # creates 'knowledge_store.db'
 
 # Add multiple PDF files to the database
 url = 'https://proceedings.neurips.cc/paper_files/paper/2017/file/3f5ee243547dee91fbd053c1c4a845aa-Paper.pdf'
 pdf_text = client.read_pdf(url)
 
+client.memory_add(text=pdf_text)
 
 summary_text = client.summarize(context=pdf_text)
+print(summary_text)
 
-# %%
-# New example
-
-from LLMlight import LLMlight
-
-client = LLMlight(model='unsloth/gemma-4-26b-a4b-it')
-client.memory_init(file_path='knowledge_base.mp4')
-
-# Add a PDF file to the memory (extracts and chunks text automatically)
-client.memory_add(files='https://erdogant.github.io/publications/papers/2020%20-%20Taskesen%20et%20al%20-%20HNet%20Hypergeometric%20Networks.pdf')
-client.memory_save()
-
-# Query on the new knowledge
-response = client.prompt('Summarize the document.')
-print(response)
 
 
 # %%
@@ -41,7 +69,8 @@ print(response)
 from LLMlight import LLMlight
 
 # Initialize with default settings
-client = LLMlight(model='unsloth/gemma-4-26b-a4b-it')
+# client = LLMlight(model='unsloth/gemma-4-26b-a4b-it')
+client = LLMlight(model='mistralai/mistral-small-3.2')
 
 # Add multiple PDF files to the database
 url = 'https://proceedings.neurips.cc/paper_files/paper/2017/file/3f5ee243547dee91fbd053c1c4a845aa-Paper.pdf'
@@ -61,25 +90,41 @@ for temp in [0.99, 0.99, 0.99, 0.99, 0.99, 0.1, 0.1, 0.1, 0.1, 0.1]:
 
 
 # %%
+# New example
+
+from LLMlight import LLMlight
+
+client = LLMlight(model='mistralai/mistral-small-3.2')
+client.memory_init(store_path='knowledge_base.db')
+
+# Add a PDF file to the memory (extracts and chunks text automatically)
+client.memory_add(files='https://erdogant.github.io/publications/papers/2020%20-%20Taskesen%20et%20al%20-%20HNet%20Hypergeometric%20Networks.pdf')
+client.memory_save()
+
+# Query on the new knowledge
+response = client.prompt('Summarize the document.')
+print(response)
 
 
 # Load library
-from LLMlight import LLMlight
+# from LLMlight import LLMlight
+# should return the inserted chunks
+client.memory_chunks(n=5)  
 
 # Initialize
-client = LLMlight(model='unsloth/gemma-4-26b-a4b-it', file_path='local_database.mp4', context_strategy=None)
+client = LLMlight(model='mistralai/mistral-small-3.2', file_path='knowledge_base.db', context_strategy=None)
 # Make a prompt
 response = client.prompt('What are Graphical Hypergeometric Networks?', instructions='Answer the question using the information from the context.')
 print(response)
 
 # Initialize
-client = LLMlight(model='unsloth/gemma-4-26b-a4b-it', file_path='local_database.mp4', context_strategy='chunk-wise')
+client = LLMlight(model='mistralai/mistral-small-3.2', file_path='knowledge_base.db', context_strategy='chunk-wise')
 # Make a prompt
 response = client.prompt('What are Graphical Hypergeometric Networks?', instructions='Answer the question using the information from the context.')
 print(response)
 
 # Initialize
-client = LLMlight(model='unsloth/gemma-4-26b-a4b-it', file_path='local_database.mp4', context_strategy='global-reasoning')
+client = LLMlight(model='mistralai/mistral-small-3.2', file_path='knowledge_base.db', context_strategy='global-reasoning')
 # Make a prompt
 response = client.prompt('What are Graphical Hypergeometric Networks?', instructions='Answer the question using the information from the context.')
 print(response)

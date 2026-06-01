@@ -183,7 +183,7 @@ class LLMlight:
 
         # Set the logger
         set_logger(verbose)
-        
+
         # Store data in self
         self.model = model
         self.context_strategy = context_strategy
@@ -197,8 +197,9 @@ class LLMlight:
         self.context = None
         self.embedding = _set_embedding(embedding)
         self.tempdir = os.path.join(tempfile.gettempdir(), 'temp_LLMlight')
-        self.file_path = self.get_full_path(file_path)
-        
+        # Single, authoritative path resolution — used everywhere
+        self.store_path = self._resolve_file_path(file_path)
+
         # Make checks
         if model is None:
             models = self.get_available_models(validate=False)
@@ -209,20 +210,18 @@ class LLMlight:
             return
 
         # Create tempdir
-        if not os.path.isdir(self.tempdir):
-            os.makedirs(self.tempdir, exist_ok=True)
+        os.makedirs(self.tempdir, exist_ok=True)
 
         # Set chunk parameters
-        if chunks is None: chunks = {}
+        if chunks is None:
+            chunks = {}
         self.chunks = {**{'method': 'chars', 'size': 1000, 'overlap': 250}, **chunks}
 
-        # Set Memory parameters.
-        if file_path:
-            self.memory_load(self.file_path)
-            # self.memory_save(overwrite=False)
+        # Load memory from disk when a store path was provided
+        if self.store_path:
+            self.memory_load(self.store_path)
 
-
-        # Load local LLM gguf model
+        # Load a local GGUF model when the endpoint points to a file
         if os.path.isfile(self.endpoint):
             self.llm = load_local_gguf_model(self.endpoint, n_ctx=self.n_ctx)
 
@@ -232,15 +231,23 @@ class LLMlight:
         logger.info(f'Embedding: {self.embedding or "disabled"}')
         logger.info('LLMlight is initialized!')
 
-    def get_full_path(self, filepath: str) -> str | None:
-        # If filepath is absolute, return as-is
-        if filepath is None:
+    def _resolve_file_path(self, filepath: str):
+        """Return an absolute path for *filepath*, or None when not given.
+
+        Resolution rules (applied in order):
+        1. None or empty string  -> returns None.
+        2. Already absolute      -> returned unchanged.
+        3. Relative / bare name  -> resolved relative to self.tempdir.
+        """
+        if not filepath:
             return None
-        elif os.path.isabs(filepath):
+        if os.path.isabs(filepath):
             return filepath
-        
-        # If it's relative or just a filename, prepend tempdir
         return os.path.join(self.tempdir, filepath)
+
+    def get_full_path(self, filepath: str):
+        """Alias kept for backwards compatibility.  Use _resolve_file_path()."""
+        return self._resolve_file_path(filepath)
 
     def prompt(self,
                query: str,
@@ -436,181 +443,267 @@ class LLMlight:
             logger.error(f"{response.status_code} - {response}")
             return f"Error: {response.status_code} - {response}"
 
-    def memory_init(self, file_path: str = None, config: dict = None, embedding=None):
-        """Build QR code video and index from chunks with unified codec handling.
+    def memory_init(self, store_path: str = None, config: dict = None,
+                    embedding: str = None, backend: str = None):
+        """Prepare a memory store for writing.
+
+        Call this when you want to create a *new* store or re-open an existing
+        one to add more chunks.  After adding chunks, call :meth:`memory_save`
+        to persist them.
 
         Parameters
         ----------
-        file_path : str
-            Path to output video memory file.
-        config : dict
-            Dictionary containing configuration parameters.
-
+        store_path : str, optional
+            Path to the store file.  Relative paths are resolved against the
+            LLMlight temp directory.  Defaults to the path set at construction.
+        config : dict, optional
+            Backend-specific configuration.
+        embedding : str, optional
+            Override the memory embedding method for this store.
+        backend : str, optional
+            ``'sqlite'`` (default) or ``'memvid'``.
         """
-        if file_path: self.file_path = file_path
-        # Make check whether already loaded
-        if hasattr(self, 'memory') and self.memory.file_path == self.file_path:
-            logger.info(f'Memory already initialized: [{self.file_path}] <return>')
-            return 
+        resolved = self._resolve_file_path(store_path) or self.store_path
 
-        # Initialize
-        self.memory = memory.memvid_llm(file_path, config=config)
-        # Update file path
-        self.file_path = self.memory.file_path
+        # Skip if the same store is already initialised
+        if hasattr(self, 'memory') and self.memory.store_path == resolved:
+            logger.info(f'Memory already initialised: {resolved}')
+            return
 
-        # Set the embedding
+        self.memory = memory.create_memory_backend(resolved, config=config, backend=backend)
+        self.store_path = self.memory.store_path
+
         if embedding is not None:
             self.embedding['memory'] = embedding
-            logger.info(f'Memory embedding is set: {self.embedding or "disabled"}')
+            logger.info(f'Memory embedding updated: {self.embedding}')
 
-    def memory_load(self, file_path: str = None, config: dict = None):
-        # Load
-        if file_path: self.file_path = file_path
-        # if not hasattr(self.memory, 'encoder'):
-        if hasattr(self, 'memory') and config is None and hasattr(self.memory, 'config'):
+    def memory_load(self, store_path: str = None, config: dict = None, backend: str = None):
+        """Load an existing memory store from disk so it is ready for querying.
+
+        Parameters
+        ----------
+        store_path : str, optional
+            Path to the store file.  Defaults to the path set at construction.
+        config : dict, optional
+            Backend-specific configuration (reuses existing config if omitted).
+        backend : str, optional
+            Force a specific backend.  Usually not needed — the factory infers
+            the backend from the file extension.
+        """
+        resolved = self._resolve_file_path(store_path) or self.store_path
+
+        # Reuse existing config if none supplied
+        if config is None and hasattr(self, 'memory') and hasattr(self.memory, 'config'):
             config = self.memory.config
 
         if not hasattr(self, 'memory'):
-            self.memory = memory.memvid_llm(self.file_path, config=config)
-            self.file_path = self.memory.file_path
-            # Update file path
-            if not hasattr(self.memory, 'retriever'):
-                self.memory.load()
-            return
+            self.memory = memory.create_memory_backend(resolved, config=config, backend=backend)
+            self.store_path = self.memory.store_path
 
-        # Load the retriever
-        # if not hasattr(self.memory, 'retriever'):
-        # Load video-memory retriever
         self.memory.load()
 
     def memory_save(self,
-                    file_path: str = None,
+                    store_path: str = None,
                     codec: str = 'mp4v',
                     auto_build_docker: bool = False,
                     allow_fallback: bool = True,
                     overwrite: bool = True,
-                    show_progress: bool = True,
-                    ):
-        """Build QR code video and index from chunks with unified codec handling.
+                    show_progress: bool = True):
+        """Persist buffered chunks to the store and reload the retriever.
 
         Parameters
         ----------
-        file_path : str (default is the initialization memory-path)
-            Path to output video memory file.
+        store_path : str, optional
+            Override the destination path.  Defaults to the current store path.
         codec : str, optional
-            Video codec ('mp4v', 'h265', 'h264', etc.)
-            'mp4v': Default
-        auto_build_docker : bool (default: True)
-            Whether to auto-build Docker if needed.
+            Video codec for the memvid backend (ignored by sqlite backend).
+        auto_build_docker : bool
+            Passed through to the memvid backend only.
         allow_fallback : bool
-            Whether to fall back to MP4V if advanced codec fails.
-        show_progress : bool (default: True)
-
+            Allow the memvid backend to fall back to mp4v on codec failure.
+        overwrite : bool
+            Overwrite an existing store.  Default True.
+        show_progress : bool
+            Show a progress bar during encoding.
         """
-        if file_path is not None: self.file_path = file_path
-        self.memory.save(file_path=self.file_path, codec=codec, auto_build_docker=auto_build_docker, allow_fallback=allow_fallback, overwrite=overwrite, show_progress=show_progress)
+        if not hasattr(self, 'memory'):
+            raise RuntimeError('No memory store initialised. Call memory_init() first.')
+
+        if store_path is not None:
+            self.store_path = self._resolve_file_path(store_path)
+
+        self.memory.save(
+            self.store_path,
+            codec=codec,
+            auto_build_docker=auto_build_docker,
+            allow_fallback=allow_fallback,
+            overwrite=overwrite,
+            show_progress=show_progress,
+        )
         self.memory.load()
+
+    def memory_reindex(self, batch_size: int = 128, save_index: bool = True):
+        """Rebuild the retrieval index for the current backend.
+
+        Computes embeddings for all stored chunks and rebuilds the ANN index.
+        Requires the ``sentence-transformers`` and ``hnswlib`` packages.
+
+        Parameters
+        ----------
+        batch_size : int
+            Number of texts to encode per batch.
+        save_index : bool
+            Persist the rebuilt index to disk after completion.
+
+        Returns
+        -------
+        bool
+            True on success.
+        """
+        if not hasattr(self, 'memory'):
+            logger.info('No memory store loaded — initialising from current store_path.')
+            self.memory_init(self.store_path)
+
+        if hasattr(self.memory, 'reindex') and callable(self.memory.reindex):
+            logger.info('Rebuilding retrieval index...')
+            try:
+                result = self.memory.reindex(batch_size=batch_size, save_index=save_index)
+                logger.info('Index rebuild complete.')
+                return result
+            except Exception as exc:
+                logger.error(f'Index rebuild failed: {exc}')
+                raise
+        else:
+            raise NotImplementedError(
+                'The current memory backend does not support reindex(). '
+                "Switch to backend='sqlite' or implement reindex() in your backend."
+            )
 
     def memory_add(self,
                    text: Union[str, List[str]] = None,
                    files: Union[str, List[str]] = None,
                    dirpath: str = None,
-                   filetypes: List[str] = ['.pdf', '.txt', '.epub', '.md', '.doc', '.docx', '.rtf', '.html', '.htm'],
+                   filetypes: List[str] = None,
                    chunk_size: int = 512,
                    chunk_overlap: int = 100,
-                   overwrite=True):
-        """Add chunks to memory.
+                   overwrite: bool = True):
+        """Add text chunks or files to the memory store buffer.
 
         Parameters
         ----------
-        files : (str, list)
-            Path to file(s).
-
+        text : str or list of str, optional
+            Raw text strings to add directly.
+        files : str or list of str, optional
+            File paths or HTTP URLs to ingest.
+        dirpath : str, optional
+            Directory to scan recursively for supported file types.
+        filetypes : list of str, optional
+            File extensions to include when scanning *dirpath*.
+            Defaults to a standard set (pdf, txt, epub, md, doc, docx, ...).
+        chunk_size : int
+            Characters (or words) per chunk.
+        chunk_overlap : int
+            Overlap between consecutive chunks.
+        overwrite : bool
+            When False, skip adding if a store file already exists on disk.
         """
-        self.memory.add(text=text, input_files=files, dirpath=dirpath, filetypes=filetypes, chunk_size=chunk_size, chunk_overlap=chunk_overlap, overwrite=overwrite, tempdir=self.tempdir)
+        if not hasattr(self, 'memory'):
+            raise RuntimeError('No memory store initialised. Call memory_init() first.')
 
-    def memory_chunks(self, n=10, return_type='disk'):
-        """Return the top n memory stack.
+        if filetypes is None:
+            filetypes = ['.pdf', '.txt', '.epub', '.md', '.doc', '.docx',
+                         '.rtf', '.html', '.htm']
+
+        self.memory.add(
+            text=text,
+            input_files=files,
+            dirpath=dirpath,
+            filetypes=filetypes,
+            chunk_size=chunk_size,
+            chunk_overlap=chunk_overlap,
+            overwrite=overwrite,
+            tempdir=self.tempdir,
+        )
+
+    def memory_chunks(self, n: int = 10) -> list:
+        """Return up to *n* stored chunks from the memory store.
 
         Parameters
         ----------
-        n : int, optional
-            Top n chunks to be returned. The default is 5.
-        return_type : str, optional
-            Retrieve chunks from memory or disk. The default is 'disk'.
-            'memory'
-            'disk'
+        n : int
+            Maximum number of chunks to return.
 
         Returns
         -------
-        chunks : list
-            Top n returned chunks.
-
+        list of str
         """
-
         if not hasattr(self, 'memory'):
-            logger.warning('Memory is not initialized. Hint: client.memory_init()')
-            return
-        if not hasattr(self.memory, 'retriever'):
-            logger.warning('Memory is empty. Use client.memory_add() to add text and then client.memory_save() to store to disk.')
-            return
-        
-        if len(self.memory.encoder.chunks) > 0:
-            logger.warning(f'Encoder contains {len(self.memory.encoder.chunks)} chunks that are not saved yet. Save to disk with: client.memory_save()')
-            # logger.warning(f'Total chunks on disk: {len(self.memory.retriever.index_manager.metadata)}')
-            # logger.warning(f'Total chunks on memory: {len(self.memory.encoder.chunks)}')
+            logger.warning('No memory store loaded. Call memory_init() or memory_load() first.')
+            return []
 
-        logger.info(f'Retrieving the first top {n} chunks from {return_type}.')
-        if return_type == 'disk':
-            chunks = list(map(lambda x: x.get('text'), self.memory.retriever.index_manager.metadata))[0:n]
-        else:
-            chunks = self.memory.encoder.chunks[0:n]
+        # Warn if there are unsaved chunks in the buffer (memvid backend)
+        if (hasattr(self.memory, 'encoder')
+                and hasattr(self.memory.encoder, 'chunks')
+                and len(self.memory.encoder.chunks) > 0):
+            logger.warning(
+                f'{len(self.memory.encoder.chunks)} buffered chunk(s) not yet saved. '
+                'Call memory_save() to persist them.'
+            )
 
-        return chunks
+        chunks = self.memory.get_all_chunks()
+        logger.info(f'Returning {min(n, len(chunks))} of {len(chunks)} stored chunks.')
+        return chunks[:n]
 
     def compute_probability(self, query, scores, embedding, n=5000):
-        if not hasattr(self, 'memory') or not hasattr(self.memory, 'retriever'):
-            logger.debug('No chunks to encode for null distribution. Use client.add_chunks() first.')
-            return
+        """Fit a null distribution over retrieval scores and return significance flags.
 
-        logger.info('Creating null distribution -> For the detect of chunks with significant scores.')
-        if self.embedding['memory']=='memvid':
-            results = self.memory.retriever.index_manager.search(query, top_k=n)
-            random_scores = np.array(list(map(lambda x: x[1], results)))
+        Uses the *distfit* package.  Returns None when no memory store is loaded
+        or *distfit* is not installed.
+        """
+        if not hasattr(self, 'memory'):
+            logger.debug('No memory store loaded — skipping null distribution.')
+            return None
+
+        scores = np.asarray(scores)
+        if len(scores) < 2:
+            return None
+
+        logger.info('Building null distribution for retrieval score significance testing.')
+
+        # The memvid backend can provide its own similarity scores for the
+        # full corpus, which gives a better null distribution.
+        if self.embedding['memory'] == 'memvid':
+            scored = self.memory.search_with_scores(query, top_k=n)
+            random_scores = np.array([s for s, _ in scored])
             bound = 'left'
         else:
             random_chunks = self.memory.get_random_chunks(n=n)
+            if not random_chunks:
+                logger.debug('No random chunks available — skipping null distribution.')
+                return None
             query_vector, chunk_vectors = self.fit_transform(query, random_chunks, embedding=embedding)
-            # Compute similarity
             random_scores = cosine_similarity(query_vector, chunk_vectors)[0]
-            # Remove all scores with exactly value 0
-            random_scores = random_scores[random_scores!=0]
+            random_scores = random_scores[random_scores != 0]
             bound = 'right'
-
-        # Top indices
-        # top_indices = np.argsort(scores)[::-1]
-        # Join relevant chunks and send as prompt
-        # relevant_chunks = [random_chunks[i] for i in top_indices]
-        # relevant_scores = [scores[i] for i in top_indices]
 
         try:
             from distfit import distfit
-        except Exception as e:
-            raise ImportError("distfit is required for compute_probability. Install via 'pip install distfit'") from e
+        except Exception as exc:
+            raise ImportError(
+                "The 'distfit' package is required for compute_probability. "
+                "Install it with: pip install distfit"
+            ) from exc
 
         model = distfit(method='parametric', alpha=self.alpha, bound=bound, verbose='warning')
-        _ = model.fit_transform(random_scores)
-
+        model.fit_transform(random_scores)
         results = model.predict(scores, alpha=self.alpha, todf=False, multtest='fdr_bh')
-        # results['y_bool'] = results['P']<=self.alpha
-        # Store figure
-        fig, ax = model.plot(title=f'Retrieval method:{self.retrieval_method}, Embedding: {embedding}')
 
-        # Store
+        fig, ax = model.plot(
+            title=f'Retrieval: {self.retrieval_method}, Embedding: {embedding}'
+        )
         self.distfit = model
         self.distfit.fig = fig
         self.distfit.ax = ax
-        # Return
         return results
 
     def summarize(self,
@@ -1055,44 +1148,52 @@ class LLMlight:
         # Return
         return relevant_context
 
-    def relevant_memory_retrieval(self, query: str, return_type='list'):
+    def relevant_memory_retrieval(self, query: str, return_type: str = 'list'):
+        """Retrieve the most relevant chunks from the memory store for *query*.
+
+        Returns a list of strings (return_type='list') or a single joined
+        string (return_type='string').  Returns None when no store is loaded.
+        """
         relevant_context = None
 
-        # Show warning if chunks are not processed yet
-        if hasattr(self, 'encoder') and len(self.encoder.chunks) > 0:
-            logger.warning('Documents are stored in the encoder but not saved into video memory! Use save first: client.memory_save() to include the information.')
+        store_ready = (
+            hasattr(self, 'memory')
+            and self.store_path
+            and os.path.isfile(self.store_path)
+        )
+        if not store_ready:
+            return relevant_context
 
-        # Retrieve context from video memory
-        if self.file_path and os.path.isfile(self.file_path):
-            # and os.path.isfile(self.memory.index_path)
-            logger.info(f"Initialize retrieval from memory.. Collect [{self.top_chunks}] chunks from video-memory using {self.embedding['memory']}.")
-            # Initialize retriever
-            # retriever = self.memory.MemvidRetriever(video_file=self.memory.file_path, index_file=self.memory['index_path'], config=self.memory.config)
-            if not hasattr(self, 'memory'):
-                self.memory_load()
+        if not hasattr(self, 'memory'):
+            self.memory_load()
 
-            # Retrieval based on embedding
-            if self.embedding['memory']=='memvid':
-                # Use the memvid search retriever
-                # relevant_context = self.memory.retriever.search(query, top_k=self.top_chunks)
-                results = self.memory.retriever.index_manager.search(query, top_k=self.top_chunks)
-                scores = np.array(list(map(lambda x: x[1], results)))
-                relevant_context = list(map(lambda x: x[2]['text'], results))
-            elif self.embedding['memory'] in get_embeddings():
-                # Use the classic retrievers
-                chunks = list(map(lambda x: x.get('text'), self.memory.retriever.index_manager.metadata))
-                # Compute distances and get top k chunks
-                results = self.search(query, chunks, top_chunks=self.top_chunks, embedding=self.embedding['memory'], return_type='score')
-                scores, relevant_context = map(list, zip(*results))
+        logger.info(
+            f"Retrieving [{self.top_chunks}] chunks from memory store "
+            f"using embedding='{self.embedding['memory']}'."
+        )
 
-            # Filter on Probability
-            relevant_context = self._filter_proba(query, scores, relevant_context)
+        # Use the backend's generic search interface
+        if self.embedding['memory'] == 'memvid':
+            scored = self.memory.search_with_scores(query, top_k=self.top_chunks)
+            scores = np.array([s for s, _ in scored])
+            relevant_context = [t for _, t in scored]
+        elif self.embedding['memory'] in get_embeddings():
+            all_chunks = self.memory.get_all_chunks()
+            results = self.search(query, all_chunks, top_chunks=self.top_chunks,
+                                  embedding=self.embedding['memory'], return_type='score')
+            scores, relevant_context = map(list, zip(*results))
+        else:
+            logger.warning(f"Unknown memory embedding '{self.embedding['memory']}', skipping retrieval.")
+            return relevant_context
 
-            if return_type=='string':
-                # Join the chunks in context
-                relevant_context = "\n\n---\n\n".join([f"### Chunk {i+1}:\n{s}" for i, s in enumerate(relevant_context)])
+        # Optional statistical filtering
+        relevant_context = self._filter_proba(query, scores, relevant_context)
 
-        # Return
+        if return_type == 'string':
+            relevant_context = "\n\n---\n\n".join(
+                [f"### Chunk {i+1}:\n{s}" for i, s in enumerate(relevant_context)]
+            )
+
         return relevant_context
 
     def relevant_context_retrieval(self, query, context: str, return_type='list'):
@@ -1131,6 +1232,10 @@ class LLMlight:
         if self.alpha is not None:
             logger.info(f'Computing probability distribution..')
             # Compute probability
+            if scores is None or len(scores) < 2:
+                logger.warning(f"Skipping probability filtering because only {0 if scores is None else len(scores)} scores available.")
+            return relevant_context
+        
             out = self.compute_probability(query, scores, embedding=self.embedding['memory'], n=1000)
             
             if out is not None:
