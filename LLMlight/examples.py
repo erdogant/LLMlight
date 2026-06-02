@@ -1,21 +1,3 @@
-from LLMlight import LLMlight
-# normal init
-client = LLMlight()
-client.get_available_models()
-
-# %%
-
-# Load library
-from LLMlight import LLMlight
-# normal init
-client = LLMlight(model='gemma-4-e2b-it', alpha=1)
-
-# prompt
-out = client.prompt('who are you?')
-print(out)
-
-# %%
-
 # Load library
 from LLMlight import LLMlight
 # normal init
@@ -36,7 +18,34 @@ client.memory_chunks(n=5)
 # Query memory
 results = client.relevant_memory_retrieval('Tell me about Apes.')  # will use sqlite+hnsw by default
 
-print(results)
+print(results[0][2]['text'])
+print(results[0][1])
+
+results = client.relevant_memory_retrieval('What is the capital of France?')  # will use sqlite+hnsw by default
+print(results[0][2]['text'])
+print(results[0][1])
+
+# %%
+
+
+from LLMlight import LLMlight
+# normal init
+client = LLMlight()
+client.get_available_models()
+
+# %%
+
+# Load library
+from LLMlight import LLMlight
+# normal init
+client = LLMlight(model='gemma-4-e2b-it', alpha=1)
+
+# prompt
+out = client.prompt('who are you?')
+print(out)
+
+# %%
+
 
 # %%
 

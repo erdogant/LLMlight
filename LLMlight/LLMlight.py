@@ -698,9 +698,7 @@ class LLMlight:
         model.fit_transform(random_scores)
         results = model.predict(scores, alpha=self.alpha, todf=False, multtest='fdr_bh')
 
-        fig, ax = model.plot(
-            title=f'Retrieval: {self.retrieval_method}, Embedding: {embedding}'
-        )
+        fig, ax = model.plot(title=f'Retrieval: {self.retrieval_method}, Embedding: {embedding}')
         self.distfit = model
         self.distfit.fig = fig
         self.distfit.ax = ax
