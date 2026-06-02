@@ -1060,191 +1060,262 @@ class LLMlight:
         return final_response
         # return {'response': final_response, 'response_per_chunk': response_total}
 
-    def search(self, query: str, chunks: list, return_type: str = 'string', top_chunks: int = None, embedding: str = None):
-        """Splits large text into chunks and finds the most relevant ones."""
-        # Embedding
-        query_vector, chunk_vectors = self.fit_transform(query, chunks, embedding=embedding)
-        # Compute similarity
-        D = cosine_similarity(query_vector, chunk_vectors)[0]
-        # Get top scoring chunks
-        if top_chunks is None:
-            top_chunks = len(D)
-            logger.info('Number of top chunks selected is set to: {top_chunks}')
+    # ------------------------------------------------------------------
+    # Embedding helpers
+    # ------------------------------------------------------------------
 
-        # Top indices
-        top_indices = np.argsort(D)[-top_chunks:][::-1]
-        # Join relevant chunks and send as prompt
-        relevant_chunks = [chunks[i] for i in top_indices]
-        relevant_scores = [D[i] for i in top_indices]
+    def _embed(self, query: str, chunks: list, embedding: str) -> tuple:
+        """Embed *query* and *chunks* using the requested *embedding* method.
 
-        # Set the return type
-        if return_type == 'score':
-            return list(zip(relevant_scores, relevant_chunks))
-        elif return_type == 'list':
-            return relevant_chunks
-        elif return_type == 'string_flat':
-            return " ".join(relevant_chunks)
-        else:
-            return "\n---------\n".join(relevant_chunks)
+        Parameters
+        ----------
+        query : str
+        chunks : list of str
+        embedding : str  — one of 'tfidf', 'bow', 'bert', 'bge-small'
 
-    def fit_transform(self, query, chunks, embedding=None):
-        """Converts context chunks and query into vector space representations based on the selected embedding method."""
-        if embedding is None: embedding = self.embedding
+        Returns
+        -------
+        (query_vector, chunk_vectors)
+        """
+        _SENTENCE_MODELS = {
+            'bert':      'all-MiniLM-L6-v2',
+            'bge-small': 'BAAI/bge-small-en',
+        }
 
-        # Set embedding model parameters.
-        if self.embedding['context'] == 'bert':
+        if embedding in ('tfidf', 'bow'):
+            Vectorizer = TfidfVectorizer if embedding == 'tfidf' else CountVectorizer
+            vec = Vectorizer()
+            chunk_vectors = vec.fit_transform(chunks)
+            query_vector  = vec.transform([query])
+            return query_vector, chunk_vectors
+
+        if embedding in _SENTENCE_MODELS:
             try:
                 from sentence_transformers import SentenceTransformer
-            except Exception as e:
-                raise ImportError("sentence-transformers is required for 'bert' embeddings. Install via 'pip install sentence-transformers'") from e
-            embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
-        elif self.embedding['context'] == 'bge-small':
-            try:
-                from sentence_transformers import SentenceTransformer
-            except Exception as e:
-                raise ImportError("sentence-transformers is required for 'bge-small' embeddings. Install via 'pip install sentence-transformers'") from e
-            embedding_model = SentenceTransformer('BAAI/bge-small-en')
-        else:
-            embedding_model = None
+            except Exception as exc:
+                raise ImportError(
+                    f"sentence-transformers is required for embedding='{embedding}'. "
+                    "Install it with: pip install sentence-transformers"
+                ) from exc
+            model = SentenceTransformer(_SENTENCE_MODELS[embedding])
+            chunk_vectors = np.vstack([model.encode(c) for c in chunks])
+            query_vector  = model.encode([query]).reshape(1, -1)
+            return query_vector, chunk_vectors
 
-        if embedding == 'tfidf':
-            vectorizer = TfidfVectorizer()
-            chunk_vectors = vectorizer.fit_transform(chunks)
-            # dense_matrix = chunk_vectors.toarray()  # Converts to a NumPy array
-            query_vector = vectorizer.transform([query])
-        elif embedding == 'bow':
-            vectorizer = CountVectorizer()
-            chunk_vectors = vectorizer.fit_transform(chunks)
-            query_vector = vectorizer.transform([query])
-        # elif embedding_model is not None:
-        elif embedding == 'bert' or embedding == 'bge-small':
-            chunk_vectors = np.vstack([embedding_model.encode(chunk) for chunk in chunks])
-            query_vector = embedding_model.encode([query])
-            query_vector = query_vector.reshape(1, -1)
-        elif embedding == 'memvid':
-            logger.warning(f'Embedding method [{embedding}] can only be applied when retrieval method is set to memory-video path.')
-        else:
-            logger.error(f'Available embedding methods: {get_embeddings()}')
-            raise ValueError(f"Unsupported embedding method: {self.embedding}")
-        # Return
-        return query_vector, chunk_vectors
-        
-    def compute_context_strategy(self, query, context, instructions, system):
-        # Create advanced prompt using relevant chunks of text, the input query and instructions
-        if context is not None:
-            if self.context_strategy=='global-reasoning':
-                # Global Reasoning
-                relevant_context = self.global_reasoning(query, context, instructions, system, rewrite_query=False, return_per_chunk=True)
-            elif self.context_strategy=='chunk-wise':
-                # Analyze per chunk
-                relevant_context = self.chunk_wise(query, context, instructions, system, top_chunks=0, return_per_chunk=True)
-            else:
-                logger.info(f'No Context Strategy method is applied.')
-                relevant_context = context
-        else:
-            # Default
-            relevant_context = context
+        raise ValueError(
+            f"Unsupported embedding method: '{embedding}'. "
+            f"Valid options: {get_embeddings()}"
+        )
 
-        # Return
-        return relevant_context
+    # ------------------------------------------------------------------
+    # Core retrieval primitive  (single shared implementation)
+    # ------------------------------------------------------------------
+
+    def _retrieve(self,
+                  query: str,
+                  chunks: list,
+                  embedding: str,
+                  top_k: int) -> list:
+        """Rank *chunks* by relevance to *query* and return the top-*top_k* ones.
+
+        Returns a list of (score, text) tuples, highest score first.
+
+        Parameters
+        ----------
+        query     : str
+        chunks    : list of str
+        embedding : str — embedding method name
+        top_k     : int — number of results to return (capped at len(chunks))
+        """
+        if not chunks:
+            return []
+
+        top_k = min(top_k, len(chunks))
+        query_vector, chunk_vectors = self._embed(query, chunks, embedding)
+        scores = cosine_similarity(query_vector, chunk_vectors)[0]
+
+        top_indices = np.argsort(scores)[-top_k:][::-1]
+        return [(float(scores[i]), chunks[i]) for i in top_indices]
+
+    # ------------------------------------------------------------------
+    # Statistical significance filter
+    # ------------------------------------------------------------------
+
+    def _filter_by_significance(self, query: str, scored: list) -> list:
+        """Remove chunks whose retrieval score is not statistically significant.
+
+        Parameters
+        ----------
+        query  : str
+        scored : list of (score, text) tuples
+
+        Returns
+        -------
+        list of (score, text) — filtered to significant results only,
+        or the original list unchanged when alpha is None / filtering fails.
+        """
+        if self.alpha is None or len(scored) < 2:
+            return scored
+
+        scores = np.array([s for s, _ in scored])
+        logger.info("Testing retrieval score significance (alpha=%.3f).", self.alpha)
+        out = self.compute_probability(query, scores, embedding=self.embedding['memory'], n=1000)
+
+        if out is None:
+            return scored
+
+        mask = out.get('y_bool', np.ones(len(scored), dtype=bool))
+        filtered = [pair for pair, keep in zip(scored, mask) if keep]
+        logger.info("%d / %d chunks retained after significance filtering.", len(filtered), len(scored))
+        return filtered
+
+    # ------------------------------------------------------------------
+    # Public retrieval entry points
+    # ------------------------------------------------------------------
 
     def relevant_memory_retrieval(self, query: str, return_type: str = 'list'):
-        """Retrieve the most relevant chunks from the memory store for *query*.
+        """Return the top-k chunks from the persistent memory store.
 
-        Returns a list of strings (return_type='list') or a single joined
-        string (return_type='string').  Returns None when no store is loaded.
+        Parameters
+        ----------
+        query       : str
+        return_type : 'list' (default) or 'string'
+
+        Returns
+        -------
+        list of str, a joined str, or None when no store is loaded.
         """
-        relevant_context = None
-
-        store_ready = (
-            hasattr(self, 'memory')
-            and self.store_path
-            and os.path.isfile(self.store_path)
-        )
-        if not store_ready:
-            return relevant_context
-
-        if not hasattr(self, 'memory'):
-            self.memory_load()
+        if not (hasattr(self, 'memory') and self.store_path and os.path.isfile(self.store_path)):
+            return None
 
         logger.info(
-            f"Retrieving [{self.top_chunks}] chunks from memory store "
-            f"using embedding='{self.embedding['memory']}'."
+            "Retrieving [%d] chunks from memory store (embedding='%s').",
+            self.top_chunks, self.embedding['memory'],
         )
 
-        # Use the backend's generic search interface
         if self.embedding['memory'] == 'memvid':
+            # Backend provides its own similarity scores
             scored = self.memory.search_with_scores(query, top_k=self.top_chunks)
-            scores = np.array([s for s, _ in scored])
-            relevant_context = [t for _, t in scored]
         elif self.embedding['memory'] in get_embeddings():
             all_chunks = self.memory.get_all_chunks()
-            results = self.search(query, all_chunks, top_chunks=self.top_chunks,
-                                  embedding=self.embedding['memory'], return_type='score')
-            scores, relevant_context = map(list, zip(*results))
+            scored = self._retrieve(query, all_chunks, self.embedding['memory'], self.top_chunks)
         else:
-            logger.warning(f"Unknown memory embedding '{self.embedding['memory']}', skipping retrieval.")
-            return relevant_context
+            logger.warning("Unknown memory embedding '%s', skipping retrieval.", self.embedding['memory'])
+            return None
 
-        # Optional statistical filtering
-        relevant_context = self._filter_proba(query, scores, relevant_context)
+        scored = self._filter_by_significance(query, scored)
+        chunks = [text for _, text in scored]
 
         if return_type == 'string':
-            relevant_context = "\n\n---\n\n".join(
-                [f"### Chunk {i+1}:\n{s}" for i, s in enumerate(relevant_context)]
+            return "\n\n---\n\n".join(f"### Chunk {i+1}:\n{c}" for i, c in enumerate(chunks))
+        return chunks
+
+    def relevant_context_retrieval(self, query: str, context: str, return_type: str = 'list'):
+        """Return the most relevant portion of *context* for *query*.
+
+        Parameters
+        ----------
+        query       : str
+        context     : str — raw text to search through
+        return_type : 'list' (default) or 'string'
+
+        Returns
+        -------
+        list of str, str, or None when *context* is empty.
+        """
+        if not context:
+            return context
+
+        if self.retrieval_method == 'naive_rag' and self.embedding['context'] in get_embeddings():
+            logger.info(
+                "naive_rag: retrieving [%d] chunks from context (embedding='%s').",
+                self.top_chunks, self.embedding['context'],
+            )
+            chunks = utils.chunk_text(
+                context,
+                method=self.chunks['method'],
+                chunk_size=self.chunks['size'],
+                overlap=self.chunks['overlap'],
+            )
+            scored = self._retrieve(query, chunks, self.embedding['context'], self.top_chunks)
+            # Note: significance filtering uses memory embedding; skip for pure-context retrieval
+            chunks_out = [text for _, text in scored]
+
+            if return_type == 'string':
+                return "\n\n---\n\n".join(f"### Chunk {i+1}:\n{c}" for i, c in enumerate(chunks_out))
+            return chunks_out
+
+        if self.retrieval_method == 'RSE' and self.embedding['context'] in ('bert', 'bge-small'):
+            logger.info("RSE retrieval applied.")
+            return RAG.RSE(
+                context, query,
+                label=None,
+                chunk_size=self.chunks['size'],
+                irrelevant_chunk_penalty=0,
+                embedding=self.embedding['context'],
+                device='cpu',
+                batch_size=32,
             )
 
-        return relevant_context
+        logger.info("No retrieval method applied — using full context.")
+        return context
 
-    def relevant_context_retrieval(self, query, context: str, return_type='list'):
-        # Get context
-        # context = self._get_context(context)
+    # Public alias kept for any external callers that use the old names
+    def search(self, query: str, chunks: list,
+               return_type: str = 'score',
+               top_chunks: int = None,
+               embedding: str = None) -> list:
+        """Rank *chunks* by relevance to *query*.
 
-        if context is not None:
-            # Get relevant context using RAG and embedding
-            if self.retrieval_method == 'naive_rag' and self.embedding['context'] in get_embeddings():
-                # Find the best matching parts using simple retrieval method approach.
-                logger.info(f"Initialize retrieval from context.. Collect [{self.top_chunks}] chunks from context using {self.embedding['context']}.")
-                # Create chunks
-                chunks = utils.chunk_text(context, method=self.chunks['method'], chunk_size=self.chunks['size'], overlap=self.chunks['overlap'])
-                # Compute distances and get top k chunks
-                results = self.search(query, chunks, top_chunks=self.top_chunks, embedding=self.embedding['context'], return_type='score')
-                # Unzip scores and context
-                scores, relevant_context = map(list, zip(*results))
-                # Filter on Probability
-                relevant_context = self._filter_proba(query, scores, relevant_context)
+        Thin wrapper around :meth:`_retrieve` kept for backwards compatibility.
 
-            elif self.retrieval_method == 'RSE' and np.isin(self.embedding['context'], ['bert', 'bge-small']):
-                logger.info(f'RAG approach [{self.retrieval_method}] is applied.')
-                relevant_context = RAG.RSE(context, query, label=None, chunk_size=self.chunks['size'], irrelevant_chunk_penalty=0, embedding=self.embedding['context'], device='cpu', batch_size=32)
-            else:
-                logger.info(f'No retrieval method is applied.')
-                relevant_context = context
-        else:
-            relevant_context = context
+        Returns
+        -------
+        list — format depends on *return_type*:
+            'score'       : list of (score, text) tuples  [default]
+            'list'        : list of text strings
+            'string_flat' : space-joined string
+            str (other)   : newline-separated string
+        """
+        emb = embedding or 'tfidf'
+        k   = top_chunks or len(chunks)
+        scored = self._retrieve(query, chunks, emb, k)
 
-        # Return
-        return relevant_context
+        if return_type == 'score':
+            return scored
+        if return_type == 'list':
+            return [t for _, t in scored]
+        if return_type == 'string_flat':
+            return " ".join(t for _, t in scored)
+        return "\n---------\n".join(t for _, t in scored)
 
-    # Compute probability
+    # fit_transform kept for any code that calls it directly
+    def fit_transform(self, query, chunks, embedding=None):
+        """Embed query and chunks.  Use :meth:`_embed` in new code."""
+        emb = embedding if isinstance(embedding, str) else (
+            self.embedding.get('context', 'tfidf') if not isinstance(embedding, dict) else embedding.get('context', 'tfidf')
+        )
+        return self._embed(query, chunks, emb)
+
+    def compute_context_strategy(self, query, context, instructions, system):
+        """Apply the configured context strategy before retrieval."""
+        if context is None:
+            return context
+        if self.context_strategy == 'global-reasoning':
+            return self.global_reasoning(query, context, instructions, system,
+                                         rewrite_query=False, return_per_chunk=True)
+        if self.context_strategy == 'chunk-wise':
+            return self.chunk_wise(query, context, instructions, system,
+                                   top_chunks=0, return_per_chunk=True)
+        logger.info("No context strategy applied.")
+        return context
+
+    # Legacy alias
     def _filter_proba(self, query, scores, relevant_context):
-        # Filter on significance
-        if self.alpha is not None:
-            logger.info(f'Computing probability distribution..')
-            # Compute probability
-            if scores is None or len(scores) < 2:
-                logger.warning(f"Skipping probability filtering because only {0 if scores is None else len(scores)} scores available.")
-            return relevant_context
-        
-            out = self.compute_probability(query, scores, embedding=self.embedding['memory'], n=1000)
-            
-            if out is not None:
-                # Only keep significant chunks
-                relevant_context = list(np.array(relevant_context)[out.get('y_bool', '')])
-                logger.info(f'{len(relevant_context)} significant chunks found with alpha<={self.alpha}')
-
-        # Return relevant context
-        return relevant_context
+        """Backwards-compat wrapper — use _filter_by_significance in new code."""
+        scored = list(zip(scores, relevant_context))
+        filtered = self._filter_by_significance(query, scored)
+        return [t for _, t in filtered]
 
     def set_prompt(self, query: str, instructions: str, context: (str, list), response_format: str = None):
         # Default and update when context and instructions are available.

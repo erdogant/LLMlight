@@ -1,9 +1,25 @@
+from LLMlight import LLMlight
+# normal init
+client = LLMlight()
+client.get_available_models()
+
 # %%
 
 # Load library
 from LLMlight import LLMlight
 # normal init
-client = LLMlight(model='mistralai/mistral-small-3.2', alpha=1)
+client = LLMlight(model='gemma-4-e2b-it', alpha=1)
+
+# prompt
+out = client.prompt('who are you?')
+print(out)
+
+# %%
+
+# Load library
+from LLMlight import LLMlight
+# normal init
+client = LLMlight(model='gemma-4-e2b-it', alpha=1)
 # Initialize a local SQLite+HNSW memory (default backend)
 client.memory_init(store_path='knowledge_store.db')  # creates 'knowledge_store.db'
 # Initialize memvid backend (video-memory)
