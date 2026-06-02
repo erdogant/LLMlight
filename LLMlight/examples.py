@@ -118,7 +118,7 @@ response = client.prompt('What are Graphical Hypergeometric Networks?', instruct
 print(response)
 
 # Initialize
-client = LLMlight(model='mistralai/mistral-small-3.2', file_path='knowledge_base.db', context_strategy='chunk-wise')
+client = LLMlight(model='F', file_path='knowledge_base.db', context_strategy='chunk-wise')
 # Make a prompt
 response = client.prompt('What are Graphical Hypergeometric Networks?', instructions='Answer the question using the information from the context.')
 print(response)
@@ -168,15 +168,15 @@ client.memory_save()
 # Import
 from LLMlight import LLMlight
 # Initialize with local database
-client = LLMlight(model='unsloth/gemma-4-26b-a4b-it', file_path='local_database.mp4')
+client = LLMlight(model='GE', file_path='local_database.mp4')
 
 # Get the top 5 chunks
 client.memory_chunks(n=5)
 
 # Search through the chunks using a query
-out1 = client.memory.retriever.search('Attention Is All You Need', top_k=3)
-out2 = client.memory.retriever.search('Enrichment analysis, Hypergeometric Networks', top_k=3)
-out3 = client.memory.retriever.search('Capital of Amsterdam', top_k=3)
+out1 = client.memory.search('Attention Is All You Need', top_k=3)
+out2 = client.memory.search('Enrichment analysis, Hypergeometric Networks', top_k=3)
+out3 = client.memory.search('Capital of Amsterdam', top_k=3)
 
 # [07-09-2025 21:31:51] [memory] [INFO] Downloading file from url..
 # [07-09-2025 21:31:54] [memory] [INFO] Downloading file from url..
