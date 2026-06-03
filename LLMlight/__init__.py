@@ -2,11 +2,17 @@ from LLMlight.LLMlight import LLMlight
 
 import LLMlight.RAG as RAG
 import LLMlight.utils as utils
+import LLMlight.memory as memory
 
 from LLMlight.LLMlight import (
     convert_messages_to_model,
     compute_tokens,
-    )
+    get_embeddings,
+    _resolve_embedding,
+    _resolve_chunks,
+    _validate_params,
+    _set_embedding,
+)
 
 __author__ = 'Erdogan Tasksen'
 __email__ = 'erdogant@gmail.com'
@@ -23,7 +29,7 @@ _log_handler.setLevel(logging.DEBUG)
 # avoid duplicate handlers if re-imported
 if not _logger.hasHandlers(): _logger.addHandler(_log_handler)
 _logger.setLevel(logging.DEBUG)
-_logger.propagate = False  # prevent duplicate log lines when root logger also has a handler
+_logger.propagate = False  # prevent duplicate log lines
 
 # module level doc-string
 __doc__ = """
