@@ -15,7 +15,6 @@ Run with:
 """
 
 import os, sys, types
-sys.path.insert(0, os.path.dirname(__file__))
 
 # ---------------------------------------------------------------------------
 # Minimal stubs so we can import LLMlight without a live server

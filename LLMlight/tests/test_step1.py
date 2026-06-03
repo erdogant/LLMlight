@@ -1,159 +1,210 @@
-"""Smoke test for Step 1 — backend unification & memory init cleanup.
+"""Tests for Step 1 — backend unification & memory init cleanup.
 
-Run with:
-    python test_step1.py
-
-Expected output: all lines print "OK" and the final line prints "ALL TESTS PASSED".
-No LLM endpoint is required — these tests only exercise the memory layer and
-the path-resolution logic.
+Covers:
+  1. Package-level imports (create_memory_backend, renamed classes)
+  2. _resolve_store_path extension normalisation
+  3. SqliteBackend creation via factory (skipped when deps missing)
+  4. MemvidBackend extension validation
+  5. LLMlight._resolve_file_path and get_full_path alias
+  6. self.store_path set correctly during __init__
+  7. memory_init idempotency and store_path propagation
 """
 
 import os
-import sys
 import tempfile
+import unittest
 
-# ---------------------------------------------------------------------------
-# Allow running from the project root without installing the package
-# ---------------------------------------------------------------------------
-# sys.path.insert(0, os.path.dirname(__file__))
+# All imports go through the installed package — no sys.path hacks.
+import LLMlight as ll_pkg
+from LLMlight import LLMlight
+from LLMlight import memory as mem_module
+
 
 # ---------------------------------------------------------------------------
 # 1. Import checks
 # ---------------------------------------------------------------------------
-print("1. Import checks...")
-import memory as mem_module
-assert hasattr(mem_module, 'create_memory_backend'), "create_memory_backend not found"
-assert hasattr(mem_module, 'MemvidBackend'), "MemvidBackend not found"
-assert hasattr(mem_module, 'SqliteBackend'), "SqliteBackend not found"
-assert not hasattr(mem_module, 'memvid_llm'), "Old name 'memvid_llm' should be removed"
-assert not hasattr(mem_module, 'MemvidLLM'), "Old name 'MemvidLLM' should be removed"
-print("   OK — create_memory_backend and renamed classes present")
+class TestImports(unittest.TestCase):
+
+    def test_create_memory_backend_present(self):
+        self.assertTrue(hasattr(mem_module, 'create_memory_backend'))
+
+    def test_memvid_backend_class_present(self):
+        self.assertTrue(hasattr(mem_module, 'MemvidBackend'))
+
+    def test_sqlite_backend_class_present(self):
+        self.assertTrue(hasattr(mem_module, 'SqliteBackend'))
+
+    def test_old_name_memvid_llm_removed(self):
+        self.assertFalse(hasattr(mem_module, 'memvid_llm'))
+
+    def test_old_class_memvid_llm_removed(self):
+        self.assertFalse(hasattr(mem_module, 'MemvidLLM'))
+
 
 # ---------------------------------------------------------------------------
-# 2. _resolve_store_path helper
+# 2. _resolve_store_path
 # ---------------------------------------------------------------------------
-print("2. _resolve_store_path helper...")
-resolve = mem_module._resolve_store_path
+class TestResolveStorePath(unittest.TestCase):
 
-# sqlite backend always yields .db
-p = resolve('mystore.mp4', 'sqlite')
-assert p.endswith('.db'), f"Expected .db, got {p}"
+    def setUp(self):
+        self.resolve = mem_module._resolve_store_path
 
-p = resolve('mystore', 'sqlite')
-assert p.endswith('.db'), f"Expected .db, got {p}"
+    def test_sqlite_coerces_mp4_to_db(self):
+        p = self.resolve('mystore.mp4', 'sqlite')
+        self.assertTrue(p.endswith('.db'), p)
 
-# memvid backend keeps / coerces to .mp4
-p = resolve('mystore.db', 'memvid')
-assert p.endswith('.mp4'), f"Expected .mp4, got {p}"
+    def test_sqlite_bare_name_gets_db(self):
+        p = self.resolve('mystore', 'sqlite')
+        self.assertTrue(p.endswith('.db'), p)
 
-p = resolve('mystore.mp4', 'memvid')
-assert p.endswith('.mp4'), f"Expected .mp4, got {p}"
+    def test_memvid_coerces_db_to_mp4(self):
+        p = self.resolve('mystore.db', 'memvid')
+        self.assertTrue(p.endswith('.mp4'), p)
 
-# None defaults to cwd
-p_sqlite = resolve(None, 'sqlite')
-assert p_sqlite.endswith('.db'), f"Expected .db default, got {p_sqlite}"
-p_memvid = resolve(None, 'memvid')
-assert p_memvid.endswith('.mp4'), f"Expected .mp4 default, got {p_memvid}"
+    def test_memvid_keeps_mp4(self):
+        p = self.resolve('mystore.mp4', 'memvid')
+        self.assertTrue(p.endswith('.mp4'), p)
 
-print("   OK — extension normalisation works for both backends")
+    def test_none_sqlite_defaults_to_db(self):
+        p = self.resolve(None, 'sqlite')
+        self.assertTrue(p.endswith('.db'), p)
 
-# ---------------------------------------------------------------------------
-# 3. SqliteBackend via factory (sqlite is the default)
-# ---------------------------------------------------------------------------
-print("3. SqliteBackend creation via factory...")
-with tempfile.TemporaryDirectory() as td:
-    db_path = os.path.join(td, 'test_store.db')
-    try:
-        backend = mem_module.create_memory_backend(db_path, backend='sqlite')
-        assert hasattr(backend, 'store_path'), "store_path attribute missing"
-        assert backend.store_path == db_path, (
-            f"store_path mismatch: {backend.store_path!r} != {db_path!r}"
-        )
-        # The backend exposes the required interface methods
-        for method in ('add', 'load', 'save', 'search', 'get_all_chunks',
-                       'get_random_chunks', 'show_stats'):
-            assert hasattr(backend, method), f"Missing method: {method}"
-        print("   OK — SqliteBackend has correct store_path and full interface")
-    except ImportError as exc:
-        print(f"   SKIP — sqlite backend optional deps not installed: {exc}")
+    def test_none_memvid_defaults_to_mp4(self):
+        p = self.resolve(None, 'memvid')
+        self.assertTrue(p.endswith('.mp4'), p)
+
+    def test_result_is_absolute(self):
+        p = self.resolve('relative/path.db', 'sqlite')
+        self.assertTrue(os.path.isabs(p), p)
+
 
 # ---------------------------------------------------------------------------
-# 4. MemvidBackend: extension validation
+# 3. SqliteBackend via factory
 # ---------------------------------------------------------------------------
-print("4. MemvidBackend extension validation...")
-try:
-    mem_module.MemvidBackend('/tmp/bad_extension.db')
-    assert False, "Should have raised ValueError for non-video extension"
-except ValueError as exc:
-    assert 'video' in str(exc).lower() or '.mp4' in str(exc), str(exc)
-    print("   OK — MemvidBackend rejects non-video extensions")
-except ImportError:
-    print("   SKIP — memvid not installed, extension check not reachable")
+class TestSqliteBackendFactory(unittest.TestCase):
+
+    def test_store_path_set_correctly(self):
+        with tempfile.TemporaryDirectory() as td:
+            db_path = os.path.join(td, 'test_store.db')
+            try:
+                backend = mem_module.create_memory_backend(db_path, backend='sqlite')
+            except ImportError as exc:
+                self.skipTest(f"sqlite deps not installed: {exc}")
+            self.assertEqual(backend.store_path, db_path)
+
+    def test_interface_methods_present(self):
+        with tempfile.TemporaryDirectory() as td:
+            db_path = os.path.join(td, 'iface_test.db')
+            try:
+                backend = mem_module.create_memory_backend(db_path, backend='sqlite')
+            except ImportError as exc:
+                self.skipTest(f"sqlite deps not installed: {exc}")
+            for method in ('add', 'load', 'save', 'search',
+                           'get_all_chunks', 'get_random_chunks', 'show_stats'):
+                self.assertTrue(hasattr(backend, method), f"Missing: {method}")
+
+    def test_unknown_backend_raises(self):
+        with self.assertRaises(ValueError):
+            mem_module.create_memory_backend('x.db', backend='nonexistent')
+
+
+# ---------------------------------------------------------------------------
+# 4. MemvidBackend extension validation
+# ---------------------------------------------------------------------------
+class TestMemvidBackendValidation(unittest.TestCase):
+
+    def test_rejects_non_video_extension(self):
+        try:
+            mem_module.MemvidBackend(os.path.join(tempfile.gettempdir(), 'bad_extension.db'))
+            self.fail("Should have raised ValueError")
+        except ValueError as exc:
+            self.assertTrue('video' in str(exc).lower() or '.mp4' in str(exc), str(exc))
+        except ImportError:
+            self.skipTest("memvid not installed")
+
 
 # ---------------------------------------------------------------------------
 # 5. LLMlight._resolve_file_path
 # ---------------------------------------------------------------------------
-print("5. LLMlight._resolve_file_path...")
-# Import LLMlight without a model so __init__ returns early
-from LLMlight import LLMlight
-client = LLMlight()  # model=None → early return, no HTTP call
+class TestResolveFilePath(unittest.TestCase):
 
-assert client._resolve_file_path(None) is None
-assert client._resolve_file_path('') is None
+    def setUp(self):
+        self.client = LLMlight()  # model=None → early return, no HTTP call
 
-abs_path = '/tmp/myfile.db'
-assert client._resolve_file_path(abs_path) == abs_path, "Absolute path should pass through"
+    def test_none_returns_none(self):
+        self.assertIsNone(self.client._resolve_file_path(None))
 
-rel = client._resolve_file_path('myfile.db')
-assert os.path.isabs(rel), f"Relative path should be made absolute, got: {rel}"
-assert rel == os.path.join(client.tempdir, 'myfile.db'), f"Wrong tempdir join: {rel}"
+    def test_empty_string_returns_none(self):
+        self.assertIsNone(self.client._resolve_file_path(''))
 
-# Backwards-compat alias
-assert client.get_full_path('/tmp/x') == '/tmp/x'
-print("   OK — _resolve_file_path and get_full_path alias work correctly")
+    def test_absolute_path_passes_through(self):
+        # Use a platform-appropriate absolute path
+        p = os.path.join(tempfile.gettempdir(), 'myfile.db')
+        self.assertEqual(self.client._resolve_file_path(p), p)
 
-# ---------------------------------------------------------------------------
-# 6. self.store_path set during __init__
-# ---------------------------------------------------------------------------
-print("6. store_path set during __init__...")
-c1 = LLMlight()
-assert hasattr(c1, 'store_path'), "store_path attribute not set when file_path=None"
-assert c1.store_path is None
+    def test_relative_becomes_absolute(self):
+        rel = self.client._resolve_file_path('myfile.db')
+        self.assertTrue(os.path.isabs(rel), rel)
 
-c2 = LLMlight(file_path='knowledge.db')
-assert c2.store_path is not None
-assert c2.store_path.endswith('knowledge.db'), f"Unexpected store_path: {c2.store_path}"
-assert os.path.isabs(c2.store_path), "store_path should be absolute"
-# No self.file_path on the new API
-assert not hasattr(c2, 'file_path') or c2.__dict__.get('file_path') is None or True, \
-    "file_path alias may exist but store_path is authoritative"
-print("   OK — store_path resolved correctly in __init__")
+    def test_relative_resolves_under_tempdir(self):
+        rel = self.client._resolve_file_path('myfile.db')
+        expected = os.path.join(self.client.tempdir, 'myfile.db')
+        self.assertEqual(os.path.normcase(rel), os.path.normcase(expected))
 
-# ---------------------------------------------------------------------------
-# 7. memory_init creates backend with correct store_path
-# ---------------------------------------------------------------------------
-print("7. memory_init creates backend...")
-with tempfile.TemporaryDirectory() as td:
-    db_path = os.path.join(td, 'init_test.db')
-    try:
-        c = LLMlight()
-        c.memory_init(store_path=db_path, backend='sqlite')
-        assert hasattr(c, 'memory'), "self.memory not set after memory_init"
-        assert c.memory.store_path == db_path, (
-            f"store_path mismatch after memory_init: {c.memory.store_path!r}"
+    def test_get_full_path_alias(self):
+        p = os.path.join(tempfile.gettempdir(), 'x')
+        self.assertEqual(
+            self.client.get_full_path(p),
+            self.client._resolve_file_path(p),
         )
-        assert c.store_path == db_path, "self.store_path not updated after memory_init"
 
-        # Calling memory_init again with the same path should be a no-op
-        original_memory = c.memory
-        c.memory_init(store_path=db_path, backend='sqlite')
-        assert c.memory is original_memory, "memory_init should be idempotent for same path"
-        print("   OK — memory_init idempotent and sets store_path")
-    except ImportError as exc:
-        print(f"   SKIP — sqlite backend optional deps not installed: {exc}")
 
 # ---------------------------------------------------------------------------
-# Done
+# 6. store_path during __init__
 # ---------------------------------------------------------------------------
-print()
-print("ALL TESTS PASSED")
+class TestStorePath(unittest.TestCase):
+
+    def test_store_path_none_when_no_file_path(self):
+        c = LLMlight()
+        self.assertTrue(hasattr(c, 'store_path'))
+        self.assertIsNone(c.store_path)
+
+    def test_store_path_set_from_file_path(self):
+        c = LLMlight(file_path='knowledge.db')
+        self.assertIsNotNone(c.store_path)
+        self.assertTrue(c.store_path.endswith('knowledge.db'), c.store_path)
+        self.assertTrue(os.path.isabs(c.store_path), c.store_path)
+
+
+# ---------------------------------------------------------------------------
+# 7. memory_init idempotency
+# ---------------------------------------------------------------------------
+class TestMemoryInit(unittest.TestCase):
+
+    def test_memory_init_sets_store_path(self):
+        with tempfile.TemporaryDirectory() as td:
+            db_path = os.path.join(td, 'init_test.db')
+            c = LLMlight()
+            try:
+                c.memory_init(store_path=db_path, backend='sqlite')
+            except ImportError as exc:
+                self.skipTest(f"sqlite deps not installed: {exc}")
+            self.assertTrue(hasattr(c, 'memory'))
+            self.assertEqual(c.memory.store_path, db_path)
+            self.assertEqual(c.store_path, db_path)
+
+    def test_memory_init_idempotent(self):
+        with tempfile.TemporaryDirectory() as td:
+            db_path = os.path.join(td, 'idem_test.db')
+            c = LLMlight()
+            try:
+                c.memory_init(store_path=db_path, backend='sqlite')
+            except ImportError as exc:
+                self.skipTest(f"sqlite deps not installed: {exc}")
+            original_memory = c.memory
+            c.memory_init(store_path=db_path, backend='sqlite')
+            self.assertIs(c.memory, original_memory)
+
+
+if __name__ == '__main__':
+    unittest.main(verbosity=2)
