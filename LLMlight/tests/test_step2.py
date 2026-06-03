@@ -24,7 +24,6 @@ for mod in ('llama_cpp', 'memvid', 'distfit'):
 import LLMlight as ll_mod
 from LLMlight import (
     LLMlight,
-    _resolve_embedding,
     _resolve_chunks,
     _validate_params,
     get_embeddings,

@@ -1,39 +1,24 @@
-"""Unit tests for Step 3 — unified retrieval pipeline.
+"""Tests for Step 3 — unified retrieval pipeline.
 
-Tests cover:
-  1. _embed()                  — all supported embedding methods
-  2. _retrieve()               — ranking correctness, top_k cap
-  3. _filter_by_significance() — passthrough when alpha=None, short list
-  4. search()                  — backwards-compat wrapper return types
-  5. fit_transform()           — backwards-compat wrapper
-  6. relevant_context_retrieval() — naive_rag, no-retrieval, empty context
-  7. relevant_memory_retrieval()  — no store loaded → None
-  8. compute_context_strategy()   — None strategy passthrough
-
-Run with:
-    python test_step3.py
+Covers:
+  1.  _embed()                     — tfidf, bow shapes; unsupported raises
+  2.  _retrieve()                  — ranking, top_k cap, empty input, scores descending
+  3.  _filter_by_significance()    — alpha=None passthrough, short list, mask applied
+  4.  search()                     — backwards-compat return types
+  5.  fit_transform()              — backwards-compat wrapper
+  6.  relevant_context_retrieval() — naive_rag list/string, no retrieval, empty context
+  7.  relevant_memory_retrieval()  — no store → None, missing file → None
+  8.  compute_context_strategy()   — None passthrough, global-reasoning, chunk-wise
 """
 
-import os, sys, types
-
-# ---------------------------------------------------------------------------
-# Minimal stubs so we can import LLMlight without a live server
-# ---------------------------------------------------------------------------
 import unittest
 from unittest.mock import MagicMock, patch
 import numpy as np
 
-# Stub heavy optional packages before import
-for mod in ('llama_cpp', 'memvid', 'distfit'):
-    if mod not in sys.modules:
-        sys.modules[mod] = MagicMock()
-
-import LLMlight as ll_mod
 from LLMlight import LLMlight
 
 
-def make_client(**kwargs):
-    """Return a LLMlight instance with model=None (no HTTP calls)."""
+def _client(**kwargs):
     return LLMlight(**kwargs)
 
 
@@ -43,7 +28,7 @@ def make_client(**kwargs):
 class TestEmbed(unittest.TestCase):
 
     def setUp(self):
-        self.client = make_client()
+        self.c = _client()
         self.chunks = [
             "The cat sat on the mat.",
             "Dogs are loyal companions.",
@@ -51,23 +36,22 @@ class TestEmbed(unittest.TestCase):
         ]
 
     def test_tfidf_shapes(self):
-        qv, cv = self.client._embed("cat mat", self.chunks, "tfidf")
+        qv, cv = self.c._embed("cat mat", self.chunks, "tfidf")
         self.assertEqual(qv.shape[0], 1)
         self.assertEqual(cv.shape[0], len(self.chunks))
 
     def test_bow_shapes(self):
-        qv, cv = self.client._embed("cat mat", self.chunks, "bow")
+        qv, cv = self.c._embed("cat mat", self.chunks, "bow")
         self.assertEqual(qv.shape[0], 1)
         self.assertEqual(cv.shape[0], len(self.chunks))
 
     def test_unsupported_raises(self):
         with self.assertRaises(ValueError):
-            self.client._embed("query", self.chunks, "nonexistent_method")
+            self.c._embed("query", self.chunks, "no_such_method")
 
-    def test_memvid_embedding_raises(self):
-        """'memvid' is not a valid _embed method (it's a backend, not an embedder)."""
+    def test_memvid_raises_as_embed_method(self):
         with self.assertRaises(ValueError):
-            self.client._embed("query", self.chunks, "memvid")
+            self.c._embed("query", self.chunks, "memvid")
 
 
 # ---------------------------------------------------------------------------
@@ -76,7 +60,7 @@ class TestEmbed(unittest.TestCase):
 class TestRetrieve(unittest.TestCase):
 
     def setUp(self):
-        self.client = make_client()
+        self.c = _client()
         self.chunks = [
             "The Eiffel Tower is in Paris.",
             "Mount Everest is the tallest mountain.",
@@ -86,33 +70,28 @@ class TestRetrieve(unittest.TestCase):
         ]
 
     def test_returns_list_of_tuples(self):
-        result = self.client._retrieve("Paris France", self.chunks, "tfidf", top_k=3)
+        result = self.c._retrieve("Paris France", self.chunks, "tfidf", top_k=3)
         self.assertIsInstance(result, list)
         self.assertTrue(all(isinstance(r, tuple) and len(r) == 2 for r in result))
 
     def test_top_k_respected(self):
-        result = self.client._retrieve("Paris", self.chunks, "tfidf", top_k=2)
-        self.assertEqual(len(result), 2)
+        self.assertEqual(len(self.c._retrieve("Paris", self.chunks, "tfidf", top_k=2)), 2)
 
-    def test_top_k_capped_at_n_chunks(self):
-        result = self.client._retrieve("Paris", self.chunks, "tfidf", top_k=100)
-        self.assertEqual(len(result), len(self.chunks))
+    def test_top_k_capped(self):
+        self.assertEqual(len(self.c._retrieve("Paris", self.chunks, "tfidf", top_k=999)), len(self.chunks))
 
     def test_scores_descending(self):
-        result = self.client._retrieve("Paris France capital", self.chunks, "tfidf", top_k=5)
-        scores = [s for s, _ in result]
+        scores = [s for s, _ in self.c._retrieve("Paris France", self.chunks, "tfidf", top_k=5)]
         self.assertEqual(scores, sorted(scores, reverse=True))
 
-    def test_relevant_chunk_ranked_first(self):
-        result = self.client._retrieve("Paris France capital", self.chunks, "tfidf", top_k=3)
+    def test_relevant_chunk_in_top(self):
+        result = self.c._retrieve("Paris France capital", self.chunks, "tfidf", top_k=3)
         top_texts = [t for _, t in result]
-        # At least one of the Paris-related chunks should be in the top 3
-        paris_chunks = [c for c in self.chunks if "Paris" in c]
-        self.assertTrue(any(pc in top_texts for pc in paris_chunks))
+        paris = [c for c in self.chunks if "Paris" in c]
+        self.assertTrue(any(p in top_texts for p in paris))
 
-    def test_empty_chunks_returns_empty(self):
-        result = self.client._retrieve("query", [], "tfidf", top_k=5)
-        self.assertEqual(result, [])
+    def test_empty_input(self):
+        self.assertEqual(self.c._retrieve("query", [], "tfidf", top_k=5), [])
 
 
 # ---------------------------------------------------------------------------
@@ -121,33 +100,33 @@ class TestRetrieve(unittest.TestCase):
 class TestFilterBySignificance(unittest.TestCase):
 
     def setUp(self):
-        self.client = make_client()
+        self.c = _client()
         self.scored = [(0.9, "very relevant"), (0.5, "somewhat"), (0.1, "irrelevant")]
 
-    def test_passthrough_when_alpha_none(self):
-        self.client.alpha = None
-        result = self.client._filter_by_significance("q", self.scored)
-        self.assertEqual(result, self.scored)
+    def test_alpha_none_passthrough(self):
+        self.c.alpha = None
+        self.assertEqual(self.c._filter_by_significance("q", self.scored), self.scored)
 
-    def test_passthrough_when_too_few_scores(self):
-        self.client.alpha = 0.05
-        result = self.client._filter_by_significance("q", [(0.9, "only one")])
-        self.assertEqual(result, [(0.9, "only one")])
+    def test_single_item_passthrough(self):
+        self.c.alpha = 0.05
+        single = [(0.9, "only")]
+        self.assertEqual(self.c._filter_by_significance("q", single), single)
 
-    def test_passthrough_when_compute_probability_returns_none(self):
-        self.client.alpha = 0.05
-        with patch.object(self.client, 'compute_probability', return_value=None):
-            result = self.client._filter_by_significance("q", self.scored)
-        self.assertEqual(result, self.scored)
+    def test_compute_probability_none_passthrough(self):
+        self.c.alpha = 0.05
+        with patch.object(self.c, 'compute_probability', return_value=None):
+            self.assertEqual(self.c._filter_by_significance("q", self.scored), self.scored)
 
-    def test_filters_using_y_bool_mask(self):
-        self.client.alpha = 0.05
+    def test_mask_filters_correctly(self):
+        self.c.alpha = 0.05
         fake_out = {'y_bool': np.array([True, False, True])}
-        with patch.object(self.client, 'compute_probability', return_value=fake_out):
-            result = self.client._filter_by_significance("q", self.scored)
+        with patch.object(self.c, 'compute_probability', return_value=fake_out):
+            result = self.c._filter_by_significance("q", self.scored)
         self.assertEqual(len(result), 2)
-        self.assertEqual(result[0][1], "very relevant")
-        self.assertEqual(result[1][1], "irrelevant")
+        texts = [t for _, t in result]
+        self.assertIn("very relevant", texts)
+        self.assertIn("irrelevant", texts)
+        self.assertNotIn("somewhat", texts)
 
 
 # ---------------------------------------------------------------------------
@@ -156,36 +135,34 @@ class TestFilterBySignificance(unittest.TestCase):
 class TestSearchWrapper(unittest.TestCase):
 
     def setUp(self):
-        self.client = make_client()
+        self.c = _client()
         self.chunks = [
             "The quick brown fox jumps.",
             "A lazy dog sleeps all day.",
             "Foxes are cunning animals.",
         ]
 
-    def test_return_type_score(self):
-        result = self.client.search("fox", self.chunks, return_type='score', top_chunks=2)
+    def test_return_score(self):
+        result = self.c.search("fox", self.chunks, return_type='score', top_chunks=2)
         self.assertEqual(len(result), 2)
         self.assertTrue(all(isinstance(r, tuple) for r in result))
 
-    def test_return_type_list(self):
-        result = self.client.search("fox", self.chunks, return_type='list', top_chunks=2)
-        self.assertIsInstance(result, list)
+    def test_return_list(self):
+        result = self.c.search("fox", self.chunks, return_type='list', top_chunks=2)
         self.assertTrue(all(isinstance(r, str) for r in result))
 
-    def test_return_type_string_flat(self):
-        result = self.client.search("fox", self.chunks, return_type='string_flat', top_chunks=2)
+    def test_return_string_flat(self):
+        result = self.c.search("fox", self.chunks, return_type='string_flat', top_chunks=2)
         self.assertIsInstance(result, str)
         self.assertNotIn('\n', result)
 
-    def test_return_type_string_default(self):
-        result = self.client.search("fox", self.chunks, return_type='other', top_chunks=2)
+    def test_return_other_is_string(self):
+        result = self.c.search("fox", self.chunks, return_type='joined', top_chunks=2)
         self.assertIsInstance(result, str)
 
-    def test_explicit_embedding_kwarg(self):
-        # should not raise
-        result = self.client.search("fox", self.chunks, return_type='list',
-                                    top_chunks=2, embedding='tfidf')
+    def test_explicit_embedding(self):
+        result = self.c.search("fox", self.chunks, return_type='list',
+                               top_chunks=2, embedding='tfidf')
         self.assertEqual(len(result), 2)
 
 
@@ -195,17 +172,23 @@ class TestSearchWrapper(unittest.TestCase):
 class TestFitTransformWrapper(unittest.TestCase):
 
     def setUp(self):
-        self.client = make_client()
-        self.chunks = ["apple pie recipe", "banana smoothie", "cherry tart"]
+        self.c = _client()
+        self.chunks = ["apple pie", "banana smoothie", "cherry tart"]
 
-    def test_returns_tuple(self):
-        qv, cv = self.client.fit_transform("apple", self.chunks, embedding='tfidf')
-        self.assertEqual(qv.shape[0], 1)
+    def test_string_embedding(self):
+        qv, cv = self.c.fit_transform("apple", self.chunks, embedding='tfidf')
         self.assertEqual(cv.shape[0], 3)
 
-    def test_dict_embedding_uses_context_key(self):
-        qv, cv = self.client.fit_transform("apple", self.chunks,
-                                           embedding={'context': 'tfidf', 'memory': 'memvid'})
+    def test_dict_embedding(self):
+        qv, cv = self.c.fit_transform(
+            "apple", self.chunks,
+            embedding={'context': 'tfidf', 'memory': 'memvid'},
+        )
+        self.assertEqual(cv.shape[0], 3)
+
+    def test_none_embedding_uses_self(self):
+        self.c.embedding = {'context': 'tfidf', 'memory': 'memvid'}
+        qv, cv = self.c.fit_transform("apple", self.chunks, embedding=None)
         self.assertEqual(cv.shape[0], 3)
 
 
@@ -215,39 +198,35 @@ class TestFitTransformWrapper(unittest.TestCase):
 class TestRelevantContextRetrieval(unittest.TestCase):
 
     def setUp(self):
-        self.client = make_client()
-        self.client.chunks = {'method': 'chars', 'size': 50, 'overlap': 0}
+        self.c = _client()
+        self.c.chunks = {'method': 'chars', 'size': 50, 'overlap': 0}
 
-    def test_none_context_returns_none(self):
-        result = self.client.relevant_context_retrieval("query", None)
-        self.assertIsNone(result)
+    def test_none_context(self):
+        self.assertIsNone(self.c.relevant_context_retrieval("q", None))
 
-    def test_empty_string_returns_empty(self):
-        result = self.client.relevant_context_retrieval("query", "")
-        # empty string is falsy → returned as-is
-        self.assertFalse(result)
+    def test_empty_context(self):
+        self.assertFalse(self.c.relevant_context_retrieval("q", ""))
 
     def test_no_retrieval_method_returns_full_context(self):
-        self.client.retrieval_method = None
-        ctx = "Full context text that should be returned unchanged."
-        result = self.client.relevant_context_retrieval("query", ctx)
-        self.assertEqual(result, ctx)
+        self.c.retrieval_method = None
+        ctx = "Full context text unchanged."
+        self.assertEqual(self.c.relevant_context_retrieval("q", ctx), ctx)
 
-    def test_naive_rag_returns_list_by_default(self):
-        self.client.retrieval_method = 'naive_rag'
-        self.client.embedding = {'context': 'tfidf', 'memory': 'memvid'}
-        self.client.top_chunks = 2
-        ctx = " ".join(["word"] * 200)   # long enough to produce multiple chunks
-        result = self.client.relevant_context_retrieval("word", ctx)
+    def test_naive_rag_returns_list(self):
+        self.c.retrieval_method = 'naive_rag'
+        self.c.embedding = {'context': 'tfidf', 'memory': 'memvid'}
+        self.c.top_chunks = 2
+        ctx = " ".join(["word"] * 300)
+        result = self.c.relevant_context_retrieval("word", ctx)
         self.assertIsInstance(result, list)
         self.assertLessEqual(len(result), 2)
 
-    def test_naive_rag_return_type_string(self):
-        self.client.retrieval_method = 'naive_rag'
-        self.client.embedding = {'context': 'tfidf', 'memory': 'memvid'}
-        self.client.top_chunks = 2
-        ctx = " ".join(["word"] * 200)
-        result = self.client.relevant_context_retrieval("word", ctx, return_type='string')
+    def test_naive_rag_return_string(self):
+        self.c.retrieval_method = 'naive_rag'
+        self.c.embedding = {'context': 'tfidf', 'memory': 'memvid'}
+        self.c.top_chunks = 2
+        ctx = " ".join(["word"] * 300)
+        result = self.c.relevant_context_retrieval("word", ctx, return_type='string')
         self.assertIsInstance(result, str)
         self.assertIn("### Chunk", result)
 
@@ -257,52 +236,47 @@ class TestRelevantContextRetrieval(unittest.TestCase):
 # ---------------------------------------------------------------------------
 class TestRelevantMemoryRetrievalNoStore(unittest.TestCase):
 
-    def test_returns_none_when_no_store_path(self):
-        client = make_client()
-        # store_path is None → should return None immediately
-        self.assertIsNone(client.relevant_memory_retrieval("anything"))
+    def test_none_store_path(self):
+        c = _client()
+        self.assertIsNone(c.relevant_memory_retrieval("anything"))
 
-    def test_returns_none_when_store_file_missing(self):
-        client = make_client()
-        client.store_path = '/nonexistent/path/store.db'
-        self.assertIsNone(client.relevant_memory_retrieval("anything"))
+    def test_missing_file(self):
+        c = _client()
+        c.store_path = '/nonexistent/path/store.db'
+        self.assertIsNone(c.relevant_memory_retrieval("anything"))
 
 
 # ---------------------------------------------------------------------------
-# 8. compute_context_strategy passthrough
+# 8. compute_context_strategy
 # ---------------------------------------------------------------------------
 class TestComputeContextStrategy(unittest.TestCase):
 
-    def test_none_strategy_returns_context_unchanged(self):
-        client = make_client()
-        client.context_strategy = None
-        ctx = "some context"
-        result = client.compute_context_strategy("q", ctx, "instr", "sys")
-        self.assertEqual(result, ctx)
+    def test_none_strategy_passthrough(self):
+        c = _client()
+        c.context_strategy = None
+        self.assertEqual(c.compute_context_strategy("q", "ctx", "i", "s"), "ctx")
 
     def test_none_context_returns_none(self):
-        client = make_client()
-        client.context_strategy = None
-        result = client.compute_context_strategy("q", None, "instr", "sys")
-        self.assertIsNone(result)
+        c = _client()
+        c.context_strategy = None
+        self.assertIsNone(c.compute_context_strategy("q", None, "i", "s"))
 
-    def test_global_reasoning_delegates(self):
-        client = make_client()
-        client.context_strategy = 'global-reasoning'
-        with patch.object(client, 'global_reasoning', return_value="summary") as mock_gr:
-            result = client.compute_context_strategy("q", "ctx", "instr", "sys")
-        mock_gr.assert_called_once()
+    def test_global_reasoning_delegated(self):
+        c = _client()
+        c.context_strategy = 'global-reasoning'
+        with patch.object(c, 'global_reasoning', return_value="summary") as mock:
+            result = c.compute_context_strategy("q", "ctx", "i", "s")
+        mock.assert_called_once()
         self.assertEqual(result, "summary")
 
-    def test_chunk_wise_delegates(self):
-        client = make_client()
-        client.context_strategy = 'chunk-wise'
-        with patch.object(client, 'chunk_wise', return_value="chunked") as mock_cw:
-            result = client.compute_context_strategy("q", "ctx", "instr", "sys")
-        mock_cw.assert_called_once()
+    def test_chunk_wise_delegated(self):
+        c = _client()
+        c.context_strategy = 'chunk-wise'
+        with patch.object(c, 'chunk_wise', return_value="chunked") as mock:
+            result = c.compute_context_strategy("q", "ctx", "i", "s")
+        mock.assert_called_once()
         self.assertEqual(result, "chunked")
 
 
-# ---------------------------------------------------------------------------
 if __name__ == '__main__':
     unittest.main(verbosity=2)

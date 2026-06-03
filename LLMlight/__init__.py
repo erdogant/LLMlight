@@ -8,9 +8,6 @@ from LLMlight.LLMlight import (
     convert_messages_to_model,
     compute_tokens,
     get_embeddings,
-    _resolve_embedding,
-    _resolve_chunks,
-    _validate_params,
     _set_embedding,
 )
 
