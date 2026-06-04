@@ -170,7 +170,7 @@ class LLMlight:
                  retrieval_method: (None, str) = 'naive_rag',
                  embedding: (str, dict) = {'memory': 'memvid', 'context': 'bert'},
                  context_strategy: str = None,
-                 alpha: float = 0.05,
+                 alpha: float = None,
                  top_chunks: int = 5,
                  temperature: (int, float) = 0.7,
                  top_p: (int, float) = 1.0,
