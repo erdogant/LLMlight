@@ -579,6 +579,22 @@ class SqliteHNSWBackend:
             results.append((id_, score, meta))
         return results
 
+    def close(self):
+        """Explicitly close the SQLite connection and release the file lock.
+
+        On Windows the OS holds a file lock for the duration of the connection.
+        Call this when you are done with the backend so temp-directory cleanup
+        (and test teardown) can delete the file without a PermissionError.
+        """
+        try:
+            if self._conn is not None:
+                self._conn.commit()
+                self._conn.close()
+                self._conn = None
+                logger.debug("SqliteHNSWBackend: connection closed.")
+        except Exception as exc:
+            logger.warning(f"Error closing SQLite connection: {exc}")
+
 
 # Expose a factory-like symbol named SqliteHnswLLM for use by memory factory
 class SqliteHnswLLM(SqliteHNSWBackend):

@@ -80,34 +80,71 @@ class TestResolveStorePath(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
+# Helpers for Windows-safe temp DB management
+# ---------------------------------------------------------------------------
+
+def _make_temp_db_path():
+    """Return a path to a unique temp .db file that does NOT yet exist.
+
+    Using tempfile.NamedTemporaryFile(delete=False) would keep the file open
+    on Windows and prevent SQLite from opening it.  We just build a path
+    inside the system temp dir instead.
+    """
+    return os.path.join(tempfile.gettempdir(), f'llmlight_test_{uuid.uuid4().hex}.db')
+
+
+def _close_and_remove(backend, path):
+    """Close *backend* then delete *path* and its companion files (.hnsw, -wal, -shm).
+
+    Swallows all errors so it is safe to call from addCleanup().
+    """
+    # Close the SQLite connection first so Windows releases the file lock.
+    try:
+        if backend is not None and hasattr(backend, 'close'):
+            backend.close()
+    except Exception:
+        pass
+
+    # Remove the .db and any SQLite journal / WAL side-files.
+    for suffix in ('', '-wal', '-shm', '.hnsw'):
+        p = path + suffix if suffix.startswith('-') else os.path.splitext(path)[0] + suffix + os.path.splitext(path)[1] if suffix == '' else path + suffix
+        # Simpler: just try both combinations
+        for candidate in (path + suffix, os.path.splitext(path)[0] + suffix):
+            try:
+                if os.path.isfile(candidate):
+                    os.remove(candidate)
+            except Exception:
+                pass
+
+
+# ---------------------------------------------------------------------------
 # 3. SqliteBackend via factory
 # ---------------------------------------------------------------------------
 class TestSqliteBackendFactory(unittest.TestCase):
 
     def test_store_path_set_correctly(self):
-        with tempfile.TemporaryDirectory() as td:
-            db_path = os.path.join(td, f'test_store_{uuid.uuid4().hex}.db')
-            try:
-                backend = mem_module.create_memory_backend(db_path, backend='sqlite')
-            except ImportError as exc:
-                self.skipTest(f"sqlite deps not installed: {exc}")
-            self.assertEqual(backend.store_path, db_path)
-            backend.close()
+        db_path = _make_temp_db_path()
+        backend = None
+        try:
+            backend = mem_module.create_memory_backend(db_path, backend='sqlite')
+        except ImportError as exc:
+            self.skipTest(f"sqlite deps not installed: {exc}")
+        self.addCleanup(_close_and_remove, backend, db_path)
+        self.assertEqual(backend.store_path, db_path)
 
     def test_interface_methods_present(self):
-        with tempfile.TemporaryDirectory() as td:
-            db_path = os.path.join(td, f'iface_test_{uuid.uuid4().hex}.db')
-            try:
-                backend = mem_module.create_memory_backend(db_path, backend='sqlite')
-            except ImportError as exc:
-                self.skipTest(f"sqlite deps not installed: {exc}")
-    
-            for method in (
-                'add', 'load', 'save', 'search',
-                'get_all_chunks', 'get_random_chunks', 'show_stats'
-            ):
-                self.assertTrue(hasattr(backend, method), f"Missing: {method}")
-            backend.close()
+        db_path = _make_temp_db_path()
+        backend = None
+        try:
+            backend = mem_module.create_memory_backend(db_path, backend='sqlite')
+        except ImportError as exc:
+            self.skipTest(f"sqlite deps not installed: {exc}")
+        self.addCleanup(_close_and_remove, backend, db_path)
+        for method in (
+            'add', 'load', 'save', 'search',
+            'get_all_chunks', 'get_random_chunks', 'show_stats'
+        ):
+            self.assertTrue(hasattr(backend, method), f"Missing: {method}")
 
     def test_unknown_backend_raises(self):
         with self.assertRaises(ValueError):
@@ -188,15 +225,14 @@ class TestStorePath(unittest.TestCase):
 class TestMemoryInit(unittest.TestCase):
 
     def test_memory_init_sets_store_path(self):
-        with tempfile.TemporaryDirectory() as td:
-            db_path = os.path.join(td, f'init_test_{uuid.uuid4().hex}.db')
-            c = LLMlight()
-            try:
-                c.memory_init(store_path=db_path, backend='sqlite')
-            except ImportError as exc:
-                self.skipTest(f"sqlite deps not installed: {exc}")
-            self.assertTrue(hasattr(c, 'memory'))
-            self.assertEqual(c.memory.store_path, db_path)
-            self.assertEqual(c.store_path, db_path)
-            c.memory.close()
-
+        db_path = _make_temp_db_path()
+        c = LLMlight()
+        try:
+            c.memory_init(store_path=db_path, backend='sqlite')
+        except ImportError as exc:
+            self.skipTest(f"sqlite deps not installed: {exc}")
+        # Register cleanup *after* memory_init succeeds so c.memory exists.
+        self.addCleanup(_close_and_remove, c.memory, db_path)
+        self.assertTrue(hasattr(c, 'memory'))
+        self.assertEqual(c.memory.store_path, db_path)
+        self.assertEqual(c.store_path, db_path)
