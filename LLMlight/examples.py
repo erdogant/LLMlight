@@ -28,6 +28,9 @@ client.memory_remove(ids=results[0][0])
 client.memory_remove(query='BMC')     # by query (top-1 match)
 client.memory_remove(query='BMC', top_k=3)  # top-3 matches
 
+client.prompt('hi')
+client.prompt('what do you know about BMC?')
+
 # %%
 
 
@@ -102,19 +105,27 @@ print(results)
 
 from LLMlight import LLMlight
 client = LLMlight(model='gemma-4-e2b-it', top_chunks=5)
-client.memory_init(store_path='neurips_store1.db')  # creates 'knowledge_store.db'
+client.memory_init(store_path='neurips_store1.db')
 
 # Add multiple PDF files to the database
 url = 'https://proceedings.neurips.cc/paper_files/paper/2017/file/3f5ee243547dee91fbd053c1c4a845aa-Paper.pdf'
 pdf_text = client.read_pdf(url)
-client.memory.get_all_chunks()
 
 client.memory_add(text=pdf_text)
+out = client.memory.get_all_chunks()
+len(out)
+
+client.prompt('When to get BLEU score of 41.0?')
 
 summary_text = client.summarize(context=pdf_text)
 print(summary_text)
 
-
+# Add chunks
+client.memory_add(text=['Apes like USB sticks.', 'The capital of France is Amsterdam.'])
+out = client.memory.get_all_chunks()
+print(out)
+len(out)
+client.prompt('What is the capital of france?', instructions='Your response must be the truth.')
 
 # %%
 

@@ -458,8 +458,7 @@ class LLMlight:
             logger.error(f"{response.status_code} - {response}")
             return f"Error: {response.status_code} - {response}"
 
-    def memory_init(self, store_path: str = None, config: dict = None,
-                    embedding: str = None, backend: str = None):
+    def memory_init(self, store_path: str = None, config: dict = None, embedding: str = None, backend: str = None):
         """Prepare a memory store for writing.
 
         Call this when you want to create a *new* store or re-open an existing
