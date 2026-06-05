@@ -18,11 +18,17 @@ import unittest
 from LLMlight import memory as mem_module
 from LLMlight import LLMlight
 
+SQLITE_AVAILABLE = False
+
 try:
     from sqlite_hnsw import SqliteHnswLLM
     SQLITE_AVAILABLE = True
 except ImportError:
-    SQLITE_AVAILABLE = False
+    try:
+        from LLMlight.sqlite_hnsw import SqliteHnswLLM
+        SQLITE_AVAILABLE = True
+    except ImportError:
+        pass
 
 
 @unittest.skipUnless(SQLITE_AVAILABLE, "sqlite_hnsw not available")

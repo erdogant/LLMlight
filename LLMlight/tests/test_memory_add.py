@@ -13,11 +13,18 @@ import os
 import tempfile
 import unittest
 
+SQLITE_AVAILABLE = False
+
 try:
     from sqlite_hnsw import SqliteHnswLLM, _normalise_text_input
     SQLITE_AVAILABLE = True
 except ImportError:
-    SQLITE_AVAILABLE = False
+    try:
+        from LLMlight.sqlite_hnsw import SqliteHnswLLM, _normalise_text_input
+        SQLITE_AVAILABLE = True
+    except ImportError:
+        pass
+
 
 from LLMlight import LLMlight
 
