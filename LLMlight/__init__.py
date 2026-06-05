@@ -3,6 +3,7 @@ from LLMlight.LLMlight import LLMlight
 import LLMlight.RAG as RAG
 import LLMlight.utils as utils
 import LLMlight.memory as memory
+from LLMlight.sqlite_hnsw import SqliteHnswLLM
 
 from LLMlight.LLMlight import (
     convert_messages_to_model,
