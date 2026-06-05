@@ -510,6 +510,9 @@ class SqliteBackend:
         self.store_path = store_path
 
     # Delegate everything to the wrapped implementation
+    def close(self):
+        if hasattr(self._impl, "close"):
+            self._impl.close()
     def __getattr__(self, name):
         # Only called when the attribute is NOT found on SqliteBackend itself,
         # so self._impl is always available via __dict__ lookup.
