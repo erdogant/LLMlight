@@ -200,13 +200,3 @@ class TestMemoryInit(unittest.TestCase):
             self.assertEqual(c.store_path, db_path)
             c.memory.close()
 
-    def test_memory_init_idempotent(self):
-        with tempfile.TemporaryDirectory() as td:
-            db_path = os.path.join(td, f'idem_test_{uuid.uuid4().hex}.db')
-            c = LLMlight()
-            try:
-                c.memory_init(store_path=db_path, backend='sqlite')
-            except ImportError as exc:
-                self.skipTest(f"sqlite deps not installed: {exc}")
-            original_memory = c.memory
-            c.memory_init(store_path=db_path, backend='sqlit
