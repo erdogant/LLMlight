@@ -12,6 +12,7 @@ Every backend exposes the same interface:
     .load()
     .save(...)
     .search(query, top_k)  -> list[str]
+    .remove(ids, query)    -> list[int]
     .get_all_chunks()      -> list[str]
     .get_random_chunks(n)  -> list[str]
     .show_stats()
@@ -369,6 +370,71 @@ class MemvidBackend:
 
         return [' '.join(b) for b in buckets]
 
+    def remove(self,
+               ids: List[int] = None,
+               query: str = None,
+               top_k: int = 1) -> List[int]:
+        """Remove chunks from the store by id(s) or by search query.
+
+        For the memvid backend, removal is applied to the loaded index
+        metadata in-memory.  Call :meth:`save` afterwards to persist the
+        change (a new video will be built without the removed chunks).
+
+        Parameters
+        ----------
+        ids : list of int, optional
+            Chunk ids to remove (the first element of each search result).
+        query : str, optional
+            Search query — the top-*top_k* matching chunks are removed.
+            Ignored when *ids* is provided.
+        top_k : int
+            Number of top search results to remove when using *query*.
+
+        Returns
+        -------
+        list of int
+            The ids that were marked for removal.
+        """
+        if not hasattr(self, 'retriever'):
+            logger.warning("remove(): no retriever loaded — call load() first.")
+            return []
+
+        to_delete_ids: List[int] = []
+
+        if ids is not None:
+            if isinstance(ids, int):
+                ids = [ids]
+            to_delete_ids = list(ids)
+        elif query is not None:
+            results = self.retriever.index_manager.search(query, top_k=top_k)
+            # results are (frame_index, score, metadata_dict)
+            to_delete_ids = [r[0] for r in results]
+        else:
+            raise ValueError("Provide either ids= or query= to remove().")
+
+        if not to_delete_ids:
+            logger.info("remove(): nothing to delete.")
+            return []
+
+        # Filter metadata in-memory
+        before = len(self.retriever.index_manager.metadata)
+        self.retriever.index_manager.metadata = [
+            m for m in self.retriever.index_manager.metadata
+            if m.get('frame_index', m.get('id')) not in to_delete_ids
+        ]
+        after = len(self.retriever.index_manager.metadata)
+        logger.info(
+            "remove(): marked %d chunk(s) for removal (%d -> %d). "
+            "Call save() to persist.", before - after, before, after,
+        )
+
+        # Stage removed texts so save() will rebuild without them
+        if not hasattr(self, '_pending_remove_ids'):
+            self._pending_remove_ids = set()
+        self._pending_remove_ids.update(to_delete_ids)
+
+        return to_delete_ids
+
     def show_stats(self):
         """Log a summary of the last save operation."""
         if not hasattr(self, 'build_stats'):
@@ -395,6 +461,40 @@ class MemvidBackend:
 # SQLite+HNSW backend  (thin wrapper — the real class lives in db_backends/)
 # ---------------------------------------------------------------------------
 
+def _import_sqlite_impl():
+    """Import the SqliteHnswLLM class, trying every plausible import path.
+
+    The module may be installed as a top-level package, as part of the
+    LLMlight package, or inside a db_backends sub-package depending on the
+    project layout.  We try them all and raise a clear error only when every
+    path fails.
+    """
+    candidates = [
+        # Installed as sibling module inside the LLMlight package
+        ("LLMlight.sqlite_hnsw",          "SqliteHnswLLM"),
+        # Top-level module (editable install, tests, standalone script)
+        ("sqlite_hnsw",                   "SqliteHnswLLM"),
+        # Sub-package layout used in some project structures
+        ("LLMlight.db_backends.sqlite_hnsw", "SqliteHnswLLM"),
+        ("db_backends.sqlite_hnsw",          "SqliteHnswLLM"),
+    ]
+    last_exc = None
+    for module_path, class_name in candidates:
+        try:
+            import importlib
+            mod = importlib.import_module(module_path)
+            return getattr(mod, class_name)
+        except (ImportError, ModuleNotFoundError, AttributeError) as exc:
+            last_exc = exc
+            continue
+
+    raise ImportError(
+        "Could not import SqliteHnswLLM from any known location. "
+        "Make sure sqlite_hnsw.py is inside the LLMlight package directory "
+        "or is importable from the Python path."
+    ) from last_exc
+
+
 class SqliteBackend:
     """Memory backend that stores chunks in a local SQLite database with an
     optional HNSW index for fast approximate-nearest-neighbour search.
@@ -405,32 +505,9 @@ class SqliteBackend:
     """
 
     def __init__(self, store_path: str, config: dict = None):
-        # Attempt to instantiate the sqlite backend implementation. If the
-        # optional dependencies are missing, fall back to the Memvid backend
-        # (when available) instead of raising an ImportError immediately.
-        try:
-            try:
-                from sqlite_hnsw import SqliteHnswLLM as _Impl
-            except ImportError:
-                try:
-                    from sqlite_hnsw import SqliteHnswLLM as _Impl
-                except Exception:
-                    from sqlite_hnsw import SqliteHnswLLM as _Impl
-
-            self._impl = _Impl(store_path, config=config)
-            self.store_path = store_path
-        except ImportError as exc_sqlite:
-            # Log and fallback to memvid backend if possible.
-            logger.warning("sqlite backend optional deps not installed; falling back to memvid backend.")
-            try:
-                self._impl = MemvidBackend(store_path, config=config)
-                self.store_path = store_path
-            except Exception:
-                # re-raise the original sqlite error to make the root cause visible
-                raise ImportError(
-                    "The sqlite+hnsw backend requires optional dependencies. "
-                    "Install them or switch to backend='memvid'."
-                ) from exc_sqlite
+        _Impl = _import_sqlite_impl()
+        self._impl = _Impl(store_path, config=config)
+        self.store_path = store_path
 
     # Delegate everything to the wrapped implementation
     def __getattr__(self, name):
@@ -471,6 +548,17 @@ class SqliteBackend:
         for word in all_words:
             buckets[random.randint(0, len(buckets) - 1)].append(word)
         return [' '.join(b) for b in buckets]
+
+    def remove(self,
+               ids: List[int] = None,
+               query: str = None,
+               top_k: int = 1) -> List[int]:
+        """Remove chunks by id(s) or search query. See backend docs for details."""
+        if hasattr(self._impl, 'remove'):
+            return self._impl.remove(ids=ids, query=query, top_k=top_k)
+        raise NotImplementedError(
+            "The current backend implementation does not support remove()."
+        )
 
     def show_stats(self):
         if hasattr(self._impl, 'show_stats'):

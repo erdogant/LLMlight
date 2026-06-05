@@ -347,6 +347,83 @@ class SqliteHNSWBackend:
                 logger.warning(f"Failed to save rebuilt ANN index: {e}")
 
         return True
+    def remove(self,
+               ids: List[int] = None,
+               query: str = None,
+               top_k: int = 1) -> List[int]:
+        """Remove chunks from the store by id(s) or by search query.
+
+        Parameters
+        ----------
+        ids : list of int, optional
+            Row ids to delete (as returned in the first element of each
+            search result tuple).
+        query : str, optional
+            Search query — the top-*top_k* matching chunks are deleted.
+            Ignored when *ids* is provided.
+        top_k : int
+            Number of top search results to remove when using *query*.
+
+        Returns
+        -------
+        list of int
+            The ids that were actually deleted.
+        """
+        to_delete: List[int] = []
+
+        if ids is not None:
+            if isinstance(ids, int):
+                ids = [ids]
+            to_delete = list(ids)
+        elif query is not None:
+            results = self.search(query, top_k=top_k)
+            to_delete = [r[0] for r in results]
+        else:
+            raise ValueError("Provide either ids= or query= to remove().")
+
+        if not to_delete:
+            logger.info("remove(): nothing to delete.")
+            return []
+
+        # Delete from SQLite
+        placeholders = ",".join(["?"] * len(to_delete))
+        c = self._conn.cursor()
+        c.execute(f"DELETE FROM documents WHERE id IN ({placeholders})", to_delete)
+        deleted = c.rowcount
+        self._conn.commit()
+        logger.info(f"remove(): deleted {deleted} document(s) with id(s) {to_delete}.")
+
+        # Rebuild in-memory ANN arrays to stay consistent.
+        # hnswlib does not support deletion, so we reload everything from DB.
+        if self._use_ann and self._ann is not None and self._embedder is not None:
+            c.execute("SELECT id, text FROM documents ORDER BY id")
+            rows = c.fetchall()
+            if rows:
+                ids_remaining = [r[0] for r in rows]
+                texts_remaining = [r[1] for r in rows]
+                vecs = self._embedder.encode(texts_remaining, convert_to_numpy=True).astype(np.float32)
+                self._embeddings = vecs
+                self._ids = ids_remaining
+                try:
+                    import hnswlib
+                    dim = vecs.shape[1]
+                    p = hnswlib.Index(space='cosine', dim=dim)
+                    p.init_index(max_elements=len(ids_remaining), ef_construction=200, M=16)
+                    p.add_items(vecs, np.array(ids_remaining, dtype=np.int32))
+                    p.set_ef(max(50, len(ids_remaining) // 10 or 1))
+                    self._ann = p
+                    logger.info(f"Rebuilt ANN index with {len(ids_remaining)} remaining document(s).")
+                except Exception as exc:
+                    logger.warning(f"Could not rebuild ANN index after removal: {exc}")
+            else:
+                # All docs deleted
+                self._embeddings = None
+                self._ids = []
+                self._ann = None
+                self._use_ann = False
+
+        return to_delete
+
     def save(self, file_path: Optional[str] = None, codec: str = None, auto_build_docker: bool = False, allow_fallback: bool = True, overwrite: bool = True, show_progress: bool = True):
         """Persist both SQLite DB (already on disk) and ANN index if present."""
         # SQLite is already persisted; just save ANN index to self.index_path

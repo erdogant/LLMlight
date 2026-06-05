@@ -558,6 +558,57 @@ class LLMlight:
         )
         self.memory.load()
 
+    def memory_remove(self,
+                      ids: list = None,
+                      query: str = None,
+                      top_k: int = 1) -> list:
+        """Remove chunks from the memory store by id or search query.
+
+        Examples
+        --------
+        # Find what is stored first
+        >>> results = client.memory.search('BMC')
+        >>> # [(31, 0.23, {'text': 'BMC test', 'id': 31})]
+
+        # Remove by id
+        >>> client.memory_remove(ids=31)
+
+        # Or remove by query (removes the single best match by default)
+        >>> client.memory_remove(query='BMC test')
+
+        # Remove the top-3 matches for a query
+        >>> client.memory_remove(query='BMC', top_k=3)
+
+        Parameters
+        ----------
+        ids : int or list of int, optional
+            Row id(s) to delete, as returned in the first element of each
+            search result tuple.
+        query : str, optional
+            Search term — the top-*top_k* matching chunks are removed.
+            Ignored when *ids* is provided.
+        top_k : int
+            How many top query matches to remove (default 1).
+
+        Returns
+        -------
+        list of int
+            The ids that were actually deleted.
+
+        Notes
+        -----
+        For the **sqlite** backend the change is written to disk immediately.
+        For the **memvid** backend the removal is staged in memory — call
+        :meth:`memory_save` to rebuild and persist the video without the
+        removed chunks.
+        """
+        if not hasattr(self, 'memory'):
+            raise RuntimeError("No memory store initialised. Call memory_init() first.")
+        removed = self.memory.remove(ids=ids, query=query, top_k=top_k)
+        if removed:
+            logger.info("Removed %d chunk(s): ids=%s", len(removed), removed)
+        return removed
+
     def memory_reindex(self, batch_size: int = 128, save_index: bool = True):
         """Rebuild the retrieval index for the current backend.
 

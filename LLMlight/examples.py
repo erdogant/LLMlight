@@ -1,3 +1,36 @@
+from LLMlight import LLMlight
+client = LLMlight(model='gemma-4-e2b-it')
+client.memory_init(store_path='knowledge_store.db')
+client.memory_add(text=['BMC test1'])
+client.memory.get_all_chunks()
+results = client.memory.search('bmc')
+print(results)
+client.memory_add(text=['Apes like USB sticks.', 'The capital of France is Amsterdam.'])
+client.memory.get_all_chunks()
+
+# Remove
+# Load library
+from LLMlight import LLMlight
+# normal init
+client = LLMlight(model='gemma-4-e2b-it')
+# Init or load when exists
+client.memory_init(store_path='knowledge_store.db')
+client.memory_chunks()
+
+# Add text
+client.memory_add(text=['BMC test3'])
+
+results = client.memory.search('bmc')
+# [(31, 0.23, {'text': 'BMC test', 'id': 31})]
+client.memory_chunks()
+
+client.memory_remove(ids=results[0][0])
+client.memory_remove(query='BMC')     # by query (top-1 match)
+client.memory_remove(query='BMC', top_k=3)  # top-3 matches
+
+# %%
+
+
 # Load library
 from LLMlight import LLMlight
 # normal init
@@ -11,7 +44,7 @@ client.memory_init(store_path='knowledge_store.db')  # creates 'knowledge_store.
 client.memory_add(text=['Apes like USB sticks.', 'The capital of France is Amsterdam.'])
 
 # should return the inserted chunks
-client.memory_chunks(n=5)  
+client.memory_chunks()  
                   
 # Save index (saves ANN index if hnswlib is present)
 # client.memory_save()
@@ -47,15 +80,12 @@ print(out)
 # %%
 
 
-# %%
-
-
 from LLMlight import LLMlight
-client = LLMlight(alpha=1)
+client = LLMlight()
 client.memory_init(store_path='knowledge_store.db')
-client.memory_add(text=['BMC test'])
+client.memory_add(text=['BMC test1'])
 client.memory.get_all_chunks()
-client.memory
+
 
 # Rebuild the ANN index (requires sentence-transformers + hnswlib)
 client.memory.retriever.index_manager.backend.reindex(batch_size=64, save_index=True)
@@ -71,14 +101,13 @@ print(results)
 # =============================================================================
 
 from LLMlight import LLMlight
-
-client = LLMlight(model='unsloth/gemma-4-26b-a4b-it', top_chunks=5)
-client = LLMlight(model='mistralai/mistral-small-3.2', alpha=1)
-client.memory_init(file_path='neurips_store.db')  # creates 'knowledge_store.db'
+client = LLMlight(model='gemma-4-e2b-it', top_chunks=5)
+client.memory_init(store_path='neurips_store.db')  # creates 'knowledge_store.db'
 
 # Add multiple PDF files to the database
 url = 'https://proceedings.neurips.cc/paper_files/paper/2017/file/3f5ee243547dee91fbd053c1c4a845aa-Paper.pdf'
 pdf_text = client.read_pdf(url)
+client.memory.get_all_chunks()
 
 client.memory_add(text=pdf_text)
 
