@@ -27,7 +27,6 @@ from typing import List, Union
 from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 # sentence_transformers and distfit are optional heavy dependencies; import them only when needed.
-
 # memvid is an optional memory backend; import within memory module when used.
 
 try:

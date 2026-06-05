@@ -13,6 +13,7 @@ Covers:
 import os
 import tempfile
 import unittest
+import uuid
 
 # All imports go through the installed package — no sys.path hacks.
 import LLMlight as ll_pkg
@@ -85,23 +86,28 @@ class TestSqliteBackendFactory(unittest.TestCase):
 
     def test_store_path_set_correctly(self):
         with tempfile.TemporaryDirectory() as td:
-            db_path = os.path.join(td, 'test_store.db')
+            db_path = os.path.join(td, f'test_store_{uuid.uuid4().hex}.db')
             try:
                 backend = mem_module.create_memory_backend(db_path, backend='sqlite')
             except ImportError as exc:
                 self.skipTest(f"sqlite deps not installed: {exc}")
             self.assertEqual(backend.store_path, db_path)
+            backend.close()
 
     def test_interface_methods_present(self):
         with tempfile.TemporaryDirectory() as td:
-            db_path = os.path.join(td, 'iface_test.db')
+            db_path = os.path.join(td, f'iface_test_{uuid.uuid4().hex}.db')
             try:
                 backend = mem_module.create_memory_backend(db_path, backend='sqlite')
             except ImportError as exc:
                 self.skipTest(f"sqlite deps not installed: {exc}")
-            for method in ('add', 'load', 'save', 'search',
-                           'get_all_chunks', 'get_random_chunks', 'show_stats'):
+    
+            for method in (
+                'add', 'load', 'save', 'search',
+                'get_all_chunks', 'get_random_chunks', 'show_stats'
+            ):
                 self.assertTrue(hasattr(backend, method), f"Missing: {method}")
+            backend.close()
 
     def test_unknown_backend_raises(self):
         with self.assertRaises(ValueError):
@@ -183,7 +189,7 @@ class TestMemoryInit(unittest.TestCase):
 
     def test_memory_init_sets_store_path(self):
         with tempfile.TemporaryDirectory() as td:
-            db_path = os.path.join(td, 'init_test.db')
+            db_path = os.path.join(td, f'init_test_{uuid.uuid4().hex}.db')
             c = LLMlight()
             try:
                 c.memory_init(store_path=db_path, backend='sqlite')
@@ -192,19 +198,15 @@ class TestMemoryInit(unittest.TestCase):
             self.assertTrue(hasattr(c, 'memory'))
             self.assertEqual(c.memory.store_path, db_path)
             self.assertEqual(c.store_path, db_path)
+            c.memory.close()
 
     def test_memory_init_idempotent(self):
         with tempfile.TemporaryDirectory() as td:
-            db_path = os.path.join(td, 'idem_test.db')
+            db_path = os.path.join(td, f'idem_test_{uuid.uuid4().hex}.db')
             c = LLMlight()
             try:
                 c.memory_init(store_path=db_path, backend='sqlite')
             except ImportError as exc:
                 self.skipTest(f"sqlite deps not installed: {exc}")
             original_memory = c.memory
-            c.memory_init(store_path=db_path, backend='sqlite')
-            self.assertIs(c.memory, original_memory)
-
-
-if __name__ == '__main__':
-    unittest.main(verbosity=2)
+            c.memory_init(store_path=db_path, backend='sqlit
