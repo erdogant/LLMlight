@@ -107,60 +107,116 @@ class LLMlight:
     Parameters
     ----------
     model : str
-        'unsloth/gemma-4-26b-a4b-it'
-        'qwen/qwen3-coder-30b'
-        'openai/gpt-oss-20b'
-    system : str
-        String of the system message.
-        "I am a helpfull assistant"
-    retrieval_method : str (default: 'naive_rag')
-        None:                   No processing. The entire context is used for the query.
-        'naive_rag':            Context is processed using Navie RAG approach. Ideal for chats and when you need to answer specfic questions: Chunk of text are created. Use cosine similarity to for ranking. The top scoring chunks will be combined (n chunks) and used as input with the prompt.
-        'RSE':                  Context is processed using Navie RSE approach. Identify and extract entire segments of relevant text.
-    embedding : str, dict (default: 'automatic')
-        Specify the embedding. When using both video-memory and context, it can be specified with a dictionary: {'memory': 'memvid', 'naive_rag': 'bert'}
-        None:                   No embedding is performed.
-        'automatic':            {'memory': 'memvid', 'naive_rag': 'bert'}
-        'memvid':               This embedding can only be applied when using video-memory in the retrieval method.
-        'tfidf':                Best use when it is a structured documents and the words in the queries are matching.
-        'bow':                  Bag of words approach. Best use when you expect words in the document and queries to be matching.
-        'bert':                 Best use when document is more free text and the queries may not match exactly the words or sentences in the document.
-        'bge-small':
-    context_strategy : str (default: None)
-         None:                  No pre-processing. The original context is used in the pipeline of retrieval_method, embedding and the response.
-        'chunk-wise':           The input context will be analyze chunkwise based on the query, instructions and system. The total set of answered-chunks is then returned. The normal pipeline proceeds for the query, instructions, system etc.
-        'global-reasoning':     The input context will be summarized per chunk globally. The total set of summarized context is then returned. The normal pipeline proceeds for the query, instructions, system etc.
-    temperature : float, optional
-        Sampling temperature.
-        0.7: (default)
-        0: Deterministic
-        1: Stochastic (max)
-    top_p : float, optional
-        Top-p (nucleus) sampling parameter (default is 1.0, no filtering).
-    chunks: dict : {'method': 'chars', 'size': 1000, 'overlap': 250, 'top_chunks': 5}
-        type : str
-            'chars' or 'words': Chunks are created using chars or words.
-            'size': Chunk length in chars or words.
-                The accuracy increases with smaller chunk sizes. But it also reduces the input context for the LLM.
-                Estimates: 1000 words or ~10.000 chars costs ~3000 tokens.
-                With a context window (n_ctx) of 4096 your can set size=1000 words with n chunks=5 and leave some space for instructions, system and the query.
-            'overlap': overlap between chunks
-            'top_chunks': Retrieval of the top N chunks when performing RAG analysis.
-    n_ctx : int, default: 4096
-        The context window length is determined by the max tokens. A larger number of tokens will ask more cpu/gpu resources. Estimates: 1000 words or ~10.000 chars costs ~3000 tokens.
-    file_path : str
-        'knowledge_base.mp4'    Local or absolute path to your (video) memory file.
-    endpoint : str:  Endpoint of the LLM API
-        "http://localhost:1234/v1/chat/completions"
+        Model identifier served by the endpoint, e.g. ``'mistralai/mistral-small-3.2'``,
+        ``'unsloth/gemma-4-26b-a4b-it'``, ``'qwen/qwen3-coder-30b'``.
+        When ``None`` the available models are listed and ``__init__`` returns early.
+    retrieval_method : str, default ``'naive_rag'``
+        None          -- No chunking. The entire context is forwarded to the LLM.
+                        Use only when context fits within ``n_ctx``.
+        'naive_rag'   -- Context is split into chunks; top-k chunks are selected by
+                        cosine similarity and combined into the prompt.
+        'RSE'         -- Relevant Segment Extraction: contiguous high-scoring segments
+                        are identified and reconstructed. Requires ``embedding`` in
+                        ``('bert', 'bge-small')``.
+    embedding : str, dict, or None, default ``None``
+        Controls how text is vectorised for retrieval.
+
+        ``None``          -- Retrieval embedding **disabled**. Memory retrieval and
+                            context retrieval both skip the similarity step and fall
+                            through to the full-context path.
+        ``'automatic'``   -- Shorthand for ``{'memory': 'memvid', 'context': 'bert'}``.
+        A string          -- Applies the same method to both memory and context paths.
+                            Valid values: ``'tfidf'``, ``'bow'``, ``'bert'``,
+                            ``'bge-small'``, ``'memvid'``.
+                            Note: ``'memvid'`` is only valid for the memory path; it is
+                            silently corrected to ``'bert'`` when used as the context
+                            embedding.
+        A dict            -- Specify paths independently:
+                            ``{'memory': 'memvid', 'context': 'bert'}``.
+                            Keys ``'memory'`` and ``'context'`` are both optional;
+                            omitted keys inherit the ``'automatic'`` defaults.
+
+        Guidance by use-case:
+          ``'tfidf'``    -- Structured text, query terms likely present verbatim.
+          ``'bow'``      -- Simple word-frequency matching.
+          ``'bert'``     -- Free-text; query wording may not match the document.
+          ``'bge-small'``-- Compact retrieval-optimised model; good general default.
+          ``'memvid'``   -- Use the memvid backend's built-in FAISS similarity.
+    context_strategy : str or None, default ``None``
+        None               -- Raw (or retrieved) context is passed directly to the LLM.
+        'chunk-wise'       -- Each chunk is analysed independently against the query;
+                             per-chunk answers are combined in a final pass.
+        'global-reasoning' -- Each chunk is summarised; summaries are merged into one
+                             coherent response.
+    temperature : float, default ``0.7``
+        Sampling temperature in ``[0, 2]``. ``0`` is deterministic; higher values
+        increase randomness.
+    top_p : float, default ``1.0``
+        Nucleus sampling threshold in ``(0, 1]``. ``1.0`` disables filtering.
+    chunks : dict or None, default ``None``
+        Chunking configuration. Missing keys fall back to defaults.
+        Keys:
+
+        ``'method'``  -- ``'chars'`` (default) or ``'words'``.
+        ``'size'``    -- Chunk length in characters or words (default ``1000``).
+                        Smaller sizes improve retrieval precision but reduce the
+                        context available to the LLM. Rough estimate: 1 000 words
+                        ≈ 3 000 tokens.
+        ``'overlap'`` -- Overlap between consecutive chunks (default ``200``).
+                        Must be less than ``'size'``.
+
+        Legacy aliases accepted: ``'type'`` -> ``'method'``,
+        ``'chunk_size'`` -> ``'size'``.
+    top_chunks : int, default ``5``
+        Number of top-ranked chunks returned by retrieval.
+    n_ctx : int, default ``4096``
+        Model context window in tokens. Used to compute ``max_tokens`` for each
+        request and to warn when a prompt is likely to overflow.
+    file_path : str or None, default ``None``
+        Path to an existing memory store to load at construction time.
+        Relative paths are resolved under the LLMlight temp directory.
+        The extension determines the backend: ``.db`` -> sqlite, ``.mp4`` -> memvid.
+    endpoint : str, default ``'http://localhost:1234/v1/chat/completions'``
+        URL of the OpenAI-compatible chat completions endpoint, or an absolute
+        path to a local ``.gguf`` model file.
+    verbose : str or int, default ``'info'``
+        Logging verbosity. Accepts level names (``'debug'``, ``'info'``,
+        ``'warning'``, ``'error'``, ``'silent'``) or integer log levels.
 
     Examples
     --------
-    >>> # Examples
     >>> from LLMlight import LLMlight
-    >>> client =  LLMlight()
-    >>> client.prompt('hello, who are you?')
-    >>> system_message = "You are a helpful assistant."
-    >>> response = client.prompt('What is the capital of France?', system=system_message, top_p=0.9)
+    >>> # Simple prompt -- no context
+    >>> client = LLMlight(model='mistralai/mistral-small-3.2')
+    >>> response = client.prompt('What is the capital of France?')
+    >>> print(response)
+
+    >>> # RAG over a PDF with bert embeddings
+    >>> client = LLMlight(model='mistralai/mistral-small-3.2',
+    ...                   retrieval_method='naive_rag',
+    ...                   embedding='bert',
+    ...                   top_chunks=5)
+    >>> context = client.read_pdf('https://example.com/paper.pdf')
+    >>> response = client.prompt('Summarize the main contributions.',
+    ...                          context=context)
+    >>> print(response)
+
+    >>> # Persistent SQLite memory store
+    >>> client = LLMlight(model='mistralai/mistral-small-3.2',
+    ...                   embedding='automatic')
+    >>> client.memory_init(store_path='knowledge.db')
+    >>> client.memory_add(text=['Apes like USB sticks.',
+    ...                         'The capital of France is Amsterdam.'])
+    >>> client.memory_save()
+    >>> response = client.prompt('What do apes like?')
+    >>> print(response)
+
+    >>> # Disable embedding entirely -- full context passed to LLM
+    >>> client = LLMlight(model='mistralai/mistral-small-3.2',
+    ...                   embedding=None,
+    ...                   retrieval_method=None)
+    >>> response = client.prompt('Summarise this.',
+    ...                          context='Short enough to fit in context window.')
     >>> print(response)
 
     """
@@ -197,7 +253,7 @@ class LLMlight:
             n_ctx=n_ctx,
         )
 
-        # Store validated/normalised values — all set unconditionally so every
+        # Store validated/normalised values -- all set unconditionally so every
         # attribute exists even when model=None causes an early return below.
         self.model            = params['model']
         self.retrieval_method = params['retrieval_method']
@@ -276,50 +332,68 @@ class LLMlight:
                return_type: str = 'string',
                verbose=None,
                ):
-        """Run the model with the provided parameters.
+        """Run the model and return its response.
 
-        The final prompt is created based on the query, instructions, and the context
+        Orchestrates the full pipeline: memory retrieval -> context retrieval ->
+        context strategy -> prompt assembly -> LLM call.
 
         Parameters
         ----------
         query : str
-            The question or query.
-            "What is the capital for France?"
-        context : str
-            Large text string that will be chunked, and embedded. The answer for the query is based on the chunks.
-        instructions : str
-            Set your instructions.
-            "Answer the question strictly based on the provided context."
+            The question or task, e.g. ``'What is the capital of France?'``.
+        context : str, optional
+            Raw text to search for relevant information.  When ``retrieval_method``
+            is set the text is chunked and the top-k chunks are selected; when
+            ``retrieval_method=None`` the full string is forwarded to the LLM
+            (a warning is emitted when it likely exceeds ``n_ctx``).
+            Defaults to ``self.context`` when ``None``.
+        instructions : str, optional
+            Task-specific instructions appended to the prompt, e.g.
+            ``'Answer using only information from the context.'``.
         system : str, optional
-            Optional system message to set context for the AI (default is None).
-            "You are helpfull assistant."
+            System message that sets the LLM's role.  When ``None`` a sensible
+            default is used.
+        response_format : str, optional
+            Desired output format hint, e.g. ``'Return a JSON object.'``.
         temperature : float, optional
-            Sampling temperature (default is 0.7).
+            Sampling temperature. Overrides the instance default for this call.
         top_p : float, optional
-            Top-p (nucleus) sampling parameter (default is 1.0, no filtering).
-        stream : bool, optional
-            Whether to enable streaming (default is False).
-        return_type: bool, optional
-            Return dictionary in case the output is a json
-            'max': Output the full json
-            'dict': Convert json into dictionary.
-            'string': Return only the string answer (remove thinking strings using tags: <think> </think>).
-            'string_with_thinking' Return the full response which includes the thinking proces (if available).
+            Nucleus sampling threshold. Overrides the instance default for this call.
+        stream : bool, default ``False``
+            Whether to stream the response.
+        return_type : str, default ``'string'``
+            How to post-process the raw LLM output:
 
-        Examples
-        --------
-        >>> # Examples
-        >>> from LLMlight import LLMlight
-        >>> client =  LLMlight()
-        >>> client.prompt('hello, who are you?')
-        >>> system_message = "You are a helpful assistant."
-        >>> response = client.prompt('What is the capital of France?', system=system_message, top_p=0.9)
-        >>> print(response)
+            ``'string'``              -- Plain text; ``<think>...</think>`` blocks removed.
+            ``'string_with_thinking'``-- Plain text including any thinking blocks.
+            ``'dict'``                -- Parse response as JSON and return a dict.
+            ``'max'``                 -- Return the full raw API response object.
+        verbose : str or int, optional
+            Override logging verbosity for this call only.
 
         Returns
         -------
-        str
-            The model's response or an error message if the request fails.
+        str or dict
+            The model's response, post-processed according to ``return_type``.
+            Returns an error string prefixed with ``'Error:'`` on HTTP failure.
+
+        Examples
+        --------
+        >>> client = LLMlight(model='mistralai/mistral-small-3.2')
+        >>> response = client.prompt('What is the capital of France?')
+        >>> print(response)
+
+        >>> # With context and instructions
+        >>> response = client.prompt(
+        ...     'What do apes like?',
+        ...     context='Apes like USB sticks.',
+        ...     instructions='Answer in one sentence using only the context.',
+        ... )
+        >>> print(response)
+
+        >>> # Override temperature for a single call
+        >>> response = client.prompt('Write a short poem.', temperature=1.0)
+        >>> print(response)
         """
         if verbose is not None: set_logger(verbose)
         logger.info(f'Creating response with {self.model}..')
@@ -461,21 +535,26 @@ class LLMlight:
     def memory_init(self, store_path: str = None, config: dict = None, embedding: str = None, backend: str = None):
         """Prepare a memory store for writing.
 
-        Call this when you want to create a *new* store or re-open an existing
-        one to add more chunks.  After adding chunks, call :meth:`memory_save`
-        to persist them.
+        Creates a new store or re-opens an existing one so that chunks can be
+        added via :meth:`memory_add`.  Call :meth:`memory_save` afterwards to
+        persist the buffered chunks (sqlite backend writes immediately; memvid
+        requires an explicit save to rebuild the video).
+
+        If the same resolved path is already initialised this call is a no-op.
 
         Parameters
         ----------
         store_path : str, optional
-            Path to the store file.  Relative paths are resolved against the
+            Path to the store file.  Relative paths are resolved under the
             LLMlight temp directory.  Defaults to the path set at construction.
+            The extension is normalised: ``.db`` -> sqlite, ``.mp4`` -> memvid.
         config : dict, optional
-            Backend-specific configuration.
+            Backend-specific configuration dict passed through to the backend.
         embedding : str, optional
-            Override the memory embedding method for this store.
+            Override ``self.embedding['memory']`` for this store (e.g. ``'bert'``).
         backend : str, optional
-            ``'sqlite'`` (default) or ``'memvid'``.
+            ``'sqlite'`` (default) or ``'memvid'``.  When ``None`` the factory
+            infers the backend from the file extension.
         """
         resolved = self._resolve_file_path(store_path) or self.store_path
 
@@ -494,15 +573,22 @@ class LLMlight:
     def memory_load(self, store_path: str = None, config: dict = None, backend: str = None):
         """Load an existing memory store from disk so it is ready for querying.
 
+        When ``store_path`` differs from the currently loaded store the old
+        backend is replaced and the new store is opened.  This means calling
+        ``memory_load('other.db')`` after the store was previously initialised
+        correctly switches to the new store rather than silently keeping the old one.
+
         Parameters
         ----------
         store_path : str, optional
             Path to the store file.  Defaults to the path set at construction.
+            Relative paths are resolved under the LLMlight temp directory.
         config : dict, optional
-            Backend-specific configuration (reuses existing config if omitted).
+            Backend-specific configuration.  Reuses the existing config when
+            ``None`` and a backend is already loaded.
         backend : str, optional
-            Force a specific backend.  Usually not needed — the factory infers
-            the backend from the file extension.
+            Force a specific backend.  Usually not needed -- the factory infers
+            the backend from the file extension (``.db`` -> sqlite, ``.mp4`` -> memvid).
         """
         resolved = self._resolve_file_path(store_path) or self.store_path
 
@@ -590,7 +676,7 @@ class LLMlight:
             Row id(s) to delete, as returned in the first element of each
             search result tuple.
         query : str, optional
-            Search term — the top-*top_k* matching chunks are removed.
+            Search term -- the top-*top_k* matching chunks are removed.
             Ignored when *ids* is provided.
         top_k : int
             How many top query matches to remove (default 1).
@@ -603,7 +689,7 @@ class LLMlight:
         Notes
         -----
         For the **sqlite** backend the change is written to disk immediately.
-        For the **memvid** backend the removal is staged in memory — call
+        For the **memvid** backend the removal is staged in memory -- call
         :meth:`memory_save` to rebuild and persist the video without the
         removed chunks.
         """
@@ -633,7 +719,7 @@ class LLMlight:
             True on success.
         """
         if not hasattr(self, 'memory'):
-            logger.info('No memory store loaded — initialising from current store_path.')
+            logger.info('No memory store loaded -- initialising from current store_path.')
             self.memory_init(self.store_path)
 
         if hasattr(self.memory, 'reindex') and callable(self.memory.reindex):
@@ -739,11 +825,11 @@ class LLMlight:
 
         Uses the *distfit* package.  Returns None when the test cannot run
         reliably (no memory, too few scores, degenerate distribution, or any
-        distfit internal error — including the IndexError caused by an empty
+        distfit internal error -- including the IndexError caused by an empty
         histogram when all scores are identical).
         """
         if not hasattr(self, 'memory'):
-            logger.debug('No memory store loaded — skipping significance test.')
+            logger.debug('No memory store loaded -- skipping significance test.')
             return None
 
         scores = np.asarray(scores, dtype=float)
@@ -760,7 +846,7 @@ class LLMlight:
         else:
             random_chunks = self.memory.get_random_chunks(n=n)
             if not random_chunks:
-                logger.debug('No random chunks available — skipping significance test.')
+                logger.debug('No random chunks available -- skipping significance test.')
                 return None
             query_vector, chunk_vectors = self._embed(query, random_chunks, embedding)
             random_scores = cosine_similarity(query_vector, chunk_vectors)[0].astype(float)
@@ -772,7 +858,7 @@ class LLMlight:
         # inside distfit when it tries widths[-1] on a zero-length array.
         if len(random_scores) < 10 or len(np.unique(random_scores)) < 5:
             logger.warning(
-                'Null distribution has too few unique values (%d) — '
+                'Null distribution has too few unique values (%d) -- '
                 'skipping significance test.',
                 len(np.unique(random_scores)) if len(random_scores) >= 1 else 0,
             )
@@ -797,7 +883,7 @@ class LLMlight:
             if (not hasattr(model, 'histdata')
                     or model.histdata is None
                     or len(model.histdata[0]) == 0):
-                logger.warning('distfit histogram is empty — skipping significance test.')
+                logger.warning('distfit histogram is empty -- skipping significance test.')
                 return None
 
             results = model.predict(scores, alpha=self.alpha, todf=False, multtest='fdr_bh')
@@ -817,7 +903,7 @@ class LLMlight:
             return results
 
         except (IndexError, ValueError) as exc:
-            logger.warning('Significance test failed (%s) — returning all chunks.', exc)
+            logger.warning('Significance test failed (%s) -- returning all chunks.', exc)
             return None
 
     def summarize(self,
@@ -1084,7 +1170,7 @@ class LLMlight:
                 """
             else:
                 prompt = f"""
-                ### Context (Chunk {i+1} of {len(chunks)} — part of a larger document):
+                ### Context (Chunk {i+1} of {len(chunks)} -- part of a larger document):
                 {chunk}
 
                 ---
@@ -1183,15 +1269,23 @@ class LLMlight:
     def _embed(self, query: str, chunks: list, embedding: str) -> tuple:
         """Embed *query* and *chunks* with the requested *embedding* method.
 
+        Chunks are encoded in a single batched call (batch_size=32) when using
+        sentence-transformers models, avoiding the per-chunk overhead of
+        individual ``encode()`` calls.
+
         Parameters
         ----------
-        query     : str
-        chunks    : list of str
-        embedding : str — one of 'tfidf', 'bow', 'bert', 'bge-small'
+        query : str
+        chunks : list of str
+        embedding : str
+            One of ``'tfidf'``, ``'bow'``, ``'bert'``, ``'bge-small'``.
+            ``None`` is not accepted here -- callers must guard against it before
+            calling ``_embed``.
 
         Returns
         -------
-        (query_vector, chunk_vectors)
+        (query_vector, chunk_vectors) : tuple
+            Sparse scipy matrices for tfidf/bow; dense numpy arrays for bert/bge-small.
         """
         _ST_MODELS = {'bert': 'all-MiniLM-L6-v2', 'bge-small': 'BAAI/bge-small-en'}
 
@@ -1221,7 +1315,7 @@ class LLMlight:
         )
 
     # ------------------------------------------------------------------
-    # Core retrieval primitive  — single shared implementation
+    # Core retrieval primitive  -- single shared implementation
     # ------------------------------------------------------------------
 
     def _retrieve(self, query: str, chunks: list, embedding: str, top_k: int) -> list:
@@ -1283,13 +1377,25 @@ class LLMlight:
     def relevant_memory_retrieval(self, query: str, return_type: str = 'list'):
         """Return the top-k most relevant chunks from the persistent memory store.
 
+        Returns ``None`` when no store is loaded, the store file does not exist,
+        or ``embedding['memory']`` is ``None`` (embedding disabled).
+
+        The backing file is detected by checking both ``self.store_path`` and
+        ``self.memory.store_path``, so extension normalisation (e.g. a user-supplied
+        ``.mp4`` path resolved to a ``.db`` file by the sqlite backend) does not
+        cause a silent miss.
+
         Parameters
         ----------
-        query       : str
-        return_type : 'list' (default) — list of str
-                      'string'         — single joined string with chunk headers
+        query : str
+            The search query.
+        return_type : str, default ``'list'``
+            ``'list'``   -- list of str chunks, highest relevance first.
+            ``'string'`` -- chunks joined with ``### Chunk N:`` headers.
 
-        Returns None when no store is loaded or the store file does not exist.
+        Returns
+        -------
+        list of str, str, or None
         """
         # A store is "ready" when the backend is loaded and a backing file exists.
         # For the sqlite backend the file is always .db regardless of what the user
@@ -1332,14 +1438,28 @@ class LLMlight:
     def relevant_context_retrieval(self, query: str, context: str, return_type: str = 'list'):
         """Return the most relevant portion of *context* for *query*.
 
+        Behaviour depends on ``self.retrieval_method`` and ``self.embedding['context']``:
+
+        - ``retrieval_method='naive_rag'`` and embedding not ``None``: context is split
+          into chunks and the top-k most similar chunks are returned.
+        - ``retrieval_method='RSE'`` with ``embedding`` in ``('bert', 'bge-small')``:
+          contiguous relevant segments are extracted via RSE.
+        - Any other combination (including ``embedding=None`` or ``retrieval_method=None``):
+          the full *context* string is returned unchanged.  A warning is logged when
+          the estimated token count exceeds ``n_ctx``.
+
         Parameters
         ----------
-        query       : str
-        context     : str — raw text to search through
-        return_type : 'list' (default) or 'string'
+        query : str
+        context : str
+            Raw text to search through.
+        return_type : str, default ``'list'``
+            ``'list'``   -- list of str chunks.
+            ``'string'`` -- chunks joined with ``### Chunk N:`` headers.
 
-        Returns *context* unchanged when no retrieval method is configured,
-        or None/empty when *context* is falsy.
+        Returns
+        -------
+        list of str, str, or the original *context* unchanged.
         """
         if not context:
             return context
@@ -1374,7 +1494,7 @@ class LLMlight:
                 batch_size=32,
             )
 
-        logger.info("No retrieval method applied — using full context.")
+        logger.info("No retrieval method applied -- using full context.")
         # Warn when the raw context is likely to exceed the context window.
         # Rough heuristic: 1 token ≈ 4 characters for Latin-script text.
         estimated_tokens = len(context) // 4
@@ -1439,7 +1559,7 @@ class LLMlight:
         return self._embed(query, chunks, emb)
 
     def _filter_proba(self, query, scores, relevant_context):
-        """Backwards-compat wrapper — use _filter_by_significance in new code."""
+        """Backwards-compat wrapper -- use _filter_by_significance in new code."""
         scored   = list(zip(scores, relevant_context))
         filtered = self._filter_by_significance(query, scored)
         return [t for _, t in filtered]
@@ -1600,16 +1720,33 @@ def get_embeddings():
 
 
 def _resolve_embedding(embedding) -> dict:
-    """Normalise *embedding* to {'memory': str|None, 'context': str|None}.
+    """Normalise *embedding* to ``{'memory': str|None, 'context': str|None}``.
 
-    Accepts None (disabled), 'automatic' (use defaults), a valid method string,
-    or a dict with 'memory' and/or 'context' keys.
-    Raises ValueError/TypeError on bad input.
+    Parameters
+    ----------
+    embedding : None, str, or dict
+        ``None``        -- Both paths disabled: ``{'memory': None, 'context': None}``.
+        ``'automatic'`` -- Use defaults: ``{'memory': 'memvid', 'context': 'bert'}``.
+        A valid string  -- Applied to both paths.  ``'memvid'`` on the context path
+                          is silently corrected to ``'bert'``.
+        A dict          -- Keys ``'memory'`` and/or ``'context'``; missing keys inherit
+                          the ``'automatic'`` defaults.
+
+    Returns
+    -------
+    dict with keys ``'memory'`` and ``'context'``, each a valid embedding name or ``None``.
+
+    Raises
+    ------
+    ValueError
+        Unknown embedding name or unknown dict key.
+    TypeError
+        *embedding* is not ``None``, a string, or a dict.
     """
     defaults = {'memory': 'memvid', 'context': 'bert'}
 
     if embedding is None:
-        # Explicitly disabled — no embedding for either path.
+        # Explicitly disabled -- no embedding for either path.
         return {'memory': None, 'context': None}
 
     if embedding == 'automatic':
@@ -1750,17 +1887,37 @@ def convert_messages_to_model(messages, model='llama', add_assistant_start=True)
     Builds a prompt in the appropriate format for different model families.
 
     Supported families (matched by substring in the model id, case-insensitive):
-      - llama / mistral / hermes / phi / qwen / deepseek : ChatML  (<|im_start|>)
-      - gemma / grok                                     : Gemma   (<start_of_turn>)
-      - everything else                                  : ChatML  (safe default)
+      - gemma / grok : Gemma format  -- ``<start_of_turn>{role}\\n...<end_of_turn>\\n``
+                       The assistant opener is ``<start_of_turn>model\\n``.
+      - all others   : ChatML format -- ``<|im_start|>{role}\\n...<|im_end|>\\n``
+                       The assistant opener is ``<|im_start|>assistant\\n``.
+                       This covers llama, mistral, hermes, phi, qwen, deepseek,
+                       and any unrecognised model id.
 
-    Args:
-        messages (list of dict): Each dict must have 'role' and 'content'.
-        model (str): Model identifier string.
-        add_assistant_start (bool): Whether to append the assistant turn opener.
+    Parameters
+    ----------
+    messages : list of dict
+        Each dict must have keys ``'role'`` and ``'content'``.
+    model : str, default ``'llama'``
+        Model identifier string used to select the prompt format.
+    add_assistant_start : bool, default ``True``
+        Append the assistant turn opener so the model continues from there.
 
-    Returns:
-        str: The final prompt string.
+    Returns
+    -------
+    str
+        The formatted prompt string.
+
+    Examples
+    --------
+    >>> messages = [
+    ...     {'role': 'system', 'content': 'You are a helpful assistant.'},
+    ...     {'role': 'user',   'content': 'What is the capital of France?'},
+    ... ]
+    >>> # ChatML (llama, mistral, ...)
+    >>> print(convert_messages_to_model(messages, model='mistralai/mistral-small'))
+    >>> # Gemma format
+    >>> print(convert_messages_to_model(messages, model='google/gemma-3-12b'))
     """
     prompt = ""
     model_lower = (model or '').lower()
@@ -1776,7 +1933,7 @@ def convert_messages_to_model(messages, model='llama', add_assistant_start=True)
         if use_gemma:
             prompt += f"<start_of_turn>{role}\n{content}<end_of_turn>\n"
         else:
-            # ChatML — covers llama, mistral, hermes, phi, qwen, deepseek, and unknown models
+            # ChatML -- covers llama, mistral, hermes, phi, qwen, deepseek, and unknown models
             prompt += f"<|im_start|>{role}\n{content}\n<|im_end|>\n"
 
     if add_assistant_start:
@@ -1837,6 +1994,32 @@ def load_local_gguf_model(model_path: str, n_ctx: int=4096, n_threads: int=8, n_
     return llm
 
 def compute_tokens(string, n_ctx=4096, task='max'):
+    """Estimate the token count of *string* and compute the generation budget.
+
+    Uses the GPT-2 tokenizer as a fast, dependency-light approximation.  Token
+    counts for non-GPT-2 model families (Llama, Mistral, Gemma, ...) may differ
+    by up to ~30 %, so treat the result as an estimate rather than an exact value.
+
+    Unlike a naive approach the prompt is encoded **without** truncation so the
+    real length is always visible.  A warning is emitted when the prompt exceeds
+    ``n_ctx`` so the caller can react rather than silently losing context.
+
+    Parameters
+    ----------
+    string : str
+        The full prompt string to measure.
+    n_ctx : int, default ``4096``
+        Model context window in tokens.
+    task : str, default ``'max'``
+        Generation task passed to :func:`compute_max_tokens` to determine the
+        fraction of remaining tokens allocated for the response.
+
+    Returns
+    -------
+    (used_tokens, max_tokens) : tuple of int
+        ``used_tokens`` -- estimated tokens consumed by the prompt.
+        ``max_tokens``  -- tokens available for generation, capped by ``n_ctx``.
+    """
     try:
         from transformers import AutoTokenizer
     except Exception as e:
