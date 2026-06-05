@@ -22,6 +22,48 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 
+def _normalise_text_input(text, chunk_size: int = 512, chunk_overlap: int = 100) -> List[str]:
+    """Convert any text input into a flat list of non-empty string chunks.
+
+    Handles:
+      - None                  → []
+      - str                   → chunked into <=chunk_size character pieces
+      - dict (from read_pdf)  → values joined, then chunked
+      - list of str/dict/mix  → each item processed recursively and flattened
+
+    Chunking prevents single huge strings from being stored as one row
+    (which makes similarity search useless and embeddings slow).
+    """
+    if text is None:
+        return []
+
+    # Dict: join all string values (handles read_pdf return value)
+    if isinstance(text, dict):
+        combined = " ".join(str(v) for v in text.values() if v)
+        return _normalise_text_input(combined, chunk_size, chunk_overlap)
+
+    # Plain string: chunk it
+    if isinstance(text, str):
+        text = text.strip()
+        if not text:
+            return []
+        if len(text) <= chunk_size:
+            return [text]
+        # Simple overlapping character chunking
+        step = max(1, chunk_size - chunk_overlap)
+        return [text[i:i + chunk_size] for i in range(0, len(text), step) if text[i:i + chunk_size].strip()]
+
+    # List: flatten each item
+    if isinstance(text, (list, tuple)):
+        result = []
+        for item in text:
+            result.extend(_normalise_text_input(item, chunk_size, chunk_overlap))
+        return result
+
+    # Fallback: coerce to string
+    return _normalise_text_input(str(text), chunk_size, chunk_overlap)
+
+
 class IndexManager:
     """Provides search and metadata access used by LLMlight.retriever calls."""
 
@@ -163,10 +205,12 @@ class SqliteHNSWBackend:
         Returns list of inserted row ids.
         """
         # Normalize inputs
-        if text is None:
-            text = []
         if filetypes is None:
             filetypes = ['.pdf', '.txt', '.epub', '.md', '.doc', '.docx', '.rtf', '.html', '.htm']
+
+        # Normalise text to a flat list of non-empty strings.
+        # Handles: None, a bare str, a dict (from read_pdf), or a list thereof.
+        text = _normalise_text_input(text, chunk_size=chunk_size, chunk_overlap=chunk_overlap)
 
         # If a directory was provided, scan for files
         if dirpath is not None and os.path.isdir(dirpath):
@@ -242,10 +286,10 @@ class SqliteHNSWBackend:
             id_ = self._insert_document(t, m)
             ids.append(id_)
 
-        # If an embedder exists, compute embeddings and add to ANN
+        # Compute embeddings in one batch, then rebuild the ANN index once.
         if self._embedder is not None and ids:
             try:
-                vectors = self._embedder.encode(text, convert_to_numpy=True)
+                vectors = self._embedder.encode(text, convert_to_numpy=True, show_progress_bar=len(text) > 50)
             except TypeError:
                 vectors = np.asarray(self._embedder.encode(text))
             self._add_embeddings(ids, vectors)
@@ -253,29 +297,30 @@ class SqliteHNSWBackend:
         return ids
 
     def _add_embeddings(self, ids: List[int], vectors: np.ndarray):
+        """Accumulate embeddings and rebuild the ANN index once for the whole batch."""
         vectors = np.asarray(vectors, dtype=np.float32)
         if self._embeddings is None:
             self._embeddings = vectors.copy()
-            self._ids = ids.copy()
+            self._ids = list(ids)
         else:
             self._embeddings = np.vstack([self._embeddings, vectors])
             self._ids.extend(ids)
 
-        # Recreate ANN index in memory for simplicity (small datasets expected). Use hnswlib if available.
+        # Build / rebuild the ANN index once using all accumulated embeddings.
         try:
             import hnswlib
-            self._use_ann = True
-            p = hnswlib.Index(space='cosine', dim=vectors.shape[1])
+            dim = self._embeddings.shape[1]
+            p = hnswlib.Index(space='cosine', dim=dim)
             p.init_index(max_elements=len(self._ids), ef_construction=200, M=16)
             p.add_items(self._embeddings, np.array(self._ids, dtype=np.int32))
-            p.set_ef(50)
+            p.set_ef(max(50, len(self._ids) // 10 or 1))
             self._ann = p
+            self._use_ann = True
             logger.info(f"Built in-memory HNSW index with {len(self._ids)} elements")
         except Exception:
-            # No ANN available; fallback to brute-force search using numpy
             self._ann = None
             self._use_ann = False
-            logger.info("hnswlib not available; using brute-force numpy search for similarity or pip install hnswlib")
+            logger.info("hnswlib not available; using brute-force numpy search (pip install hnswlib)")
 
     def reindex(self, batch_size: int = 128, save_index: bool = True):
         """Rebuild the ANN index from all documents in the SQLite DB.

@@ -102,7 +102,7 @@ print(results)
 
 from LLMlight import LLMlight
 client = LLMlight(model='gemma-4-e2b-it', top_chunks=5)
-client.memory_init(store_path='neurips_store.db')  # creates 'knowledge_store.db'
+client.memory_init(store_path='neurips_store1.db')  # creates 'knowledge_store.db'
 
 # Add multiple PDF files to the database
 url = 'https://proceedings.neurips.cc/paper_files/paper/2017/file/3f5ee243547dee91fbd053c1c4a845aa-Paper.pdf'

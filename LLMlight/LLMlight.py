@@ -681,6 +681,14 @@ class LLMlight:
             filetypes = ['.pdf', '.txt', '.epub', '.md', '.doc', '.docx',
                          '.rtf', '.html', '.htm']
 
+        # Normalise text: read_pdf() can return a dict or a plain string.
+        # Convert dict to a flat list of its non-empty string values so the
+        # backend never receives a raw dict (which would be iterated as keys).
+        if isinstance(text, dict):
+            text = [str(v) for v in text.values() if v and str(v).strip()]
+        elif isinstance(text, str):
+            text = [text] if text.strip() else None
+
         self.memory.add(
             text=text,
             input_files=files,
