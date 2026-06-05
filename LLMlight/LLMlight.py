@@ -510,7 +510,14 @@ class LLMlight:
         if config is None and hasattr(self, 'memory') and hasattr(self.memory, 'config'):
             config = self.memory.config
 
-        if not hasattr(self, 'memory'):
+        # Create a new backend when none exists OR when a different store is requested.
+        current_path = getattr(getattr(self, 'memory', None), 'store_path', None)
+        if not hasattr(self, 'memory') or (resolved and current_path != resolved):
+            if hasattr(self, 'memory') and resolved and current_path != resolved:
+                logger.info(
+                    "memory_load: switching store from '%s' to '%s'.",
+                    current_path, resolved,
+                )
             self.memory = memory.create_memory_backend(resolved, config=config, backend=backend)
             self.store_path = self.memory.store_path
 
@@ -1021,10 +1028,11 @@ class LLMlight:
         system_summaries = (
             "You are a helpful and detail-oriented assistant. "
             "Your task is to compile and structure summaries into a single coherent and well-formatted document. "
-            "Follow all instructions precisely."
-            "Preserve important details, maintain logical flow, and respect any formatting requirements, such as using headings or bullet points when relevant.",
-            "Output the final results in the same language as the instructions.",
-            )
+            "Follow all instructions precisely. "
+            "Preserve important details, maintain logical flow, and respect any formatting requirements, "
+            "such as using headings or bullet points when relevant. "
+            "Output the final results in the same language as the instructions."
+        )
 
         final_response = self.requests_post_http(prompt_final, system_summaries, temperature=self.temperature, top_p=self.top_p, task='summarization', stream=False, return_type='string')
 
@@ -1053,8 +1061,9 @@ class LLMlight:
 
             if top_chunks > 0:
                 previous_results = '\n\n---\n\n'.join(response_list[-top_chunks:])
+                prev_section = previous_results if response_list else "No results because this is the initial chunk."
                 prompt = f"""### Context:
-                Previous Results:\n{previous_results}" if response_list else "Previous Results: No results because this is the initial chunk."
+                Previous Results:\n{prev_section}
 
                 ---
                 New Text Chunk (Part of a larger document, maintain continuity and coherence):
@@ -1202,8 +1211,8 @@ class LLMlight:
                     "Install it with: pip install sentence-transformers"
                 ) from exc
             model = SentenceTransformer(_ST_MODELS[embedding])
-            chunk_vectors = np.vstack([model.encode(c) for c in chunks])
-            query_vector  = model.encode([query]).reshape(1, -1)
+            chunk_vectors = model.encode(chunks, batch_size=32, convert_to_numpy=True)
+            query_vector  = model.encode([query], convert_to_numpy=True).reshape(1, -1)
             return query_vector, chunk_vectors
 
         raise ValueError(
@@ -1282,7 +1291,20 @@ class LLMlight:
 
         Returns None when no store is loaded or the store file does not exist.
         """
-        if not (hasattr(self, 'memory') and self.store_path and os.path.isfile(self.store_path)):
+        # A store is "ready" when the backend is loaded and a backing file exists.
+        # For the sqlite backend the file is always .db regardless of what the user
+        # passed as file_path, so check both self.store_path and the backend's own
+        # store_path (which may differ after extension normalisation).
+        backend_path = getattr(getattr(self, 'memory', None), 'store_path', None)
+        store_exists = any(
+            p and os.path.isfile(p)
+            for p in (self.store_path, backend_path)
+        )
+        if not (hasattr(self, 'memory') and store_exists):
+            return None
+
+        if self.embedding['memory'] is None:
+            logger.info("Memory retrieval skipped: embedding disabled.")
             return None
 
         logger.info(
@@ -1322,7 +1344,7 @@ class LLMlight:
         if not context:
             return context
 
-        if self.retrieval_method == 'naive_rag' and self.embedding['context'] in get_embeddings():
+        if self.retrieval_method == 'naive_rag' and self.embedding['context'] is not None and self.embedding['context'] in get_embeddings():
             logger.info(
                 "naive_rag: retrieving [%d] chunks from context (embedding='%s').",
                 self.top_chunks, self.embedding['context'],
@@ -1340,7 +1362,7 @@ class LLMlight:
                 return "\n\n---\n\n".join(f"### Chunk {i+1}:\n{c}" for i, c in enumerate(chunks_out))
             return chunks_out
 
-        if self.retrieval_method == 'RSE' and self.embedding['context'] in ('bert', 'bge-small'):
+        if self.retrieval_method == 'RSE' and self.embedding['context'] is not None and self.embedding['context'] in ('bert', 'bge-small'):
             logger.info("RSE retrieval applied.")
             return RAG.RSE(
                 context, query,
@@ -1353,6 +1375,16 @@ class LLMlight:
             )
 
         logger.info("No retrieval method applied — using full context.")
+        # Warn when the raw context is likely to exceed the context window.
+        # Rough heuristic: 1 token ≈ 4 characters for Latin-script text.
+        estimated_tokens = len(context) // 4
+        if estimated_tokens > self.n_ctx:
+            logger.warning(
+                "Full context is ~%d tokens but n_ctx=%d. "
+                "The model will likely truncate the input. "
+                "Consider setting retrieval_method='naive_rag' or reducing the context.",
+                estimated_tokens, self.n_ctx,
+            )
         return context
 
     def compute_context_strategy(self, query, context, instructions, system):
@@ -1449,7 +1481,7 @@ class LLMlight:
             url = file_path
             filename = wget.filename_from_url(url)
             file_path = os.path.join(self.tempdir, filename)
-            context = wget.download(url, file_path)
+            wget.download(url, file_path)   # downloads to file_path; return value is None
 
         if os.path.isfile(file_path):
             # Read pdf
@@ -1568,14 +1600,19 @@ def get_embeddings():
 
 
 def _resolve_embedding(embedding) -> dict:
-    """Normalise *embedding* to {'memory': str, 'context': str}.
+    """Normalise *embedding* to {'memory': str|None, 'context': str|None}.
 
-    Accepts None, 'automatic', a valid method string, or a dict with
-    'memory' and/or 'context' keys.  Raises ValueError/TypeError on bad input.
+    Accepts None (disabled), 'automatic' (use defaults), a valid method string,
+    or a dict with 'memory' and/or 'context' keys.
+    Raises ValueError/TypeError on bad input.
     """
     defaults = {'memory': 'memvid', 'context': 'bert'}
 
-    if embedding is None or embedding == 'automatic':
+    if embedding is None:
+        # Explicitly disabled — no embedding for either path.
+        return {'memory': None, 'context': None}
+
+    if embedding == 'automatic':
         return dict(defaults)
 
     if isinstance(embedding, str):
@@ -1607,11 +1644,11 @@ def _resolve_embedding(embedding) -> dict:
     mem_emb = resolved.get('memory', defaults['memory'])
     ctx_emb = resolved.get('context', defaults['context'])
 
-    if mem_emb not in _MEMORY_EMBEDDINGS:
+    if mem_emb is not None and mem_emb not in _MEMORY_EMBEDDINGS:
         raise ValueError(
             f"embedding['memory']='{mem_emb}' not recognised. Valid: {_MEMORY_EMBEDDINGS}."
         )
-    if ctx_emb not in _CONTEXT_EMBEDDINGS:
+    if ctx_emb is not None and ctx_emb not in _CONTEXT_EMBEDDINGS:
         raise ValueError(
             f"embedding['context']='{ctx_emb}' not recognised. Valid: {_CONTEXT_EMBEDDINGS}."
         )
@@ -1710,48 +1747,43 @@ def _set_embedding(embedding):
 #%%
 def convert_messages_to_model(messages, model='llama', add_assistant_start=True):
     """
-    Builds a prompt in the appropriate format for different models (LLaMA, Grok, Mistral).
+    Builds a prompt in the appropriate format for different model families.
+
+    Supported families (matched by substring in the model id, case-insensitive):
+      - llama / mistral / hermes / phi / qwen / deepseek : ChatML  (<|im_start|>)
+      - gemma / grok                                     : Gemma   (<start_of_turn>)
+      - everything else                                  : ChatML  (safe default)
 
     Args:
-        messages (list of dict): Each dict must have 'role' ('system', 'user', 'assistant') and 'content'.
-        model (str): The type of model to generate the prompt for ('llama', 'grok', or 'mistral').
-        add_assistant_start (bool): Whether to add the assistant start (default True).
-        add_bos_token (bool): Helps models know it's a fresh conversation. Useful for llama/mistral/hermes-style models
+        messages (list of dict): Each dict must have 'role' and 'content'.
+        model (str): Model identifier string.
+        add_assistant_start (bool): Whether to append the assistant turn opener.
 
     Returns:
-        str: The final prompt string in the correct format for the given model.
-
-    Example:
-        >>> messages = [
-        ...     {"role": "system", "content": "You are a helpful assistant."},
-        ...     {"role": "user", "content": "What is the capital of France?"}
-        ... ]
-        >>> prompt = convert_messages_to_model(messages, model='llama')
-         >>> print(prompt)
-
+        str: The final prompt string.
     """
     prompt = ""
+    model_lower = (model or '').lower()
 
-    # if add_bos_token and ('llama' in model or 'mistral' in model):
-    #     prompt += "<|begin_of_text|>\n"
+    # Gemma-format models use <start_of_turn> / <end_of_turn>
+    _GEMMA_FAMILIES = ('gemma', 'grok')
+    use_gemma = any(f in model_lower for f in _GEMMA_FAMILIES)
 
     for msg in messages:
         role = msg["role"]
         content = msg["content"].strip()
 
-        if 'llama' in model or 'mistral' in model:
-            prompt += f"<|im_start|>{role}\n{content}\n<|im_end|>\n"
-        elif 'grok' in model:
+        if use_gemma:
             prompt += f"<start_of_turn>{role}\n{content}<end_of_turn>\n"
         else:
-            # Default to ChatML format if model not recognized
+            # ChatML — covers llama, mistral, hermes, phi, qwen, deepseek, and unknown models
             prompt += f"<|im_start|>{role}\n{content}\n<|im_end|>\n"
 
     if add_assistant_start:
-        if 'llama' in model or 'mistral' in model:
+        if use_gemma:
+            prompt += "<start_of_turn>model\n"
+        else:
             prompt += "<|im_start|>assistant\n"
-        elif 'grok' in model:
-            prompt += "<start_of_turn>assistant\n"
 
     return prompt
 
@@ -1811,10 +1843,15 @@ def compute_tokens(string, n_ctx=4096, task='max'):
         raise ImportError("transformers is required for token counting. Install via 'pip install transformers'") from e
 
     tokenizer = AutoTokenizer.from_pretrained("gpt2")
-    # Tokenize the input string
-    tokens = tokenizer.encode(string, truncation=True, max_length=n_ctx)
-    # Get the number of tokens
+    # Encode WITHOUT truncation so we get the real token count.
+    tokens = tokenizer.encode(string)
     used_tokens = len(tokens)
+    if used_tokens > n_ctx:
+        logger.warning(
+            "Prompt length (%d tokens) exceeds context window (%d tokens). "
+            "The model will truncate the input. Consider reducing context size or chunk count.",
+            used_tokens, n_ctx,
+        )
     # Determine how many tokens are available for the model to generate
     max_tokens = compute_max_tokens(used_tokens, n_ctx=n_ctx, task=task)
     # Show message
