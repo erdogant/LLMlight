@@ -9,6 +9,9 @@ from LLMlight.LLMlight import (
     compute_tokens,
     get_embeddings,
     _set_embedding,
+    _resolve_embedding,
+    _resolve_chunks,
+    _validate_params,
 )
 
 __author__ = 'Erdogan Tasksen'

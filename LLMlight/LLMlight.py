@@ -167,14 +167,14 @@ class LLMlight:
     """
     def __init__(self,
                  model: str = None,
-                 retrieval_method: (None, str) = 'naive_rag',
-                 embedding: (str, dict) = {'memory': 'memvid', 'context': 'bert'},
+                 retrieval_method: str = 'naive_rag',
+                 embedding=None,
                  context_strategy: str = None,
                  alpha: float = None,
                  top_chunks: int = 5,
-                 temperature: (int, float) = 0.7,
-                 top_p: (int, float) = 1.0,
-                 chunks: dict = {'method': 'chars', 'size': 1000, 'overlap': 200},
+                 temperature: float = 0.7,
+                 top_p: float = 1.0,
+                 chunks: dict = None,
                  n_ctx: int = 4096,
                  file_path: str = None,
                  endpoint: str = "http://localhost:1234/v1/chat/completions",
@@ -184,38 +184,52 @@ class LLMlight:
         # Set the logger
         set_logger(verbose)
 
-        # Store data in self
-        self.model = model
-        self.context_strategy = context_strategy
-        self.retrieval_method = retrieval_method
-        self.alpha = alpha
-        self.top_chunks = top_chunks
-        self.temperature = temperature
-        self.top_p = top_p
-        self.endpoint = endpoint
-        self.n_ctx = n_ctx
-        self.context = None
-        self.embedding = _set_embedding(embedding)
-        self.tempdir = os.path.join(tempfile.gettempdir(), 'temp_LLMlight')
-        # Single, authoritative path resolution — used everywhere
-        self.store_path = self._resolve_file_path(file_path)
+        # Validate and normalise all parameters before storing anything
+        params = _validate_params(
+            model=model,
+            retrieval_method=retrieval_method,
+            embedding=embedding,
+            context_strategy=context_strategy,
+            alpha=alpha,
+            top_chunks=top_chunks,
+            temperature=temperature,
+            top_p=top_p,
+            chunks=chunks,
+            n_ctx=n_ctx,
+        )
 
-        # Make checks
-        if model is None:
+        # Store validated/normalised values — all set unconditionally so every
+        # attribute exists even when model=None causes an early return below.
+        self.model            = params['model']
+        self.retrieval_method = params['retrieval_method']
+        self.embedding        = params['embedding']
+        self.context_strategy = params['context_strategy']
+        self.alpha            = params['alpha']
+        self.top_chunks       = params['top_chunks']
+        self.temperature      = params['temperature']
+        self.top_p            = params['top_p']
+        self.chunks           = params['chunks']
+        self.n_ctx            = params['n_ctx']
+        self.endpoint         = endpoint
+        self.context          = None
+        self.tempdir          = os.path.join(tempfile.gettempdir(), 'temp_LLMlight')
+        self.store_path       = self._resolve_file_path(file_path)
+
+        # When no model is given, report available models and return early.
+        # All attributes above are already set so tests can inspect them.
+        if self.model is None:
             models = self.get_available_models(validate=False)
             if models is not None:
                 logger.info(f'Available models: {models}')
-                logger.info(f'Set model before proceeding: Example: client = LLMlight(model="{models[0]}", endpoint="{endpoint}").')
+                logger.info(
+                    f'Set model before proceeding: '
+                    f'Example: client = LLMlight(model="{models[0]}", endpoint="{endpoint}").'
+                )
                 self.models = models
             return
 
         # Create tempdir
         os.makedirs(self.tempdir, exist_ok=True)
-
-        # Set chunk parameters
-        if chunks is None:
-            chunks = {}
-        self.chunks = {**{'method': 'chars', 'size': 1000, 'overlap': 250}, **chunks}
 
         # Load memory from disk when a store path was provided
         if self.store_path:
@@ -225,11 +239,13 @@ class LLMlight:
         if os.path.isfile(self.endpoint):
             self.llm = load_local_gguf_model(self.endpoint, n_ctx=self.n_ctx)
 
-        logger.info(f'Model: {self.model}')
-        logger.info(f'Context Strategy: {self.context_strategy or "disabled"}')
-        logger.info(f'Retrieval method: {self.retrieval_method or "disabled"}')
-        logger.info(f'Embedding: {self.embedding or "disabled"}')
-        logger.info('LLMlight is initialized!')
+        logger.info(f'Model            : {self.model}')
+        logger.info(f'Context strategy : {self.context_strategy or "disabled"}')
+        logger.info(f'Retrieval method : {self.retrieval_method or "disabled"}')
+        logger.info(f'Embedding        : {self.embedding}')
+        logger.info(f'Alpha (sig. test): {self.alpha}')
+        logger.info(f'Chunk config     : {self.chunks}')
+        logger.info('LLMlight initialised.')
 
     def _resolve_file_path(self, filepath: str):
         """Return an absolute path for *filepath*, or None when not given.
@@ -657,54 +673,88 @@ class LLMlight:
     def compute_probability(self, query, scores, embedding, n=5000):
         """Fit a null distribution over retrieval scores and return significance flags.
 
-        Uses the *distfit* package.  Returns None when no memory store is loaded
-        or *distfit* is not installed.
+        Uses the *distfit* package.  Returns None when the test cannot run
+        reliably (no memory, too few scores, degenerate distribution, or any
+        distfit internal error — including the IndexError caused by an empty
+        histogram when all scores are identical).
         """
         if not hasattr(self, 'memory'):
-            logger.debug('No memory store loaded — skipping null distribution.')
+            logger.debug('No memory store loaded — skipping significance test.')
             return None
 
-        scores = np.asarray(scores)
+        scores = np.asarray(scores, dtype=float)
         if len(scores) < 2:
+            logger.debug('Too few scores for significance test (need >= 2).')
             return None
 
         logger.info('Building null distribution for retrieval score significance testing.')
 
-        # The memvid backend can provide its own similarity scores for the
-        # full corpus, which gives a better null distribution.
         if self.embedding['memory'] == 'memvid':
             scored = self.memory.search_with_scores(query, top_k=n)
-            random_scores = np.array([s for s, _ in scored])
+            random_scores = np.array([s for s, _ in scored], dtype=float)
             bound = 'left'
         else:
             random_chunks = self.memory.get_random_chunks(n=n)
             if not random_chunks:
-                logger.debug('No random chunks available — skipping null distribution.')
+                logger.debug('No random chunks available — skipping significance test.')
                 return None
-            query_vector, chunk_vectors = self.fit_transform(query, random_chunks, embedding=embedding)
-            random_scores = cosine_similarity(query_vector, chunk_vectors)[0]
+            query_vector, chunk_vectors = self._embed(query, random_chunks, embedding)
+            random_scores = cosine_similarity(query_vector, chunk_vectors)[0].astype(float)
             random_scores = random_scores[random_scores != 0]
             bound = 'right'
+
+        # Guard: need enough unique values for distfit to build a histogram.
+        # Too few unique values causes an empty histogram and an IndexError
+        # inside distfit when it tries widths[-1] on a zero-length array.
+        if len(random_scores) < 10 or len(np.unique(random_scores)) < 5:
+            logger.warning(
+                'Null distribution has too few unique values (%d) — '
+                'skipping significance test.',
+                len(np.unique(random_scores)) if len(random_scores) >= 1 else 0,
+            )
+            return None
 
         try:
             from distfit import distfit
         except Exception as exc:
             raise ImportError(
-                "The 'distfit' package is required for compute_probability. "
+                "The 'distfit' package is required for significance testing. "
                 "Install it with: pip install distfit"
             ) from exc
 
-        model = distfit(method='parametric', alpha=self.alpha, bound=bound, verbose='warning')
-        model.fit_transform(random_scores)
-        results = model.predict(scores, alpha=self.alpha, todf=False, multtest='fdr_bh')
+        try:
+            model = distfit(
+                method='parametric', alpha=self.alpha, bound=bound, verbose='warning'
+            )
+            model.fit_transform(random_scores)
 
-        fig, ax = model.plot(
-            title=f'Retrieval: {self.retrieval_method}, Embedding: {embedding}'
-        )
-        self.distfit = model
-        self.distfit.fig = fig
-        self.distfit.ax = ax
-        return results
+            # Guard: distfit stores histogram data used by plot(); if it is
+            # missing or empty the plot call raises an IndexError.
+            if (not hasattr(model, 'histdata')
+                    or model.histdata is None
+                    or len(model.histdata[0]) == 0):
+                logger.warning('distfit histogram is empty — skipping significance test.')
+                return None
+
+            results = model.predict(scores, alpha=self.alpha, todf=False, multtest='fdr_bh')
+
+            plot_result = model.plot(
+                title=f'Retrieval: {self.retrieval_method}, Embedding: {embedding}'
+            )
+            # model.plot() returns (fig, ax) but guard against unexpected return values
+            if isinstance(plot_result, (tuple, list)) and len(plot_result) == 2:
+                fig, ax = plot_result
+            else:
+                fig, ax = None, None
+
+            self.distfit     = model
+            self.distfit.fig = fig
+            self.distfit.ax  = ax
+            return results
+
+        except (IndexError, ValueError) as exc:
+            logger.warning('Significance test failed (%s) — returning all chunks.', exc)
+            return None
 
     def summarize(self,
              query="Extract key insights while maintaining coherence of the previous summaries.",
@@ -1443,26 +1493,162 @@ class LLMlight:
         logger.critical('CRITICAL')
 
 #%%
+# ---------------------------------------------------------------------------
+# Parameter constants & helpers
+# ---------------------------------------------------------------------------
+
+_CONTEXT_EMBEDDINGS = ('tfidf', 'bow', 'bert', 'bge-small')
+_MEMORY_EMBEDDINGS  = ('tfidf', 'bow', 'bert', 'bge-small', 'memvid')
+_VALID_RETRIEVAL    = (None, 'naive_rag', 'RSE')
+_VALID_STRATEGIES   = (None, 'chunk-wise', 'global-reasoning')
+_CHUNK_METHODS      = ('chars', 'words')
+_CHUNKS_DEFAULTS    = {'method': 'chars', 'size': 1000, 'overlap': 200}
+
+
 def get_embeddings():
-    return ['tfidf', 'bow', 'bert', 'bge-small', 'memvid']
+    """Return all recognised embedding method names."""
+    return list(_MEMORY_EMBEDDINGS)
 
-def _set_embedding(embedding):
-    if embedding is None: embedding = {}
+
+def _resolve_embedding(embedding) -> dict:
+    """Normalise *embedding* to {'memory': str, 'context': str}.
+
+    Accepts None, 'automatic', a valid method string, or a dict with
+    'memory' and/or 'context' keys.  Raises ValueError/TypeError on bad input.
+    """
+    defaults = {'memory': 'memvid', 'context': 'bert'}
+
+    if embedding is None or embedding == 'automatic':
+        return dict(defaults)
+
     if isinstance(embedding, str):
-        if embedding == 'automatic':
-            embedding = {'memory': 'memvid', 'context': 'bert'}
-        elif embedding in get_embeddings():
-            embedding = {'memory': embedding, 'context': embedding}
-        else:
-            embedding = {'memory': 'memvid', 'context': 'bert'}
+        if embedding not in _MEMORY_EMBEDDINGS:
+            raise ValueError(
+                f"Unknown embedding '{embedding}'. Valid: {_MEMORY_EMBEDDINGS}."
+            )
+        resolved = {'memory': embedding, 'context': embedding}
+    elif isinstance(embedding, dict):
+        unknown = set(embedding) - {'memory', 'context'}
+        if unknown:
+            raise ValueError(
+                f"Unknown key(s) in embedding dict: {unknown}. "
+                "Expected keys: 'memory', 'context'."
+            )
+        resolved = dict(embedding)
+    else:
+        raise TypeError(
+            f"embedding must be a str or dict, got {type(embedding).__name__}."
+        )
 
-    if embedding.get('context') == 'memvid':
-        embedding['context'] = 'tfidf'
+    if resolved.get('context') == 'memvid':
+        logger.warning(
+            "embedding['context']='memvid' is not valid for context retrieval; "
+            "falling back to 'bert'."
+        )
+        resolved['context'] = 'bert'
 
-    embedding = {**{'memory': 'memvid', 'context': 'tfidf'}, **embedding}
+    mem_emb = resolved.get('memory', defaults['memory'])
+    ctx_emb = resolved.get('context', defaults['context'])
 
-    # Return
-    return embedding
+    if mem_emb not in _MEMORY_EMBEDDINGS:
+        raise ValueError(
+            f"embedding['memory']='{mem_emb}' not recognised. Valid: {_MEMORY_EMBEDDINGS}."
+        )
+    if ctx_emb not in _CONTEXT_EMBEDDINGS:
+        raise ValueError(
+            f"embedding['context']='{ctx_emb}' not recognised. Valid: {_CONTEXT_EMBEDDINGS}."
+        )
+
+    return {**defaults, **resolved}
+
+
+def _resolve_chunks(chunks) -> dict:
+    """Normalise *chunks* to {'method': str, 'size': int, 'overlap': int}.
+
+    Handles legacy key aliases: 'type' -> 'method', 'chunk_size' -> 'size'.
+    """
+    if chunks is None:
+        return dict(_CHUNKS_DEFAULTS)
+
+    if not isinstance(chunks, dict):
+        raise TypeError(f"chunks must be a dict or None, got {type(chunks).__name__}.")
+
+    result = dict(chunks)
+    if 'type' in result and 'method' not in result:
+        result['method'] = result.pop('type')
+    if 'chunk_size' in result and 'size' not in result:
+        result['size'] = result.pop('chunk_size')
+
+    merged = {**_CHUNKS_DEFAULTS, **result}
+
+    if merged['method'] not in _CHUNK_METHODS:
+        raise ValueError(
+            f"chunks['method']='{merged['method']}' is not valid. Valid: {_CHUNK_METHODS}."
+        )
+    if not isinstance(merged['size'], int) or merged['size'] < 1:
+        raise ValueError(
+            f"chunks['size'] must be a positive integer, got {merged['size']!r}."
+        )
+    if not isinstance(merged['overlap'], int) or merged['overlap'] < 0:
+        raise ValueError(
+            f"chunks['overlap'] must be a non-negative integer, got {merged['overlap']!r}."
+        )
+    if merged['overlap'] >= merged['size']:
+        raise ValueError(
+            f"chunks['overlap'] ({merged['overlap']}) must be less than "
+            f"chunks['size'] ({merged['size']})."
+        )
+    return merged
+
+
+def _validate_params(model, retrieval_method, embedding, context_strategy,
+                     alpha, top_chunks, temperature, top_p, chunks, n_ctx) -> dict:
+    """Validate all constructor parameters and return a normalised dict.
+
+    Raises ValueError or TypeError with a clear message on any bad value.
+    """
+    if retrieval_method not in _VALID_RETRIEVAL:
+        raise ValueError(
+            f"retrieval_method='{retrieval_method}' is not valid. "
+            f"Valid values: {_VALID_RETRIEVAL}."
+        )
+    if context_strategy not in _VALID_STRATEGIES:
+        raise ValueError(
+            f"context_strategy='{context_strategy}' is not valid. "
+            f"Valid values: {_VALID_STRATEGIES}."
+        )
+    if alpha is not None:
+        if not isinstance(alpha, (int, float)):
+            raise TypeError(f"alpha must be a float or None, got {type(alpha).__name__}.")
+        if not (0.0 < alpha <= 1.0):
+            raise ValueError(f"alpha must be in (0, 1), got {alpha}.")
+    if not isinstance(top_chunks, int) or top_chunks < 1:
+        raise ValueError(f"top_chunks must be a positive integer, got {top_chunks!r}.")
+    if not isinstance(temperature, (int, float)) or not (0.0 <= temperature <= 2.0):
+        raise ValueError(f"temperature must be a float in [0, 2], got {temperature!r}.")
+    if not isinstance(top_p, (int, float)) or not (0.0 < top_p <= 1.0):
+        raise ValueError(f"top_p must be a float in (0, 1], got {top_p!r}.")
+    if not isinstance(n_ctx, int) or n_ctx < 512:
+        raise ValueError(f"n_ctx must be an integer >= 512, got {n_ctx!r}.")
+
+    return {
+        'model':            model,
+        'retrieval_method': retrieval_method,
+        'embedding':        _resolve_embedding(embedding),
+        'context_strategy': context_strategy,
+        'alpha':            alpha,
+        'top_chunks':       top_chunks,
+        'temperature':      float(temperature),
+        'top_p':            float(top_p),
+        'chunks':           _resolve_chunks(chunks),
+        'n_ctx':            n_ctx,
+    }
+
+
+# Legacy alias kept for any external callers
+def _set_embedding(embedding):
+    """Backwards-compat alias for _resolve_embedding()."""
+    return _resolve_embedding(embedding)
 
 #%%
 def convert_messages_to_model(messages, model='llama', add_assistant_start=True):

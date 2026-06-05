@@ -38,7 +38,7 @@ client.get_available_models()
 # Load library
 from LLMlight import LLMlight
 # normal init
-client = LLMlight(model='gemma-4-e2b-it', alpha=1)
+client = LLMlight(model='gemma-4-e2b-it')
 
 # prompt
 out = client.prompt('who are you?')
@@ -53,7 +53,9 @@ print(out)
 from LLMlight import LLMlight
 client = LLMlight(alpha=1)
 client.memory_init(store_path='knowledge_store.db')
-client.memory_add(text=['Apes like USB sticks', 'Trees are mainly yellow'])
+client.memory_add(text=['BMC test'])
+client.memory.get_all_chunks()
+client.memory
 
 # Rebuild the ANN index (requires sentence-transformers + hnswlib)
 client.memory.retriever.index_manager.backend.reindex(batch_size=64, save_index=True)
