@@ -7,7 +7,7 @@ LLMlight is a library for lightweight, modular and efficient use of LLM and RAG 
 
     from LLMlight import LLMlight
 
-    # Initialize an LLMlight client (default settings)
+    # Initialize an LLMlight client
     client = LLMlight(model='mistralai/mistral-small-3.2')
 
     # Ask a question using a language model
@@ -18,7 +18,7 @@ LLMlight is a library for lightweight, modular and efficient use of LLM and RAG 
 Working with Files (PDFs)
 ################################
 
-Add the content of a PDF to memory:
+Add the content of a PDF to memory using the default SQLite backend:
 
 .. code-block:: python
 
@@ -27,16 +27,33 @@ Add the content of a PDF to memory:
 
     # Initialize model and memory
     client = LLMlight(model='mistralai/mistral-small-3.2')
-    client.memory_init(file_path='knowledge_base.mp4')
+    client.memory_init(store_path='knowledge_base.db')
 
     # Add a PDF file to the memory (extracts and chunks text automatically)
     client.memory_add(files='https://erdogant.github.io/publications/papers/2020%20-%20Taskesen%20et%20al%20-%20HNet%20Hypergeometric%20Networks.pdf')
 
-    # Store memory to disk
-    client.memory_save(overwrite=True)
+    # Store the ANN index to disk (SQLite DB is persisted automatically)
+    client.memory_save()
 
     # Query on the new knowledge
     response = client.prompt('Summarize the document.')
+    print(response)
+
+
+Loading an Existing Knowledge Base
+####################################
+
+Reload a previously built SQLite knowledge base and query it:
+
+.. code-block:: python
+
+    from LLMlight import LLMlight
+
+    client = LLMlight(model='mistralai/mistral-small-3.2')
+    client.memory_init(store_path='knowledge_base.db')
+
+    response = client.prompt('What are Graphical Hypergeometric Networks?',
+                             instructions='Answer using only the context.')
     print(response)
 
 
@@ -59,6 +76,38 @@ Creating summaries can be done using the summary functionality. In this example,
 
     # Create summary
     text_summary = client.summarize(context=pdf_text)
+    print(text_summary)
+
+
+Adding and Removing Memory Chunks
+####################################
+
+.. code-block:: python
+
+    from LLMlight import LLMlight
+
+    client = LLMlight(model='mistralai/mistral-small-3.2')
+    client.memory_init(store_path='knowledge_store.db')
+
+    # Add text chunks
+    client.memory_add(text=['Apes like USB sticks.', 'The capital of France is Paris.'])
+
+    # Inspect stored chunks
+    client.memory_chunks(n=10)
+
+    # Search memory
+    results = client.memory.search('apes', top_k=3)
+    # results: list of (id, score, metadata) tuples
+
+    # Remove by id
+    client.memory_remove(ids=results[0][0])
+
+    # Or remove by query (top-1 match by default)
+    client.memory_remove(query='capital of France')
+
+    # Prompt using stored knowledge
+    response = client.prompt('What do apes like?')
+    print(response)
 
 
 .. include:: add_bottom.add

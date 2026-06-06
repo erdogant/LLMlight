@@ -6,8 +6,9 @@ retrieval-augmented workflows. Its core functionalities include chunking, embedd
 and memory storage.
 
 The goal of LLMlight is to enable both researchers and practitioners to quickly build and experiment with local language models without relying on cloud services. It provides:
-- Easy integration of local knowledge bases (FAISS, JSON, MemVid)
-- Reproducible training and retrieval pipelines
+
+- Easy integration of local knowledge bases (SQLite+HNSW by default, MemVid optional)
+- Reproducible retrieval pipelines with pluggable embedding backends
 - Tools for statistical validation to separate meaningful signals from noise
 - Visualization and plotting for better understanding of models and data
 
@@ -15,8 +16,9 @@ Output
 ******
 
 Using LLMlight, users can efficiently:
-- Train and save local language models for specific tasks
-- Load saved models for inference or further training without retraining
+
+- Store and query knowledge from PDFs, text files, and plain text using a local SQLite database
+- Load saved knowledge bases for inference without reprocessing
 - Perform retrieval-augmented queries with statistical significance testing
 - Build applications such as chat-with-your-PDF, email auto-reply engines, or personal document assistants
 - Visualize embeddings, layer usage, and memory retrieval via plotting tools
@@ -36,7 +38,7 @@ The schematic overview of our approach is as follows:
 The figure illustrates the end-to-end workflow:
 
 - Input data or documents are preprocessed and chunked.
-- Chunks are embedded and optionally stored in a local database.
+- Chunks are embedded and stored in a local SQLite database with an optional HNSW index.
 - A language model uses the chunks and context aggregation strategies for inference.
 - Retrieval results are statistically validated via null distribution modeling.
 - Outputs can be visualized, saved, and reused in future sessions.

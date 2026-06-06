@@ -8,15 +8,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Algorithm &mdash; LLMlight LLMlight documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=03e43079" />
-      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
       <link rel="stylesheet" type="text/css" href="_static/css/custom.css?v=e0179649" />
 
   
       <script src="_static/jquery.js?v=5d32c60e"></script>
       <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
       <script src="_static/documentation_options.js?v=f9eecb16"></script>
-      <script src="_static/doctools.js?v=9bcbadda"></script>
-      <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+      <script src="_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="_static/js/theme.js"></script>
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
@@ -66,14 +66,17 @@
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="Examples.html">Basic Prompting</a></li>
 <li class="toctree-l1"><a class="reference internal" href="Examples.html#working-with-files-pdfs">Working with Files (PDFs)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Examples.html#loading-an-existing-knowledge-base">Loading an Existing Knowledge Base</a></li>
 <li class="toctree-l1"><a class="reference internal" href="Examples.html#create-summaries">Create Summaries</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Examples.html#adding-and-removing-memory-chunks">Adding and Removing Memory Chunks</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Saving and Loading</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="Saving%20and%20Loading.html">Saving</a></li>
 <li class="toctree-l1"><a class="reference internal" href="Saving%20and%20Loading.html#loading">Loading</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Saving%20and%20Loading.html#rebuilding-the-ann-index">Rebuilding the ANN Index</a></li>
 <li class="toctree-l1"><a class="reference internal" href="Saving%20and%20Loading.html#memory-management">Memory Management</a></li>
-<li class="toctree-l1"><a class="reference internal" href="Saving%20and%20Loading.html#advanced-load-existing-memory-and-continue">Advanced: Load Existing Memory and Continue</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Saving%20and%20Loading.html#advanced-remove-chunks-and-re-query">Advanced: Remove Chunks and Re-query</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Documentation</span></p>
 <ul>
@@ -125,7 +128,7 @@
 <ol class="arabic simple">
 <li><p><strong>Input Data or Documents</strong>: Raw documents (PDFs, text files, etc.) are preprocessed to remove noise such as headers, footers, and boilerplate text.</p></li>
 <li><p><strong>Chunking</strong>: Documents are split into meaningful chunks to ensure each contains enough context for embedding and retrieval.</p></li>
-<li><p><strong>Embedding &amp; Local Storage</strong>: Each chunk is transformed into vector embeddings and optionally stored in a local database (e.g., FAISS, MemVid) for offline, efficient, and portable retrieval.</p></li>
+<li><p><strong>Embedding &amp; Local Storage</strong>: Each chunk is transformed into vector embeddings and stored in a local SQLite database with an optional HNSW index for fast approximate nearest-neighbour search. When <code class="docutils literal notranslate"><span class="pre">hnswlib</span></code> and <code class="docutils literal notranslate"><span class="pre">sentence-transformers</span></code> are not available, LLMlight falls back to TF-IDF search automatically.</p></li>
 <li><p><strong>Query Processing &amp; Retrieval</strong>: User queries are transformed into embeddings and compared against the stored chunks using similarity measures.</p></li>
 <li><p><strong>Statistical Validation</strong>: LLMlight constructs a null distribution to assess the statistical significance of retrieved chunks, separating true signal from noise.</p></li>
 <li><p><strong>Context Aggregation &amp; LLM Inference</strong>: Selected chunks are aggregated and provided as context to the local language model for generation of accurate and grounded responses.</p></li>
@@ -164,7 +167,8 @@ Retrieving available models can be done via the <a class="reference internal" hr
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">LLMlight</span><span class="w"> </span><span class="kn">import</span> <span class="n">LLMlight</span>
 
 <span class="c1"># Initialize with default settings</span>
-<span class="n">client</span> <span class="o">=</span> <span class="n">LLMlight</span><span class="p">(</span><span class="n">model</span><span class="o">=</span><span class="s1">&#39;mistralai/mistral-small-3.2&#39;</span><span class="p">,</span> <span class="n">file_path</span><span class="o">=</span><span class="s1">&#39;local_database.mp4&#39;</span><span class="p">)</span>
+<span class="n">client</span> <span class="o">=</span> <span class="n">LLMlight</span><span class="p">(</span><span class="n">model</span><span class="o">=</span><span class="s1">&#39;mistralai/mistral-small-3.2&#39;</span><span class="p">)</span>
+<span class="n">client</span><span class="o">.</span><span class="n">memory_init</span><span class="p">(</span><span class="n">store_path</span><span class="o">=</span><span class="s1">&#39;local_database.db&#39;</span><span class="p">)</span>
 
 <span class="c1"># Example PDFs to process</span>
 <span class="n">url1</span> <span class="o">=</span> <span class="s1">&#39;https://proceedings.neurips.cc/paper_files/paper/2017/file/3f5ee243547dee91fbd053c1c4a845aa-Paper.pdf&#39;</span>
@@ -174,7 +178,7 @@ Retrieving available models can be done via the <a class="reference internal" hr
 </section>
 <section id="embedding-local-storage">
 <h1>Embedding &amp; Local Storage<a class="headerlink" href="#embedding-local-storage" title="Link to this heading"></a></h1>
-<p>In <strong>Embedding &amp; Local Storage</strong>, each chunk is transformed into a vector representation. These embeddings are stored in local databases such as FAISS or MemVid, making retrieval fast, offline-friendly, and portable. Users can also add small text chunks or entire directories.</p>
+<p>In <strong>Embedding &amp; Local Storage</strong>, each chunk is transformed into a vector representation. These embeddings are stored in a local SQLite database (default backend) with an optional HNSW index, making retrieval fast, offline-friendly, and portable. Users can also add small text chunks or entire directories.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Add multiple PDF files to the database</span>
 <span class="n">client</span><span class="o">.</span><span class="n">memory_add</span><span class="p">(</span><span class="n">files</span><span class="o">=</span><span class="p">[</span><span class="n">url1</span><span class="p">,</span> <span class="n">url2</span><span class="p">])</span>
 
@@ -182,7 +186,7 @@ Retrieving available models can be done via the <a class="reference internal" hr
 <span class="n">client</span><span class="o">.</span><span class="n">memory_add</span><span class="p">(</span><span class="n">text</span><span class="o">=</span><span class="p">[</span>
     <span class="s1">&#39;Small chunk that is also added to the database.&#39;</span><span class="p">,</span>
     <span class="s1">&#39;The capital of France is Amsterdam.&#39;</span>
-<span class="p">],</span> <span class="n">overwrite</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="p">])</span>
 
 <span class="c1"># Add all supported file types from a directory</span>
 <span class="n">client</span><span class="o">.</span><span class="n">memory_add</span><span class="p">(</span>
@@ -190,7 +194,7 @@ Retrieving available models can be done via the <a class="reference internal" hr
     <span class="n">filetypes</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;.pdf&#39;</span><span class="p">,</span> <span class="s1">&#39;.txt&#39;</span><span class="p">,</span> <span class="s1">&#39;.epub&#39;</span><span class="p">,</span> <span class="s1">&#39;.md&#39;</span><span class="p">,</span> <span class="s1">&#39;.doc&#39;</span><span class="p">,</span> <span class="s1">&#39;.docx&#39;</span><span class="p">,</span> <span class="s1">&#39;.rtf&#39;</span><span class="p">,</span> <span class="s1">&#39;.html&#39;</span><span class="p">,</span> <span class="s1">&#39;.htm&#39;</span><span class="p">]</span>
 <span class="p">)</span>
 
-<span class="c1"># Store the database to disk</span>
+<span class="c1"># Store the database to disk (SQLite is auto-persisted; this also saves the ANN index)</span>
 <span class="n">client</span><span class="o">.</span><span class="n">memory_save</span><span class="p">()</span>
 </pre></div>
 </div>
@@ -199,15 +203,16 @@ Retrieving available models can be done via the <a class="reference internal" hr
 <h1>RAG with Statistical Validation<a class="headerlink" href="#rag-with-statistical-validation" title="Link to this heading"></a></h1>
 <p>During <strong>Retrieval-Augmented Generation (RAG)</strong>, queries are compared against stored chunks using similarity measures. LLMlight constructs a null distribution of scores to evaluate statistical significance. Only chunks that are likely relevant are selected and aggregated for the language model to generate grounded responses.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Load database for inference</span>
-<span class="n">client</span> <span class="o">=</span> <span class="n">LLMlight</span><span class="p">(</span><span class="n">model</span><span class="o">=</span><span class="s1">&#39;mistralai/mistral-small-3.2&#39;</span><span class="p">,</span> <span class="n">file_path</span><span class="o">=</span><span class="s1">&#39;local_database.mp4&#39;</span><span class="p">)</span>
+<span class="n">client</span> <span class="o">=</span> <span class="n">LLMlight</span><span class="p">(</span><span class="n">model</span><span class="o">=</span><span class="s1">&#39;mistralai/mistral-small-3.2&#39;</span><span class="p">)</span>
+<span class="n">client</span><span class="o">.</span><span class="n">memory_init</span><span class="p">(</span><span class="n">store_path</span><span class="o">=</span><span class="s1">&#39;local_database.db&#39;</span><span class="p">)</span>
 
 <span class="c1"># Inspect top 5 chunks</span>
 <span class="n">client</span><span class="o">.</span><span class="n">memory_chunks</span><span class="p">(</span><span class="n">n</span><span class="o">=</span><span class="mi">5</span><span class="p">)</span>
 
 <span class="c1"># Search through chunks using queries</span>
-<span class="n">out1</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">memory</span><span class="o">.</span><span class="n">retriever</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="s1">&#39;Attention Is All You Need&#39;</span><span class="p">,</span> <span class="n">top_k</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
-<span class="n">out2</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">memory</span><span class="o">.</span><span class="n">retriever</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="s1">&#39;Enrichment analysis, Hypergeometric Networks&#39;</span><span class="p">,</span> <span class="n">top_k</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
-<span class="n">out3</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">memory</span><span class="o">.</span><span class="n">retriever</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="s1">&#39;Capital of Amsterdam&#39;</span><span class="p">,</span> <span class="n">top_k</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
+<span class="n">out1</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">memory</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="s1">&#39;Attention Is All You Need&#39;</span><span class="p">,</span> <span class="n">top_k</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
+<span class="n">out2</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">memory</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="s1">&#39;Enrichment analysis, Hypergeometric Networks&#39;</span><span class="p">,</span> <span class="n">top_k</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
+<span class="n">out3</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">memory</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="s1">&#39;Capital of Amsterdam&#39;</span><span class="p">,</span> <span class="n">top_k</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
 </pre></div>
 </div>
 <div class="admonition note">

@@ -19,7 +19,7 @@ The figure below illustrates the end-to-end workflow of LLMlight:
 
 2. **Chunking**: Documents are split into meaningful chunks to ensure each contains enough context for embedding and retrieval.
 
-3. **Embedding & Local Storage**: Each chunk is transformed into vector embeddings and optionally stored in a local database (e.g., FAISS, MemVid) for offline, efficient, and portable retrieval.
+3. **Embedding & Local Storage**: Each chunk is transformed into vector embeddings and stored in a local SQLite database with an optional HNSW index for fast approximate nearest-neighbour search. When ``hnswlib`` and ``sentence-transformers`` are not available, LLMlight falls back to TF-IDF search automatically.
 
 4. **Query Processing & Retrieval**: User queries are transformed into embeddings and compared against the stored chunks using similarity measures.
 
@@ -70,7 +70,8 @@ The first step is **Preprocessing & Chunking**. Input documents are split into m
     from LLMlight import LLMlight
 
     # Initialize with default settings
-    client = LLMlight(model='mistralai/mistral-small-3.2', file_path='local_database.mp4')
+    client = LLMlight(model='mistralai/mistral-small-3.2')
+    client.memory_init(store_path='local_database.db')
 
     # Example PDFs to process
     url1 = 'https://proceedings.neurips.cc/paper_files/paper/2017/file/3f5ee243547dee91fbd053c1c4a845aa-Paper.pdf'
@@ -79,7 +80,7 @@ The first step is **Preprocessing & Chunking**. Input documents are split into m
 Embedding & Local Storage
 ############################
 
-In **Embedding & Local Storage**, each chunk is transformed into a vector representation. These embeddings are stored in local databases such as FAISS or MemVid, making retrieval fast, offline-friendly, and portable. Users can also add small text chunks or entire directories.
+In **Embedding & Local Storage**, each chunk is transformed into a vector representation. These embeddings are stored in a local SQLite database (default backend) with an optional HNSW index, making retrieval fast, offline-friendly, and portable. Users can also add small text chunks or entire directories.
 
 .. code:: python
 
@@ -90,7 +91,7 @@ In **Embedding & Local Storage**, each chunk is transformed into a vector repres
     client.memory_add(text=[
         'Small chunk that is also added to the database.',
         'The capital of France is Amsterdam.'
-    ], overwrite=True)
+    ])
 
     # Add all supported file types from a directory
     client.memory_add(
@@ -98,7 +99,7 @@ In **Embedding & Local Storage**, each chunk is transformed into a vector repres
         filetypes=['.pdf', '.txt', '.epub', '.md', '.doc', '.docx', '.rtf', '.html', '.htm']
     )
 
-    # Store the database to disk
+    # Store the database to disk (SQLite is auto-persisted; this also saves the ANN index)
     client.memory_save()
 
 RAG with Statistical Validation
@@ -109,15 +110,16 @@ During **Retrieval-Augmented Generation (RAG)**, queries are compared against st
 .. code:: python
 
     # Load database for inference
-    client = LLMlight(model='mistralai/mistral-small-3.2', file_path='local_database.mp4')
+    client = LLMlight(model='mistralai/mistral-small-3.2')
+    client.memory_init(store_path='local_database.db')
 
     # Inspect top 5 chunks
     client.memory_chunks(n=5)
 
     # Search through chunks using queries
-    out1 = client.memory.retriever.search('Attention Is All You Need', top_k=3)
-    out2 = client.memory.retriever.search('Enrichment analysis, Hypergeometric Networks', top_k=3)
-    out3 = client.memory.retriever.search('Capital of Amsterdam', top_k=3)
+    out1 = client.memory.search('Attention Is All You Need', top_k=3)
+    out2 = client.memory.search('Enrichment analysis, Hypergeometric Networks', top_k=3)
+    out3 = client.memory.search('Capital of Amsterdam', top_k=3)
 
 .. note::
 

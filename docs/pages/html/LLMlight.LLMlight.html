@@ -8,15 +8,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>API References &mdash; LLMlight LLMlight documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=03e43079" />
-      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
       <link rel="stylesheet" type="text/css" href="_static/css/custom.css?v=e0179649" />
 
   
       <script src="_static/jquery.js?v=5d32c60e"></script>
       <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
       <script src="_static/documentation_options.js?v=f9eecb16"></script>
-      <script src="_static/doctools.js?v=9bcbadda"></script>
-      <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+      <script src="_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="_static/js/theme.js"></script>
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
@@ -65,14 +65,17 @@
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="Examples.html">Basic Prompting</a></li>
 <li class="toctree-l1"><a class="reference internal" href="Examples.html#working-with-files-pdfs">Working with Files (PDFs)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Examples.html#loading-an-existing-knowledge-base">Loading an Existing Knowledge Base</a></li>
 <li class="toctree-l1"><a class="reference internal" href="Examples.html#create-summaries">Create Summaries</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Examples.html#adding-and-removing-memory-chunks">Adding and Removing Memory Chunks</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Saving and Loading</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="Saving%20and%20Loading.html">Saving</a></li>
 <li class="toctree-l1"><a class="reference internal" href="Saving%20and%20Loading.html#loading">Loading</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Saving%20and%20Loading.html#rebuilding-the-ann-index">Rebuilding the ANN Index</a></li>
 <li class="toctree-l1"><a class="reference internal" href="Saving%20and%20Loading.html#memory-management">Memory Management</a></li>
-<li class="toctree-l1"><a class="reference internal" href="Saving%20and%20Loading.html#advanced-load-existing-memory-and-continue">Advanced: Load Existing Memory and Continue</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Saving%20and%20Loading.html#advanced-remove-chunks-and-re-query">Advanced: Remove Chunks and Re-query</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Documentation</span></p>
 <ul class="current">
@@ -94,6 +97,8 @@
 <li class="toctree-l3"><a class="reference internal" href="#LLMlight.LLMlight.LLMlight.memory_chunks"><code class="docutils literal notranslate"><span class="pre">LLMlight.memory_chunks()</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="#LLMlight.LLMlight.LLMlight.memory_init"><code class="docutils literal notranslate"><span class="pre">LLMlight.memory_init()</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="#LLMlight.LLMlight.LLMlight.memory_load"><code class="docutils literal notranslate"><span class="pre">LLMlight.memory_load()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#LLMlight.LLMlight.LLMlight.memory_reindex"><code class="docutils literal notranslate"><span class="pre">LLMlight.memory_reindex()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#LLMlight.LLMlight.LLMlight.memory_remove"><code class="docutils literal notranslate"><span class="pre">LLMlight.memory_remove()</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="#LLMlight.LLMlight.LLMlight.memory_save"><code class="docutils literal notranslate"><span class="pre">LLMlight.memory_save()</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="#LLMlight.LLMlight.LLMlight.prompt"><code class="docutils literal notranslate"><span class="pre">LLMlight.prompt()</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="#LLMlight.LLMlight.LLMlight.read_pdf"><code class="docutils literal notranslate"><span class="pre">LLMlight.read_pdf()</span></code></a></li>
@@ -162,7 +167,7 @@ github      : <a class="reference external" href="https://github.com/erdogant/LL
 Licence     : See licences</p>
 <dl class="py class">
 <dt class="sig sig-object py" id="LLMlight.LLMlight.LLMlight">
-<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">LLMlight.LLMlight.</span></span><span class="sig-name descname"><span class="pre">LLMlight</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">model:</span> <span class="pre">str</span> <span class="pre">=</span> <span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">retrieval_method:</span> <span class="pre">(None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">&lt;class</span> <span class="pre">'str'&gt;)</span> <span class="pre">=</span> <span class="pre">'naive_rag'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">embedding:</span> <span class="pre">(&lt;class</span> <span class="pre">'str'&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">&lt;class</span> <span class="pre">'dict'&gt;)</span> <span class="pre">=</span> <span class="pre">{'context':</span> <span class="pre">'bert'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">'memory':</span> <span class="pre">'memvid'}</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">context_strategy:</span> <span class="pre">str</span> <span class="pre">=</span> <span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">alpha:</span> <span class="pre">float</span> <span class="pre">=</span> <span class="pre">0.05</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">top_chunks:</span> <span class="pre">int</span> <span class="pre">=</span> <span class="pre">5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">temperature:</span> <span class="pre">(&lt;class</span> <span class="pre">'int'&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">&lt;class</span> <span class="pre">'float'&gt;)</span> <span class="pre">=</span> <span class="pre">0.7</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">top_p:</span> <span class="pre">(&lt;class</span> <span class="pre">'int'&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">&lt;class</span> <span class="pre">'float'&gt;)</span> <span class="pre">=</span> <span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">chunks:</span> <span class="pre">dict</span> <span class="pre">=</span> <span class="pre">{'method':</span> <span class="pre">'chars'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">'overlap':</span> <span class="pre">200</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">'size':</span> <span class="pre">1000}</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_ctx:</span> <span class="pre">int</span> <span class="pre">=</span> <span class="pre">4096</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">file_path:</span> <span class="pre">str</span> <span class="pre">=</span> <span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">endpoint:</span> <span class="pre">str</span> <span class="pre">=</span> <span class="pre">'http://localhost:1234/v1/chat/completions'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose:</span> <span class="pre">(&lt;class</span> <span class="pre">'str'&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">&lt;class</span> <span class="pre">'int'&gt;)</span> <span class="pre">=</span> <span class="pre">'info'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#LLMlight.LLMlight.LLMlight" title="Link to this definition"></a></dt>
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">LLMlight.LLMlight.</span></span><span class="sig-name descname"><span class="pre">LLMlight</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">model</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">retrieval_method</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'naive_rag'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">embedding</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">context_strategy</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">alpha</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">top_chunks</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">temperature</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0.7</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">top_p</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">chunks</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_ctx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">4096</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">file_path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">endpoint</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'http://localhost:1234/v1/chat/completions'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">(&lt;class</span> <span class="pre">'str'&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">&lt;class</span> <span class="pre">'int'&gt;)</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'info'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#LLMlight.LLMlight.LLMlight" title="Link to this definition"></a></dt>
 <dd><p>Large Language Model Light.</p>
 <p>Run your LLM models local and with minimum dependencies.
 1. Go to LM-studio.
@@ -221,107 +226,178 @@ The prompting stage brings together all the processed information, combining it 
 Throughout this process, the system maintains flexibility through various configuration options, allowing it to adapt to different types of queries and contexts. This modular approach enables the system to handle everything from simple questions to complex document analysis tasks efficiently.</p>
 <dl class="field-list">
 <dt class="field-odd">param model<span class="colon">:</span></dt>
-<dd class="field-odd"><p>‘mistralai/mistral-small-3.2’
-‘qwen/qwen3-coder-30b’
-‘openai/gpt-oss-20b’</p>
+<dd class="field-odd"><p>Model identifier served by the endpoint, e.g. <code class="docutils literal notranslate"><span class="pre">'mistralai/mistral-small-3.2'</span></code>,
+<code class="docutils literal notranslate"><span class="pre">'unsloth/gemma-4-26b-a4b-it'</span></code>, <code class="docutils literal notranslate"><span class="pre">'qwen/qwen3-coder-30b'</span></code>.
+When <code class="docutils literal notranslate"><span class="pre">None</span></code> the available models are listed and <code class="docutils literal notranslate"><span class="pre">__init__</span></code> returns early.</p>
 </dd>
 <dt class="field-even">type model<span class="colon">:</span></dt>
 <dd class="field-even"><p>str</p>
 </dd>
-<dt class="field-odd">param system<span class="colon">:</span></dt>
-<dd class="field-odd"><p>String of the system message.
-“I am a helpfull assistant”</p>
-</dd>
-<dt class="field-even">type system<span class="colon">:</span></dt>
-<dd class="field-even"><p>str</p>
-</dd>
 <dt class="field-odd">param retrieval_method<span class="colon">:</span></dt>
-<dd class="field-odd"><p>None:                   No processing. The entire context is used for the query.
-‘naive_rag’:            Context is processed using Navie RAG approach. Ideal for chats and when you need to answer specfic questions: Chunk of text are created. Use cosine similarity to for ranking. The top scoring chunks will be combined (n chunks) and used as input with the prompt.
-‘RSE’:                  Context is processed using Navie RSE approach. Identify and extract entire segments of relevant text.</p>
+<dd class="field-odd"><dl class="simple">
+<dt>None          – No chunking. The entire context is forwarded to the LLM.</dt><dd><p>Use only when context fits within <code class="docutils literal notranslate"><span class="pre">n_ctx</span></code>.</p>
 </dd>
-<dt class="field-even">type retrieval_method<span class="colon">:</span></dt>
-<dd class="field-even"><p>str (default: ‘naive_rag’)</p>
+<dt>‘naive_rag’   – Context is split into chunks; top-k chunks are selected by</dt><dd><p>cosine similarity and combined into the prompt.</p>
 </dd>
-<dt class="field-odd">param embedding<span class="colon">:</span></dt>
-<dd class="field-odd"><p>Specify the embedding. When using both video-memory and context, it can be specified with a dictionary: {‘memory’: ‘memvid’, ‘naive_rag’: ‘bert’}
-None:                   No embedding is performed.
-‘automatic’:            {‘memory’: ‘memvid’, ‘naive_rag’: ‘bert’}
-‘memvid’:               This embedding can only be applied when using video-memory in the retrieval method.
-‘tfidf’:                Best use when it is a structured documents and the words in the queries are matching.
-‘bow’:                  Bag of words approach. Best use when you expect words in the document and queries to be matching.
-‘bert’:                 Best use when document is more free text and the queries may not match exactly the words or sentences in the document.
-‘bge-small’:</p>
-</dd>
-<dt class="field-even">type embedding<span class="colon">:</span></dt>
-<dd class="field-even"><p>str, dict (default: ‘automatic’)</p>
-</dd>
-<dt class="field-odd">param context_strategy<span class="colon">:</span></dt>
-<dd class="field-odd"><p>None:                  No pre-processing. The original context is used in the pipeline of retrieval_method, embedding and the response.
-‘chunk-wise’:           The input context will be analyze chunkwise based on the query, instructions and system. The total set of answered-chunks is then returned. The normal pipeline proceeds for the query, instructions, system etc.
-‘global-reasoning’:     The input context will be summarized per chunk globally. The total set of summarized context is then returned. The normal pipeline proceeds for the query, instructions, system etc.</p>
-</dd>
-<dt class="field-even">type context_strategy<span class="colon">:</span></dt>
-<dd class="field-even"><p>str (default: None)</p>
-</dd>
-<dt class="field-odd">param temperature<span class="colon">:</span></dt>
-<dd class="field-odd"><p>Sampling temperature.
-0.7: (default)
-0: Deterministic
-1: Stochastic (max)</p>
-</dd>
-<dt class="field-even">type temperature<span class="colon">:</span></dt>
-<dd class="field-even"><p>float, optional</p>
-</dd>
-<dt class="field-odd">param top_p<span class="colon">:</span></dt>
-<dd class="field-odd"><p>Top-p (nucleus) sampling parameter (default is 1.0, no filtering).</p>
-</dd>
-<dt class="field-even">type top_p<span class="colon">:</span></dt>
-<dd class="field-even"><p>float, optional</p>
-</dd>
-<dt class="field-odd">param chunks<span class="colon">:</span></dt>
-<dd class="field-odd"><dl>
-<dt>type<span class="classifier">str</span></dt><dd><p>‘chars’ or ‘words’: Chunks are created using chars or words.
-‘size’: Chunk length in chars or words.</p>
-<blockquote>
-<div><p>The accuracy increases with smaller chunk sizes. But it also reduces the input context for the LLM.
-Estimates: 1000 words or ~10.000 chars costs ~3000 tokens.
-With a context window (n_ctx) of 4096 your can set size=1000 words with n chunks=5 and leave some space for instructions, system and the query.</p>
-</div></blockquote>
-<p>‘overlap’: overlap between chunks
-‘top_chunks’: Retrieval of the top N chunks when performing RAG analysis.</p>
+<dt>‘RSE’         – Relevant Segment Extraction: contiguous high-scoring segments</dt><dd><p>are identified and reconstructed. Requires <code class="docutils literal notranslate"><span class="pre">embedding</span></code> in
+<code class="docutils literal notranslate"><span class="pre">('bert',</span> <span class="pre">'bge-small')</span></code>.</p>
 </dd>
 </dl>
 </dd>
+<dt class="field-even">type retrieval_method<span class="colon">:</span></dt>
+<dd class="field-even"><p>str, default <code class="docutils literal notranslate"><span class="pre">'naive_rag'</span></code></p>
+</dd>
+<dt class="field-odd">param embedding<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Controls how text is vectorised for retrieval.</p>
+<dl class="simple">
+<dt><code class="docutils literal notranslate"><span class="pre">None</span></code>          – Retrieval embedding <strong>disabled</strong>. Memory retrieval and</dt><dd><p>context retrieval both skip the similarity step and fall
+through to the full-context path.</p>
+</dd>
+</dl>
+<p><code class="docutils literal notranslate"><span class="pre">'automatic'</span></code>   – Shorthand for <code class="docutils literal notranslate"><span class="pre">{'memory':</span> <span class="pre">'memvid',</span> <span class="pre">'context':</span> <span class="pre">'bert'}</span></code>.
+A string          – Applies the same method to both memory and context paths.</p>
+<blockquote>
+<div><p>Valid values: <code class="docutils literal notranslate"><span class="pre">'tfidf'</span></code>, <code class="docutils literal notranslate"><span class="pre">'bow'</span></code>, <code class="docutils literal notranslate"><span class="pre">'bert'</span></code>,
+<code class="docutils literal notranslate"><span class="pre">'bge-small'</span></code>, <code class="docutils literal notranslate"><span class="pre">'memvid'</span></code>.
+Note: <code class="docutils literal notranslate"><span class="pre">'memvid'</span></code> is only valid for the memory path; it is
+silently corrected to <code class="docutils literal notranslate"><span class="pre">'bert'</span></code> when used as the context
+embedding.</p>
+</div></blockquote>
+<dl class="simple">
+<dt>A dict            – Specify paths independently:</dt><dd><p><code class="docutils literal notranslate"><span class="pre">{'memory':</span> <span class="pre">'memvid',</span> <span class="pre">'context':</span> <span class="pre">'bert'}</span></code>.
+Keys <code class="docutils literal notranslate"><span class="pre">'memory'</span></code> and <code class="docutils literal notranslate"><span class="pre">'context'</span></code> are both optional;
+omitted keys inherit the <code class="docutils literal notranslate"><span class="pre">'automatic'</span></code> defaults.</p>
+</dd>
+<dt>Guidance by use-case:</dt><dd><p><code class="docutils literal notranslate"><span class="pre">'tfidf'</span></code>    – Structured text, query terms likely present verbatim.
+<code class="docutils literal notranslate"><span class="pre">'bow'</span></code>      – Simple word-frequency matching.
+<code class="docutils literal notranslate"><span class="pre">'bert'</span></code>     – Free-text; query wording may not match the document.
+<code class="docutils literal notranslate"><span class="pre">'bge-small'</span></code>– Compact retrieval-optimised model; good general default.
+<code class="docutils literal notranslate"><span class="pre">'memvid'</span></code>   – Use the memvid backend’s built-in FAISS similarity.</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-even">type embedding<span class="colon">:</span></dt>
+<dd class="field-even"><p>str, dict, or None, default <code class="docutils literal notranslate"><span class="pre">None</span></code></p>
+</dd>
+<dt class="field-odd">param context_strategy<span class="colon">:</span></dt>
+<dd class="field-odd"><p>None               – Raw (or retrieved) context is passed directly to the LLM.
+‘chunk-wise’       – Each chunk is analysed independently against the query;</p>
+<blockquote>
+<div><p>per-chunk answers are combined in a final pass.</p>
+</div></blockquote>
+<dl class="simple">
+<dt>‘global-reasoning’ – Each chunk is summarised; summaries are merged into one</dt><dd><p>coherent response.</p>
+</dd>
+</dl>
+</dd>
+<dt class="field-even">type context_strategy<span class="colon">:</span></dt>
+<dd class="field-even"><p>str or None, default <code class="docutils literal notranslate"><span class="pre">None</span></code></p>
+</dd>
+<dt class="field-odd">param temperature<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Sampling temperature in <code class="docutils literal notranslate"><span class="pre">[0,</span> <span class="pre">2]</span></code>. <code class="docutils literal notranslate"><span class="pre">0</span></code> is deterministic; higher values
+increase randomness.</p>
+</dd>
+<dt class="field-even">type temperature<span class="colon">:</span></dt>
+<dd class="field-even"><p>float, default <code class="docutils literal notranslate"><span class="pre">0.7</span></code></p>
+</dd>
+<dt class="field-odd">param top_p<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Nucleus sampling threshold in <code class="docutils literal notranslate"><span class="pre">(0,</span> <span class="pre">1]</span></code>. <code class="docutils literal notranslate"><span class="pre">1.0</span></code> disables filtering.</p>
+</dd>
+<dt class="field-even">type top_p<span class="colon">:</span></dt>
+<dd class="field-even"><p>float, default <code class="docutils literal notranslate"><span class="pre">1.0</span></code></p>
+</dd>
+<dt class="field-odd">param chunks<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Chunking configuration. Missing keys fall back to defaults.
+Keys:</p>
+<p><code class="docutils literal notranslate"><span class="pre">'method'</span></code>  – <code class="docutils literal notranslate"><span class="pre">'chars'</span></code> (default) or <code class="docutils literal notranslate"><span class="pre">'words'</span></code>.
+<code class="docutils literal notranslate"><span class="pre">'size'</span></code>    – Chunk length in characters or words (default <code class="docutils literal notranslate"><span class="pre">1000</span></code>).</p>
+<blockquote>
+<div><p>Smaller sizes improve retrieval precision but reduce the
+context available to the LLM. Rough estimate: 1 000 words
+≈ 3 000 tokens.</p>
+</div></blockquote>
+<dl class="simple">
+<dt><code class="docutils literal notranslate"><span class="pre">'overlap'</span></code> – Overlap between consecutive chunks (default <code class="docutils literal notranslate"><span class="pre">200</span></code>).</dt><dd><p>Must be less than <code class="docutils literal notranslate"><span class="pre">'size'</span></code>.</p>
+</dd>
+</dl>
+<p>Legacy aliases accepted: <code class="docutils literal notranslate"><span class="pre">'type'</span></code> -&gt; <code class="docutils literal notranslate"><span class="pre">'method'</span></code>,
+<code class="docutils literal notranslate"><span class="pre">'chunk_size'</span></code> -&gt; <code class="docutils literal notranslate"><span class="pre">'size'</span></code>.</p>
+</dd>
 <dt class="field-even">type chunks<span class="colon">:</span></dt>
-<dd class="field-even"><p>dict : {‘method’: ‘chars’, ‘size’: 1000, ‘overlap’: 250, ‘top_chunks’: 5}</p>
+<dd class="field-even"><p>dict or None, default <code class="docutils literal notranslate"><span class="pre">None</span></code></p>
+</dd>
+<dt class="field-odd">param top_chunks<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Number of top-ranked chunks returned by retrieval.</p>
+</dd>
+<dt class="field-even">type top_chunks<span class="colon">:</span></dt>
+<dd class="field-even"><p>int, default <code class="docutils literal notranslate"><span class="pre">5</span></code></p>
 </dd>
 <dt class="field-odd">param n_ctx<span class="colon">:</span></dt>
-<dd class="field-odd"><p>The context window length is determined by the max tokens. A larger number of tokens will ask more cpu/gpu resources. Estimates: 1000 words or ~10.000 chars costs ~3000 tokens.</p>
+<dd class="field-odd"><p>Model context window in tokens. Used to compute <code class="docutils literal notranslate"><span class="pre">max_tokens</span></code> for each
+request and to warn when a prompt is likely to overflow.</p>
 </dd>
 <dt class="field-even">type n_ctx<span class="colon">:</span></dt>
-<dd class="field-even"><p>int, default: 4096</p>
+<dd class="field-even"><p>int, default <code class="docutils literal notranslate"><span class="pre">4096</span></code></p>
 </dd>
 <dt class="field-odd">param file_path<span class="colon">:</span></dt>
-<dd class="field-odd"><p>‘knowledge_base.mp4’    Local or absolute path to your (video) memory file.</p>
+<dd class="field-odd"><p>Path to an existing memory store to load at construction time.
+Relative paths are resolved under the LLMlight temp directory.
+The extension determines the backend: <code class="docutils literal notranslate"><span class="pre">.db</span></code> -&gt; sqlite, <code class="docutils literal notranslate"><span class="pre">.mp4</span></code> -&gt; memvid.</p>
 </dd>
 <dt class="field-even">type file_path<span class="colon">:</span></dt>
-<dd class="field-even"><p>str</p>
+<dd class="field-even"><p>str or None, default <code class="docutils literal notranslate"><span class="pre">None</span></code></p>
 </dd>
 <dt class="field-odd">param endpoint<span class="colon">:</span></dt>
-<dd class="field-odd"><p>“<a class="reference external" href="http://localhost:1234/v1/chat/completions">http://localhost:1234/v1/chat/completions</a>”</p>
+<dd class="field-odd"><p>URL of the OpenAI-compatible chat completions endpoint, or an absolute
+path to a local <code class="docutils literal notranslate"><span class="pre">.gguf</span></code> model file.</p>
 </dd>
 <dt class="field-even">type endpoint<span class="colon">:</span></dt>
-<dd class="field-even"><p>str:  Endpoint of the LLM API</p>
+<dd class="field-even"><p>str, default <code class="docutils literal notranslate"><span class="pre">'http://localhost:1234/v1/chat/completions'</span></code></p>
+</dd>
+<dt class="field-odd">param verbose<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Logging verbosity. Accepts level names (<code class="docutils literal notranslate"><span class="pre">'debug'</span></code>, <code class="docutils literal notranslate"><span class="pre">'info'</span></code>,
+<code class="docutils literal notranslate"><span class="pre">'warning'</span></code>, <code class="docutils literal notranslate"><span class="pre">'error'</span></code>, <code class="docutils literal notranslate"><span class="pre">'silent'</span></code>) or integer log levels.</p>
+</dd>
+<dt class="field-even">type verbose<span class="colon">:</span></dt>
+<dd class="field-even"><p>str or int, default <code class="docutils literal notranslate"><span class="pre">'info'</span></code></p>
 </dd>
 </dl>
 <p class="rubric">Examples</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="c1"># Examples</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span><span class="w"> </span><span class="nn">LLMlight</span><span class="w"> </span><span class="kn">import</span> <span class="n">LLMlight</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">client</span> <span class="o">=</span>  <span class="n">LLMlight</span><span class="p">()</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">client</span><span class="o">.</span><span class="n">prompt</span><span class="p">(</span><span class="s1">&#39;hello, who are you?&#39;</span><span class="p">)</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">system_message</span> <span class="o">=</span> <span class="s2">&quot;You are a helpful assistant.&quot;</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">response</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">prompt</span><span class="p">(</span><span class="s1">&#39;What is the capital of France?&#39;</span><span class="p">,</span> <span class="n">system</span><span class="o">=</span><span class="n">system_message</span><span class="p">,</span> <span class="n">top_p</span><span class="o">=</span><span class="mf">0.9</span><span class="p">)</span>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span><span class="w"> </span><span class="nn">LLMlight</span><span class="w"> </span><span class="kn">import</span> <span class="n">LLMlight</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="c1"># Simple prompt -- no context</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">client</span> <span class="o">=</span> <span class="n">LLMlight</span><span class="p">(</span><span class="n">model</span><span class="o">=</span><span class="s1">&#39;mistralai/mistral-small-3.2&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">response</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">prompt</span><span class="p">(</span><span class="s1">&#39;What is the capital of France?&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">response</span><span class="p">)</span>
+</pre></div>
+</div>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="c1"># RAG over a PDF with bert embeddings</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">client</span> <span class="o">=</span> <span class="n">LLMlight</span><span class="p">(</span><span class="n">model</span><span class="o">=</span><span class="s1">&#39;mistralai/mistral-small-3.2&#39;</span><span class="p">,</span>
+<span class="gp">... </span>                  <span class="n">retrieval_method</span><span class="o">=</span><span class="s1">&#39;naive_rag&#39;</span><span class="p">,</span>
+<span class="gp">... </span>                  <span class="n">embedding</span><span class="o">=</span><span class="s1">&#39;bert&#39;</span><span class="p">,</span>
+<span class="gp">... </span>                  <span class="n">top_chunks</span><span class="o">=</span><span class="mi">5</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">context</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">read_pdf</span><span class="p">(</span><span class="s1">&#39;https://example.com/paper.pdf&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">response</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">prompt</span><span class="p">(</span><span class="s1">&#39;Summarize the main contributions.&#39;</span><span class="p">,</span>
+<span class="gp">... </span>                         <span class="n">context</span><span class="o">=</span><span class="n">context</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">response</span><span class="p">)</span>
+</pre></div>
+</div>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="c1"># Persistent SQLite memory store</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">client</span> <span class="o">=</span> <span class="n">LLMlight</span><span class="p">(</span><span class="n">model</span><span class="o">=</span><span class="s1">&#39;mistralai/mistral-small-3.2&#39;</span><span class="p">,</span>
+<span class="gp">... </span>                  <span class="n">embedding</span><span class="o">=</span><span class="s1">&#39;automatic&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">client</span><span class="o">.</span><span class="n">memory_init</span><span class="p">(</span><span class="n">store_path</span><span class="o">=</span><span class="s1">&#39;knowledge.db&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">client</span><span class="o">.</span><span class="n">memory_add</span><span class="p">(</span><span class="n">text</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;Apes like USB sticks.&#39;</span><span class="p">,</span>
+<span class="gp">... </span>                        <span class="s1">&#39;The capital of France is Amsterdam.&#39;</span><span class="p">])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">client</span><span class="o">.</span><span class="n">memory_save</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">response</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">prompt</span><span class="p">(</span><span class="s1">&#39;What do apes like?&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">response</span><span class="p">)</span>
+</pre></div>
+</div>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="c1"># Disable embedding entirely -- full context passed to LLM</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">client</span> <span class="o">=</span> <span class="n">LLMlight</span><span class="p">(</span><span class="n">model</span><span class="o">=</span><span class="s1">&#39;mistralai/mistral-small-3.2&#39;</span><span class="p">,</span>
+<span class="gp">... </span>                  <span class="n">embedding</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+<span class="gp">... </span>                  <span class="n">retrieval_method</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">response</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">prompt</span><span class="p">(</span><span class="s1">&#39;Summarise this.&#39;</span><span class="p">,</span>
+<span class="gp">... </span>                         <span class="n">context</span><span class="o">=</span><span class="s1">&#39;Short enough to fit in context window.&#39;</span><span class="p">)</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">response</span><span class="p">)</span>
 </pre></div>
 </div>
@@ -343,17 +419,23 @@ With a context window (n_ctx) of 4096 your can set size=1000 words with n chunks
 <dl class="py method">
 <dt class="sig sig-object py" id="LLMlight.LLMlight.LLMlight.compute_context_strategy">
 <span class="sig-name descname"><span class="pre">compute_context_strategy</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">query</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">context</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">instructions</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">system</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#LLMlight.LLMlight.LLMlight.compute_context_strategy" title="Link to this definition"></a></dt>
-<dd></dd></dl>
+<dd><p>Apply the configured context strategy before retrieval.</p>
+</dd></dl>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="LLMlight.LLMlight.LLMlight.compute_probability">
 <span class="sig-name descname"><span class="pre">compute_probability</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">query</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scores</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">embedding</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">5000</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#LLMlight.LLMlight.LLMlight.compute_probability" title="Link to this definition"></a></dt>
-<dd></dd></dl>
+<dd><p>Fit a null distribution over retrieval scores and return significance flags.</p>
+<p>Uses the <em>distfit</em> package.  Returns None when the test cannot run
+reliably (no memory, too few scores, degenerate distribution, or any
+distfit internal error – including the IndexError caused by an empty
+histogram when all scores are identical).</p>
+</dd></dl>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="LLMlight.LLMlight.LLMlight.fit_transform">
 <span class="sig-name descname"><span class="pre">fit_transform</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">query</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">chunks</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">embedding</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#LLMlight.LLMlight.LLMlight.fit_transform" title="Link to this definition"></a></dt>
-<dd><p>Converts context chunks and query into vector space representations based on the selected embedding method.</p>
+<dd><p>Embed query and chunks.  Use <code class="xref py py-meth docutils literal notranslate"><span class="pre">_embed()</span></code> in new code.</p>
 </dd></dl>
 
 <dl class="py method">
@@ -395,8 +477,9 @@ Models that fail validation (e.g., return a 404 error) are excluded from the res
 
 <dl class="py method">
 <dt class="sig sig-object py" id="LLMlight.LLMlight.LLMlight.get_full_path">
-<span class="sig-name descname"><span class="pre">get_full_path</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">filepath</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span></span><a class="headerlink" href="#LLMlight.LLMlight.LLMlight.get_full_path" title="Link to this definition"></a></dt>
-<dd></dd></dl>
+<span class="sig-name descname"><span class="pre">get_full_path</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">filepath</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#LLMlight.LLMlight.LLMlight.get_full_path" title="Link to this definition"></a></dt>
+<dd><p>Alias kept for backwards compatibility.  Use _resolve_file_path().</p>
+</dd></dl>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="LLMlight.LLMlight.LLMlight.global_reasoning">
@@ -413,46 +496,57 @@ response = model.llm.prompt(query=prompt, instructions=instructions, task=’Tas
 
 <dl class="py method">
 <dt class="sig sig-object py" id="LLMlight.LLMlight.LLMlight.memory_add">
-<span class="sig-name descname"><span class="pre">memory_add</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">text</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">files</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dirpath</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">filetypes</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">['.pdf',</span> <span class="pre">'.txt',</span> <span class="pre">'.epub',</span> <span class="pre">'.md',</span> <span class="pre">'.doc',</span> <span class="pre">'.docx',</span> <span class="pre">'.rtf',</span> <span class="pre">'.html',</span> <span class="pre">'.htm']</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">chunk_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">512</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">chunk_overlap</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">100</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">overwrite</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#LLMlight.LLMlight.LLMlight.memory_add" title="Link to this definition"></a></dt>
-<dd><p>Add chunks to memory.</p>
+<span class="sig-name descname"><span class="pre">memory_add</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">text</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">files</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dirpath</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">filetypes</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">chunk_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">512</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">chunk_overlap</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">100</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">overwrite</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#LLMlight.LLMlight.LLMlight.memory_add" title="Link to this definition"></a></dt>
+<dd><p>Add text chunks or files to the memory store buffer.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>files</strong> (<em>(</em><em>str</em><em>, </em><em>list</em><em>)</em>) – Path to file(s).</p>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>text</strong> (<em>str</em><em> or </em><em>list</em><em> of </em><em>str</em><em>, </em><em>optional</em>) – Raw text strings to add directly.</p></li>
+<li><p><strong>files</strong> (<em>str</em><em> or </em><em>list</em><em> of </em><em>str</em><em>, </em><em>optional</em>) – File paths or HTTP URLs to ingest.</p></li>
+<li><p><strong>dirpath</strong> (<em>str</em><em>, </em><em>optional</em>) – Directory to scan recursively for supported file types.</p></li>
+<li><p><strong>filetypes</strong> (<em>list</em><em> of </em><em>str</em><em>, </em><em>optional</em>) – File extensions to include when scanning <em>dirpath</em>.
+Defaults to a standard set (pdf, txt, epub, md, doc, docx, …).</p></li>
+<li><p><strong>chunk_size</strong> (<em>int</em>) – Characters (or words) per chunk.</p></li>
+<li><p><strong>chunk_overlap</strong> (<em>int</em>) – Overlap between consecutive chunks.</p></li>
+<li><p><strong>overwrite</strong> (<em>bool</em>) – When False, skip adding if a store file already exists on disk.</p></li>
+</ul>
 </dd>
 </dl>
 </dd></dl>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="LLMlight.LLMlight.LLMlight.memory_chunks">
-<span class="sig-name descname"><span class="pre">memory_chunks</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">n</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">10</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">return_type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'disk'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#LLMlight.LLMlight.LLMlight.memory_chunks" title="Link to this definition"></a></dt>
-<dd><p>Return the top n memory stack.</p>
+<span class="sig-name descname"><span class="pre">memory_chunks</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">n</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">10</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">list</span></span></span><a class="headerlink" href="#LLMlight.LLMlight.LLMlight.memory_chunks" title="Link to this definition"></a></dt>
+<dd><p>Return up to <em>n</em> stored chunks from the memory store.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>n</strong> (<em>int</em><em>, </em><em>optional</em>) – Top n chunks to be returned. The default is 5.</p></li>
-<li><p><strong>return_type</strong> (<em>str</em><em>, </em><em>optional</em>) – Retrieve chunks from memory or disk. The default is ‘disk’.
-‘memory’
-‘disk’</p></li>
-</ul>
+<dd class="field-odd"><p><strong>n</strong> (<em>int</em>) – Maximum number of chunks to return.</p>
 </dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p><strong>chunks</strong> – Top n returned chunks.</p>
-</dd>
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p>list</p>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>list of str</p>
 </dd>
 </dl>
 </dd></dl>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="LLMlight.LLMlight.LLMlight.memory_init">
-<span class="sig-name descname"><span class="pre">memory_init</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">file_path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">config</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">embedding</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#LLMlight.LLMlight.LLMlight.memory_init" title="Link to this definition"></a></dt>
-<dd><p>Build QR code video and index from chunks with unified codec handling.</p>
+<span class="sig-name descname"><span class="pre">memory_init</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">store_path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">config</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">embedding</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">backend</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#LLMlight.LLMlight.LLMlight.memory_init" title="Link to this definition"></a></dt>
+<dd><p>Prepare a memory store for writing.</p>
+<p>Creates a new store or re-opens an existing one so that chunks can be
+added via <a class="reference internal" href="#LLMlight.LLMlight.LLMlight.memory_add" title="LLMlight.LLMlight.LLMlight.memory_add"><code class="xref py py-meth docutils literal notranslate"><span class="pre">memory_add()</span></code></a>.  Call <a class="reference internal" href="#LLMlight.LLMlight.LLMlight.memory_save" title="LLMlight.LLMlight.LLMlight.memory_save"><code class="xref py py-meth docutils literal notranslate"><span class="pre">memory_save()</span></code></a> afterwards to
+persist the buffered chunks (sqlite backend writes immediately; memvid
+requires an explicit save to rebuild the video).</p>
+<p>If the same resolved path is already initialised this call is a no-op.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>file_path</strong> (<em>str</em>) – Path to output video memory file.</p></li>
-<li><p><strong>config</strong> (<em>dict</em>) – Dictionary containing configuration parameters.</p></li>
+<li><p><strong>store_path</strong> (<em>str</em><em>, </em><em>optional</em>) – Path to the store file.  Relative paths are resolved under the
+LLMlight temp directory.  Defaults to the path set at construction.
+The extension is normalised: <code class="docutils literal notranslate"><span class="pre">.db</span></code> -&gt; sqlite, <code class="docutils literal notranslate"><span class="pre">.mp4</span></code> -&gt; memvid.</p></li>
+<li><p><strong>config</strong> (<em>dict</em><em>, </em><em>optional</em>) – Backend-specific configuration dict passed through to the backend.</p></li>
+<li><p><strong>embedding</strong> (<em>str</em><em>, </em><em>optional</em>) – Override <code class="docutils literal notranslate"><span class="pre">self.embedding['memory']</span></code> for this store (e.g. <code class="docutils literal notranslate"><span class="pre">'bert'</span></code>).</p></li>
+<li><p><strong>backend</strong> (<em>str</em><em>, </em><em>optional</em>) – <code class="docutils literal notranslate"><span class="pre">'sqlite'</span></code> (default) or <code class="docutils literal notranslate"><span class="pre">'memvid'</span></code>.  When <code class="docutils literal notranslate"><span class="pre">None</span></code> the factory
+infers the backend from the file extension.</p></li>
 </ul>
 </dd>
 </dl>
@@ -460,22 +554,99 @@ response = model.llm.prompt(query=prompt, instructions=instructions, task=’Tas
 
 <dl class="py method">
 <dt class="sig sig-object py" id="LLMlight.LLMlight.LLMlight.memory_load">
-<span class="sig-name descname"><span class="pre">memory_load</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">file_path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">config</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#LLMlight.LLMlight.LLMlight.memory_load" title="Link to this definition"></a></dt>
-<dd></dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="LLMlight.LLMlight.LLMlight.memory_save">
-<span class="sig-name descname"><span class="pre">memory_save</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">file_path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">codec</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'mp4v'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">auto_build_docker</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">allow_fallback</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">overwrite</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">show_progress</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#LLMlight.LLMlight.LLMlight.memory_save" title="Link to this definition"></a></dt>
-<dd><p>Build QR code video and index from chunks with unified codec handling.</p>
+<span class="sig-name descname"><span class="pre">memory_load</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">store_path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">config</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">backend</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#LLMlight.LLMlight.LLMlight.memory_load" title="Link to this definition"></a></dt>
+<dd><p>Load an existing memory store from disk so it is ready for querying.</p>
+<p>When <code class="docutils literal notranslate"><span class="pre">store_path</span></code> differs from the currently loaded store the old
+backend is replaced and the new store is opened.  This means calling
+<code class="docutils literal notranslate"><span class="pre">memory_load('other.db')</span></code> after the store was previously initialised
+correctly switches to the new store rather than silently keeping the old one.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>file_path</strong> (<em>str</em><em> (</em><em>default is the initialization memory-path</em><em>)</em>) – Path to output video memory file.</p></li>
-<li><p><strong>codec</strong> (<em>str</em><em>, </em><em>optional</em>) – Video codec (‘mp4v’, ‘h265’, ‘h264’, etc.)
-‘mp4v’: Default</p></li>
-<li><p><strong>auto_build_docker</strong> (<em>bool</em><em> (</em><em>default: True</em><em>)</em>) – Whether to auto-build Docker if needed.</p></li>
-<li><p><strong>allow_fallback</strong> (<em>bool</em>) – Whether to fall back to MP4V if advanced codec fails.</p></li>
-<li><p><strong>show_progress</strong> (<em>bool</em><em> (</em><em>default: True</em><em>)</em>)</p></li>
+<li><p><strong>store_path</strong> (<em>str</em><em>, </em><em>optional</em>) – Path to the store file.  Defaults to the path set at construction.
+Relative paths are resolved under the LLMlight temp directory.</p></li>
+<li><p><strong>config</strong> (<em>dict</em><em>, </em><em>optional</em>) – Backend-specific configuration.  Reuses the existing config when
+<code class="docutils literal notranslate"><span class="pre">None</span></code> and a backend is already loaded.</p></li>
+<li><p><strong>backend</strong> (<em>str</em><em>, </em><em>optional</em>) – Force a specific backend.  Usually not needed – the factory infers
+the backend from the file extension (<code class="docutils literal notranslate"><span class="pre">.db</span></code> -&gt; sqlite, <code class="docutils literal notranslate"><span class="pre">.mp4</span></code> -&gt; memvid).</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="LLMlight.LLMlight.LLMlight.memory_reindex">
+<span class="sig-name descname"><span class="pre">memory_reindex</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">batch_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">128</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">save_index</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#LLMlight.LLMlight.LLMlight.memory_reindex" title="Link to this definition"></a></dt>
+<dd><p>Rebuild the retrieval index for the current backend.</p>
+<p>Computes embeddings for all stored chunks and rebuilds the ANN index.
+Requires the <code class="docutils literal notranslate"><span class="pre">sentence-transformers</span></code> and <code class="docutils literal notranslate"><span class="pre">hnswlib</span></code> packages.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>batch_size</strong> (<em>int</em>) – Number of texts to encode per batch.</p></li>
+<li><p><strong>save_index</strong> (<em>bool</em>) – Persist the rebuilt index to disk after completion.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>True on success.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>bool</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="LLMlight.LLMlight.LLMlight.memory_remove">
+<span class="sig-name descname"><span class="pre">memory_remove</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ids</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">list</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">query</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">top_k</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">list</span></span></span><a class="headerlink" href="#LLMlight.LLMlight.LLMlight.memory_remove" title="Link to this definition"></a></dt>
+<dd><p>Remove chunks from the memory store by id or search query.</p>
+<p class="rubric">Examples</p>
+<p># Find what is stored first
+&gt;&gt;&gt; results = client.memory.search(‘BMC’)
+&gt;&gt;&gt; # [(31, 0.23, {‘text’: ‘BMC test’, ‘id’: 31})]</p>
+<p># Remove by id
+&gt;&gt;&gt; client.memory_remove(ids=31)</p>
+<p># Or remove by query (removes the single best match by default)
+&gt;&gt;&gt; client.memory_remove(query=’BMC test’)</p>
+<p># Remove the top-3 matches for a query
+&gt;&gt;&gt; client.memory_remove(query=’BMC’, top_k=3)</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>ids</strong> (<em>int</em><em> or </em><em>list</em><em> of </em><em>int</em><em>, </em><em>optional</em>) – Row id(s) to delete, as returned in the first element of each
+search result tuple.</p></li>
+<li><p><strong>query</strong> (<em>str</em><em>, </em><em>optional</em>) – Search term – the top-<em>top_k</em> matching chunks are removed.
+Ignored when <em>ids</em> is provided.</p></li>
+<li><p><strong>top_k</strong> (<em>int</em>) – How many top query matches to remove (default 1).</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The ids that were actually deleted.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>list of int</p>
+</dd>
+</dl>
+<p class="rubric">Notes</p>
+<p>For the <strong>sqlite</strong> backend the change is written to disk immediately.
+For the <strong>memvid</strong> backend the removal is staged in memory – call
+<a class="reference internal" href="#LLMlight.LLMlight.LLMlight.memory_save" title="LLMlight.LLMlight.LLMlight.memory_save"><code class="xref py py-meth docutils literal notranslate"><span class="pre">memory_save()</span></code></a> to rebuild and persist the video without the
+removed chunks.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="LLMlight.LLMlight.LLMlight.memory_save">
+<span class="sig-name descname"><span class="pre">memory_save</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">store_path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">codec</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'mp4v'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">auto_build_docker</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">allow_fallback</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">overwrite</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">show_progress</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#LLMlight.LLMlight.LLMlight.memory_save" title="Link to this definition"></a></dt>
+<dd><p>Persist buffered chunks to the store and reload the retriever.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>store_path</strong> (<em>str</em><em>, </em><em>optional</em>) – Override the destination path.  Defaults to the current store path.</p></li>
+<li><p><strong>codec</strong> (<em>str</em><em>, </em><em>optional</em>) – Video codec for the memvid backend (ignored by sqlite backend).</p></li>
+<li><p><strong>auto_build_docker</strong> (<em>bool</em>) – Passed through to the memvid backend only.</p></li>
+<li><p><strong>allow_fallback</strong> (<em>bool</em>) – Allow the memvid backend to fall back to mp4v on codec failure.</p></li>
+<li><p><strong>overwrite</strong> (<em>bool</em>) – Overwrite an existing store.  Default True.</p></li>
+<li><p><strong>show_progress</strong> (<em>bool</em>) – Show a progress bar during encoding.</p></li>
 </ul>
 </dd>
 </dl>
@@ -483,48 +654,64 @@ response = model.llm.prompt(query=prompt, instructions=instructions, task=’Tas
 
 <dl class="py method">
 <dt class="sig sig-object py" id="LLMlight.LLMlight.LLMlight.prompt">
-<span class="sig-name descname"><span class="pre">prompt</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">query:</span> <span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">instructions:</span> <span class="pre">str</span> <span class="pre">=</span> <span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">system:</span> <span class="pre">str</span> <span class="pre">=</span> <span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">context:</span> <span class="pre">str</span> <span class="pre">=</span> <span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">response_format=None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">temperature:</span> <span class="pre">(&lt;class</span> <span class="pre">'int'&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">&lt;class</span> <span class="pre">'float'&gt;)</span> <span class="pre">=</span> <span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">top_p:</span> <span class="pre">(&lt;class</span> <span class="pre">'int'&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">&lt;class</span> <span class="pre">'float'&gt;)</span> <span class="pre">=</span> <span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stream:</span> <span class="pre">bool</span> <span class="pre">=</span> <span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">return_type:</span> <span class="pre">str</span> <span class="pre">=</span> <span class="pre">'string'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose=None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#LLMlight.LLMlight.LLMlight.prompt" title="Link to this definition"></a></dt>
-<dd><p>Run the model with the provided parameters.</p>
-<p>The final prompt is created based on the query, instructions, and the context</p>
+<span class="sig-name descname"><span class="pre">prompt</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">query</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">instructions</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">system</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">context</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">response_format</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">temperature</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">(&lt;class</span> <span class="pre">'int'&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">&lt;class</span> <span class="pre">'float'&gt;)</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">top_p</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">(&lt;class</span> <span class="pre">'int'&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">&lt;class</span> <span class="pre">'float'&gt;)</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stream</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">return_type</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'string'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#LLMlight.LLMlight.LLMlight.prompt" title="Link to this definition"></a></dt>
+<dd><p>Run the model and return its response.</p>
+<p>Orchestrates the full pipeline: memory retrieval -&gt; context retrieval -&gt;
+context strategy -&gt; prompt assembly -&gt; LLM call.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>query</strong> (<em>str</em>) – The question or query.
-“What is the capital for France?”</p></li>
-<li><p><strong>context</strong> (<em>str</em>) – Large text string that will be chunked, and embedded. The answer for the query is based on the chunks.</p></li>
-<li><p><strong>instructions</strong> (<em>str</em>) – Set your instructions.
-“Answer the question strictly based on the provided context.”</p></li>
-<li><p><strong>system</strong> (<em>str</em><em>, </em><em>optional</em>) – Optional system message to set context for the AI (default is None).
-“You are helpfull assistant.”</p></li>
-<li><p><strong>temperature</strong> (<em>float</em><em>, </em><em>optional</em>) – Sampling temperature (default is 0.7).</p></li>
-<li><p><strong>top_p</strong> (<em>float</em><em>, </em><em>optional</em>) – Top-p (nucleus) sampling parameter (default is 1.0, no filtering).</p></li>
-<li><p><strong>stream</strong> (<em>bool</em><em>, </em><em>optional</em>) – Whether to enable streaming (default is False).</p></li>
-<li><p><strong>return_type</strong> (<em>bool</em><em>, </em><em>optional</em>) – Return dictionary in case the output is a json
-‘max’: Output the full json
-‘dict’: Convert json into dictionary.
-‘string’: Return only the string answer (remove thinking strings using tags: &lt;think&gt; &lt;/think&gt;).
-‘string_with_thinking’ Return the full response which includes the thinking proces (if available).</p></li>
+<li><p><strong>query</strong> (<em>str</em>) – The question or task, e.g. <code class="docutils literal notranslate"><span class="pre">'What</span> <span class="pre">is</span> <span class="pre">the</span> <span class="pre">capital</span> <span class="pre">of</span> <span class="pre">France?'</span></code>.</p></li>
+<li><p><strong>context</strong> (<em>str</em><em>, </em><em>optional</em>) – Raw text to search for relevant information.  When <code class="docutils literal notranslate"><span class="pre">retrieval_method</span></code>
+is set the text is chunked and the top-k chunks are selected; when
+<code class="docutils literal notranslate"><span class="pre">retrieval_method=None</span></code> the full string is forwarded to the LLM
+(a warning is emitted when it likely exceeds <code class="docutils literal notranslate"><span class="pre">n_ctx</span></code>).
+Defaults to <code class="docutils literal notranslate"><span class="pre">self.context</span></code> when <code class="docutils literal notranslate"><span class="pre">None</span></code>.</p></li>
+<li><p><strong>instructions</strong> (<em>str</em><em>, </em><em>optional</em>) – Task-specific instructions appended to the prompt, e.g.
+<code class="docutils literal notranslate"><span class="pre">'Answer</span> <span class="pre">using</span> <span class="pre">only</span> <span class="pre">information</span> <span class="pre">from</span> <span class="pre">the</span> <span class="pre">context.'</span></code>.</p></li>
+<li><p><strong>system</strong> (<em>str</em><em>, </em><em>optional</em>) – System message that sets the LLM’s role.  When <code class="docutils literal notranslate"><span class="pre">None</span></code> a sensible
+default is used.</p></li>
+<li><p><strong>response_format</strong> (<em>str</em><em>, </em><em>optional</em>) – Desired output format hint, e.g. <code class="docutils literal notranslate"><span class="pre">'Return</span> <span class="pre">a</span> <span class="pre">JSON</span> <span class="pre">object.'</span></code>.</p></li>
+<li><p><strong>temperature</strong> (<em>float</em><em>, </em><em>optional</em>) – Sampling temperature. Overrides the instance default for this call.</p></li>
+<li><p><strong>top_p</strong> (<em>float</em><em>, </em><em>optional</em>) – Nucleus sampling threshold. Overrides the instance default for this call.</p></li>
+<li><p><strong>stream</strong> (bool, default <code class="docutils literal notranslate"><span class="pre">False</span></code>) – Whether to stream the response.</p></li>
+<li><p><strong>return_type</strong> (str, default <code class="docutils literal notranslate"><span class="pre">'string'</span></code>) – <p>How to post-process the raw LLM output:</p>
+<p><code class="docutils literal notranslate"><span class="pre">'string'</span></code>              – Plain text; <code class="docutils literal notranslate"><span class="pre">&lt;think&gt;...&lt;/think&gt;</span></code> blocks removed.
+<code class="docutils literal notranslate"><span class="pre">'string_with_thinking'</span></code>– Plain text including any thinking blocks.
+<code class="docutils literal notranslate"><span class="pre">'dict'</span></code>                – Parse response as JSON and return a dict.
+<code class="docutils literal notranslate"><span class="pre">'max'</span></code>                 – Return the full raw API response object.</p>
+</p></li>
+<li><p><strong>verbose</strong> (<em>str</em><em> or </em><em>int</em><em>, </em><em>optional</em>) – Override logging verbosity for this call only.</p></li>
 </ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The model’s response, post-processed according to <code class="docutils literal notranslate"><span class="pre">return_type</span></code>.
+Returns an error string prefixed with <code class="docutils literal notranslate"><span class="pre">'Error:'</span></code> on HTTP failure.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>str or dict</p>
 </dd>
 </dl>
 <p class="rubric">Examples</p>
-<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="c1"># Examples</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span><span class="w"> </span><span class="nn">LLMlight</span><span class="w"> </span><span class="kn">import</span> <span class="n">LLMlight</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">client</span> <span class="o">=</span>  <span class="n">LLMlight</span><span class="p">()</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">client</span><span class="o">.</span><span class="n">prompt</span><span class="p">(</span><span class="s1">&#39;hello, who are you?&#39;</span><span class="p">)</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">system_message</span> <span class="o">=</span> <span class="s2">&quot;You are a helpful assistant.&quot;</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">response</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">prompt</span><span class="p">(</span><span class="s1">&#39;What is the capital of France?&#39;</span><span class="p">,</span> <span class="n">system</span><span class="o">=</span><span class="n">system_message</span><span class="p">,</span> <span class="n">top_p</span><span class="o">=</span><span class="mf">0.9</span><span class="p">)</span>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">client</span> <span class="o">=</span> <span class="n">LLMlight</span><span class="p">(</span><span class="n">model</span><span class="o">=</span><span class="s1">&#39;mistralai/mistral-small-3.2&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">response</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">prompt</span><span class="p">(</span><span class="s1">&#39;What is the capital of France?&#39;</span><span class="p">)</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">response</span><span class="p">)</span>
 </pre></div>
 </div>
-<dl class="field-list simple">
-<dt class="field-odd">Returns<span class="colon">:</span></dt>
-<dd class="field-odd"><p>The model’s response or an error message if the request fails.</p>
-</dd>
-<dt class="field-even">Return type<span class="colon">:</span></dt>
-<dd class="field-even"><p>str</p>
-</dd>
-</dl>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="c1"># With context and instructions</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">response</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">prompt</span><span class="p">(</span>
+<span class="gp">... </span>    <span class="s1">&#39;What do apes like?&#39;</span><span class="p">,</span>
+<span class="gp">... </span>    <span class="n">context</span><span class="o">=</span><span class="s1">&#39;Apes like USB sticks.&#39;</span><span class="p">,</span>
+<span class="gp">... </span>    <span class="n">instructions</span><span class="o">=</span><span class="s1">&#39;Answer in one sentence using only the context.&#39;</span><span class="p">,</span>
+<span class="gp">... </span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">response</span><span class="p">)</span>
+</pre></div>
+</div>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="c1"># Override temperature for a single call</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">response</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">prompt</span><span class="p">(</span><span class="s1">&#39;Write a short poem.&#39;</span><span class="p">,</span> <span class="n">temperature</span><span class="o">=</span><span class="mf">1.0</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">response</span><span class="p">)</span>
+</pre></div>
+</div>
 </dd></dl>
 
 <dl class="py method">
@@ -542,13 +729,56 @@ dict: dictionary</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="LLMlight.LLMlight.LLMlight.relevant_context_retrieval">
-<span class="sig-name descname"><span class="pre">relevant_context_retrieval</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">query</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">context</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">return_type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'list'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#LLMlight.LLMlight.LLMlight.relevant_context_retrieval" title="Link to this definition"></a></dt>
-<dd></dd></dl>
+<span class="sig-name descname"><span class="pre">relevant_context_retrieval</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">query</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">context</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">return_type</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'list'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#LLMlight.LLMlight.LLMlight.relevant_context_retrieval" title="Link to this definition"></a></dt>
+<dd><p>Return the most relevant portion of <em>context</em> for <em>query</em>.</p>
+<p>Behaviour depends on <code class="docutils literal notranslate"><span class="pre">self.retrieval_method</span></code> and <code class="docutils literal notranslate"><span class="pre">self.embedding['context']</span></code>:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">retrieval_method='naive_rag'</span></code> and embedding not <code class="docutils literal notranslate"><span class="pre">None</span></code>: context is split
+into chunks and the top-k most similar chunks are returned.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">retrieval_method='RSE'</span></code> with <code class="docutils literal notranslate"><span class="pre">embedding</span></code> in <code class="docutils literal notranslate"><span class="pre">('bert',</span> <span class="pre">'bge-small')</span></code>:
+contiguous relevant segments are extracted via RSE.</p></li>
+<li><p>Any other combination (including <code class="docutils literal notranslate"><span class="pre">embedding=None</span></code> or <code class="docutils literal notranslate"><span class="pre">retrieval_method=None</span></code>):
+the full <em>context</em> string is returned unchanged.  A warning is logged when
+the estimated token count exceeds <code class="docutils literal notranslate"><span class="pre">n_ctx</span></code>.</p></li>
+</ul>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>query</strong> (<em>str</em>)</p></li>
+<li><p><strong>context</strong> (<em>str</em>) – Raw text to search through.</p></li>
+<li><p><strong>return_type</strong> (str, default <code class="docutils literal notranslate"><span class="pre">'list'</span></code>) – <code class="docutils literal notranslate"><span class="pre">'list'</span></code>   – list of str chunks.
+<code class="docutils literal notranslate"><span class="pre">'string'</span></code> – chunks joined with <code class="docutils literal notranslate"><span class="pre">###</span> <span class="pre">Chunk</span> <span class="pre">N:</span></code> headers.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>list of str, str, or the original <em>context</em> unchanged.</p>
+</dd>
+</dl>
+</dd></dl>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="LLMlight.LLMlight.LLMlight.relevant_memory_retrieval">
-<span class="sig-name descname"><span class="pre">relevant_memory_retrieval</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">query</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">return_type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'list'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#LLMlight.LLMlight.LLMlight.relevant_memory_retrieval" title="Link to this definition"></a></dt>
-<dd></dd></dl>
+<span class="sig-name descname"><span class="pre">relevant_memory_retrieval</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">query</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">return_type</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'list'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#LLMlight.LLMlight.LLMlight.relevant_memory_retrieval" title="Link to this definition"></a></dt>
+<dd><p>Return the top-k most relevant chunks from the persistent memory store.</p>
+<p>Returns <code class="docutils literal notranslate"><span class="pre">None</span></code> when no store is loaded, the store file does not exist,
+or <code class="docutils literal notranslate"><span class="pre">embedding['memory']</span></code> is <code class="docutils literal notranslate"><span class="pre">None</span></code> (embedding disabled).</p>
+<p>The backing file is detected by checking both <code class="docutils literal notranslate"><span class="pre">self.store_path</span></code> and
+<code class="docutils literal notranslate"><span class="pre">self.memory.store_path</span></code>, so extension normalisation (e.g. a user-supplied
+<code class="docutils literal notranslate"><span class="pre">.mp4</span></code> path resolved to a <code class="docutils literal notranslate"><span class="pre">.db</span></code> file by the sqlite backend) does not
+cause a silent miss.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>query</strong> (<em>str</em>) – The search query.</p></li>
+<li><p><strong>return_type</strong> (str, default <code class="docutils literal notranslate"><span class="pre">'list'</span></code>) – <code class="docutils literal notranslate"><span class="pre">'list'</span></code>   – list of str chunks, highest relevance first.
+<code class="docutils literal notranslate"><span class="pre">'string'</span></code> – chunks joined with <code class="docutils literal notranslate"><span class="pre">###</span> <span class="pre">Chunk</span> <span class="pre">N:</span></code> headers.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>list of str, str, or None</p>
+</dd>
+</dl>
+</dd></dl>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="LLMlight.LLMlight.LLMlight.requests_post">
@@ -568,13 +798,21 @@ dict: dictionary</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="LLMlight.LLMlight.LLMlight.search">
-<span class="sig-name descname"><span class="pre">search</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">query</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">chunks</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">list</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">return_type</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'string'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">top_chunks</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">embedding</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#LLMlight.LLMlight.LLMlight.search" title="Link to this definition"></a></dt>
-<dd><p>Splits large text into chunks and finds the most relevant ones.</p>
+<span class="sig-name descname"><span class="pre">search</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">query</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">chunks</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">list</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">return_type</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'score'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">top_chunks</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">embedding</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">list</span></span></span><a class="headerlink" href="#LLMlight.LLMlight.LLMlight.search" title="Link to this definition"></a></dt>
+<dd><p>Rank <em>chunks</em> by relevance to <em>query</em>.</p>
+<p>Thin wrapper around <code class="xref py py-meth docutils literal notranslate"><span class="pre">_retrieve()</span></code> kept for backwards compatibility.</p>
+<section id="return-type-options">
+<h3>return_type options<a class="headerlink" href="#return-type-options" title="Link to this heading"></a></h3>
+<p>‘score’       : list of (score, text) tuples  [default]
+‘list’        : list of text strings
+‘string_flat’ : space-joined string
+other         : newline-separated string</p>
+</section>
 </dd></dl>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="LLMlight.LLMlight.LLMlight.set_prompt">
-<span class="sig-name descname"><span class="pre">set_prompt</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">query:</span> <span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">instructions:</span> <span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">context:</span> <span class="pre">(&lt;class</span> <span class="pre">'str'&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">&lt;class</span> <span class="pre">'list'&gt;)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">response_format:</span> <span class="pre">str</span> <span class="pre">=</span> <span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#LLMlight.LLMlight.LLMlight.set_prompt" title="Link to this definition"></a></dt>
+<span class="sig-name descname"><span class="pre">set_prompt</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">query</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">instructions</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">context</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">(&lt;class</span> <span class="pre">'str'&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">&lt;class</span> <span class="pre">'list'&gt;)</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">response_format</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#LLMlight.LLMlight.LLMlight.set_prompt" title="Link to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
@@ -642,30 +880,79 @@ ensuring at least a minimum number of tokens as defined per task type.</p>
 <dl class="py function">
 <dt class="sig sig-object py" id="LLMlight.LLMlight.compute_tokens">
 <span class="sig-prename descclassname"><span class="pre">LLMlight.LLMlight.</span></span><span class="sig-name descname"><span class="pre">compute_tokens</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">string</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_ctx</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">4096</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">task</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'max'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#LLMlight.LLMlight.compute_tokens" title="Link to this definition"></a></dt>
-<dd></dd></dl>
+<dd><p>Estimate the token count of <em>string</em> and compute the generation budget.</p>
+<p>Uses the GPT-2 tokenizer as a fast, dependency-light approximation.  Token
+counts for non-GPT-2 model families (Llama, Mistral, Gemma, …) may differ
+by up to ~30 %, so treat the result as an estimate rather than an exact value.</p>
+<p>Unlike a naive approach the prompt is encoded <strong>without</strong> truncation so the
+real length is always visible.  A warning is emitted when the prompt exceeds
+<code class="docutils literal notranslate"><span class="pre">n_ctx</span></code> so the caller can react rather than silently losing context.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>string</strong> (<em>str</em>) – The full prompt string to measure.</p></li>
+<li><p><strong>n_ctx</strong> (int, default <code class="docutils literal notranslate"><span class="pre">4096</span></code>) – Model context window in tokens.</p></li>
+<li><p><strong>task</strong> (str, default <code class="docutils literal notranslate"><span class="pre">'max'</span></code>) – Generation task passed to <a class="reference internal" href="#LLMlight.LLMlight.compute_max_tokens" title="LLMlight.LLMlight.compute_max_tokens"><code class="xref py py-func docutils literal notranslate"><span class="pre">compute_max_tokens()</span></code></a> to determine the
+fraction of remaining tokens allocated for the response.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>(used_tokens, max_tokens)</strong> – <code class="docutils literal notranslate"><span class="pre">used_tokens</span></code> – estimated tokens consumed by the prompt.
+<code class="docutils literal notranslate"><span class="pre">max_tokens</span></code>  – tokens available for generation, capped by <code class="docutils literal notranslate"><span class="pre">n_ctx</span></code>.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>tuple of int</p>
+</dd>
+</dl>
+</dd></dl>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="LLMlight.LLMlight.convert_messages_to_model">
 <span class="sig-prename descclassname"><span class="pre">LLMlight.LLMlight.</span></span><span class="sig-name descname"><span class="pre">convert_messages_to_model</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">messages</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">model</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'llama'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">add_assistant_start</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#LLMlight.LLMlight.convert_messages_to_model" title="Link to this definition"></a></dt>
-<dd><p>Builds a prompt in the appropriate format for different models (LLaMA, Grok, Mistral).</p>
+<dd><p>Builds a prompt in the appropriate format for different model families.</p>
 <dl>
-<dt>Args:</dt><dd><p>messages (list of dict): Each dict must have ‘role’ (‘system’, ‘user’, ‘assistant’) and ‘content’.
-model (str): The type of model to generate the prompt for (‘llama’, ‘grok’, or ‘mistral’).
-add_assistant_start (bool): Whether to add the assistant start (default True).
-add_bos_token (bool): Helps models know it’s a fresh conversation. Useful for llama/mistral/hermes-style models</p>
-</dd>
-<dt>Returns:</dt><dd><p>str: The final prompt string in the correct format for the given model.</p>
-</dd>
-<dt>Example:</dt><dd><div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">messages</span> <span class="o">=</span> <span class="p">[</span>
-<span class="gp">... </span>    <span class="p">{</span><span class="s2">&quot;role&quot;</span><span class="p">:</span> <span class="s2">&quot;system&quot;</span><span class="p">,</span> <span class="s2">&quot;content&quot;</span><span class="p">:</span> <span class="s2">&quot;You are a helpful assistant.&quot;</span><span class="p">},</span>
-<span class="gp">... </span>    <span class="p">{</span><span class="s2">&quot;role&quot;</span><span class="p">:</span> <span class="s2">&quot;user&quot;</span><span class="p">,</span> <span class="s2">&quot;content&quot;</span><span class="p">:</span> <span class="s2">&quot;What is the capital of France?&quot;</span><span class="p">}</span>
-<span class="gp">... </span><span class="p">]</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">prompt</span> <span class="o">=</span> <span class="n">convert_messages_to_model</span><span class="p">(</span><span class="n">messages</span><span class="p">,</span> <span class="n">model</span><span class="o">=</span><span class="s1">&#39;llama&#39;</span><span class="p">)</span>
-<span class="go"> &gt;&gt;&gt; print(prompt)</span>
-</pre></div>
-</div>
+<dt>Supported families (matched by substring in the model id, case-insensitive):</dt><dd><ul>
+<li><dl>
+<dt>gemma / grok<span class="classifier">Gemma format  – <code class="docutils literal notranslate"><span class="pre">&lt;start_of_turn&gt;{role}\n...&lt;end_of_turn&gt;\n</span></code></span></dt><dd><p>The assistant opener is <code class="docutils literal notranslate"><span class="pre">&lt;start_of_turn&gt;model\n</span></code>.</p>
 </dd>
 </dl>
+</li>
+<li><dl>
+<dt>all others<span class="classifier">ChatML format – <code class="docutils literal notranslate"><span class="pre">&lt;|im_start|&gt;{role}\n...&lt;|im_end|&gt;\n</span></code></span></dt><dd><p>The assistant opener is <code class="docutils literal notranslate"><span class="pre">&lt;|im_start|&gt;assistant\n</span></code>.
+This covers llama, mistral, hermes, phi, qwen, deepseek,
+and any unrecognised model id.</p>
+</dd>
+</dl>
+</li>
+</ul>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>messages</strong> (<em>list</em><em> of </em><em>dict</em>) – Each dict must have keys <code class="docutils literal notranslate"><span class="pre">'role'</span></code> and <code class="docutils literal notranslate"><span class="pre">'content'</span></code>.</p></li>
+<li><p><strong>model</strong> (str, default <code class="docutils literal notranslate"><span class="pre">'llama'</span></code>) – Model identifier string used to select the prompt format.</p></li>
+<li><p><strong>add_assistant_start</strong> (bool, default <code class="docutils literal notranslate"><span class="pre">True</span></code>) – Append the assistant turn opener so the model continues from there.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The formatted prompt string.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>str</p>
+</dd>
+</dl>
+<p class="rubric">Examples</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">messages</span> <span class="o">=</span> <span class="p">[</span>
+<span class="gp">... </span>    <span class="p">{</span><span class="s1">&#39;role&#39;</span><span class="p">:</span> <span class="s1">&#39;system&#39;</span><span class="p">,</span> <span class="s1">&#39;content&#39;</span><span class="p">:</span> <span class="s1">&#39;You are a helpful assistant.&#39;</span><span class="p">},</span>
+<span class="gp">... </span>    <span class="p">{</span><span class="s1">&#39;role&#39;</span><span class="p">:</span> <span class="s1">&#39;user&#39;</span><span class="p">,</span>   <span class="s1">&#39;content&#39;</span><span class="p">:</span> <span class="s1">&#39;What is the capital of France?&#39;</span><span class="p">},</span>
+<span class="gp">... </span><span class="p">]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="c1"># ChatML (llama, mistral, ...)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">convert_messages_to_model</span><span class="p">(</span><span class="n">messages</span><span class="p">,</span> <span class="n">model</span><span class="o">=</span><span class="s1">&#39;mistralai/mistral-small&#39;</span><span class="p">))</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="c1"># Gemma format</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">convert_messages_to_model</span><span class="p">(</span><span class="n">messages</span><span class="p">,</span> <span class="n">model</span><span class="o">=</span><span class="s1">&#39;google/gemma-3-12b&#39;</span><span class="p">))</span>
+</pre></div>
+</div>
 </dd></dl>
 
 <dl class="py function">
@@ -683,7 +970,8 @@ add_bos_token (bool): Helps models know it’s a fresh conversation. Useful for 
 <dl class="py function">
 <dt class="sig sig-object py" id="LLMlight.LLMlight.get_embeddings">
 <span class="sig-prename descclassname"><span class="pre">LLMlight.LLMlight.</span></span><span class="sig-name descname"><span class="pre">get_embeddings</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#LLMlight.LLMlight.get_embeddings" title="Link to this definition"></a></dt>
-<dd></dd></dl>
+<dd><p>Return all recognised embedding method names.</p>
+</dd></dl>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="LLMlight.LLMlight.get_logger">
@@ -692,7 +980,7 @@ add_bos_token (bool): Helps models know it’s a fresh conversation. Useful for 
 
 <dl class="py function">
 <dt class="sig sig-object py" id="LLMlight.LLMlight.load_local_gguf_model">
-<span class="sig-prename descclassname"><span class="pre">LLMlight.LLMlight.</span></span><span class="sig-name descname"><span class="pre">load_local_gguf_model</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">model_path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_ctx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">4096</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_threads</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">8</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_gpu_layers</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Llama</span></span></span><a class="headerlink" href="#LLMlight.LLMlight.load_local_gguf_model" title="Link to this definition"></a></dt>
+<span class="sig-prename descclassname"><span class="pre">LLMlight.LLMlight.</span></span><span class="sig-name descname"><span class="pre">load_local_gguf_model</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">model_path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_ctx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">4096</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_threads</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">8</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_gpu_layers</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#LLMlight.LLMlight.load_local_gguf_model" title="Link to this definition"></a></dt>
 <dd><p>Loads a local GGUF model using llama-cpp-python.</p>
 <dl>
 <dt>Args:</dt><dd><p>model_path (str): Path to the .gguf model file.
@@ -717,7 +1005,7 @@ verbose (bool): Whether to print status info.</p>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="LLMlight.LLMlight.set_logger">
-<span class="sig-prename descclassname"><span class="pre">LLMlight.LLMlight.</span></span><span class="sig-name descname"><span class="pre">set_logger</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">verbose:</span> <span class="pre">[&lt;class</span> <span class="pre">'str'&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">&lt;class</span> <span class="pre">'int'&gt;]</span> <span class="pre">=</span> <span class="pre">'info'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#LLMlight.LLMlight.set_logger" title="Link to this definition"></a></dt>
+<span class="sig-prename descclassname"><span class="pre">LLMlight.LLMlight.</span></span><span class="sig-name descname"><span class="pre">set_logger</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">[&lt;class</span> <span class="pre">'str'&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">&lt;class</span> <span class="pre">'int'&gt;]</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'info'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#LLMlight.LLMlight.set_logger" title="Link to this definition"></a></dt>
 <dd><p>Set the logger for verbosity messages.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -751,7 +1039,7 @@ verbose (bool): Whether to print status info.</p>
 
 <dl class="py class">
 <dt class="sig sig-object py" id="LLMlight.LLMlight.wget">
-<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">LLMlight.LLMlight.</span></span><span class="sig-name descname"><span class="pre">wget</span></span><a class="headerlink" href="#LLMlight.LLMlight.wget" title="Link to this definition"></a></dt>
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">LLMlight.LLMlight.</span></span><span class="sig-name descname"><span class="pre">wget</span></span><a class="headerlink" href="#LLMlight.LLMlight.wget" title="Link to this definition"></a></dt>
 <dd><p>Retrieve file from url.</p>
 <dl class="py method">
 <dt class="sig sig-object py" id="LLMlight.LLMlight.wget.download">

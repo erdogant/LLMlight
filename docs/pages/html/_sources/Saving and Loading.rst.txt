@@ -1,17 +1,18 @@
 Saving
 ################
 
-LLMlight allows you to persist both your learned models and local knowledge databases, enabling reproducibility and easy sharing across projects. Saving a model ensures that all learned parameters, preprocessing settings, embeddings, and context strategies are stored, so that you can later reload the model without retraining. This is particularly useful when working with large datasets or when fine-tuning local models for specialized tasks.
+LLMlight allows you to persist your local knowledge databases, enabling reproducibility and easy sharing across projects. The default SQLite backend writes rows to disk immediately on every ``memory_add`` call. Calling ``memory_save`` additionally persists the HNSW ANN index so that fast approximate nearest-neighbour search is available on reload.
 
-Saving a learned model can be done using the function :func:`LLMlight.LLMlight.LLMlight.memory_save`. This stores the model on disk under a specified file name or path. It is recommended to include versioning in the filename to track updates over time.
+Saving a knowledge base can be done using :func:`LLMlight.LLMlight.LLMlight.memory_save`.
 
 .. code:: python
 
     # Load library
     from LLMlight import LLMlight
     
-    # Initialize with default settings
-    client = LLMlight(model='mistralai/mistral-small-3.2', file_path='local_database.mp4')
+    # Initialize with default SQLite backend
+    client = LLMlight(model='mistralai/mistral-small-3.2')
+    client.memory_init(store_path='local_database.db')
     
     url1 = 'https://proceedings.neurips.cc/paper_files/paper/2017/file/3f5ee243547dee91fbd053c1c4a845aa-Paper.pdf'
     url2 = 'https://erdogant.github.io/publications/papers/2020%20-%20Taskesen%20et%20al%20-%20HNet%20Hypergeometric%20Networks.pdf'
@@ -21,35 +22,68 @@ Saving a learned model can be done using the function :func:`LLMlight.LLMlight.L
     
     # Add more chunks of information
     client.memory_add(text=['Small chunk that is also added to the database.',
-                            'The capital of France is Amsterdam.'],
-                      overwrite=True)
+                            'The capital of France is Amsterdam.'])
     
     # Add all file types from a directory
     client.memory_add(dirpath='c:/my_documents/',
-                      filetypes = ['.pdf', '.txt', '.epub', '.md', '.doc', '.docx', '.rtf', '.html', '.htm'],
-                      )
+                      filetypes=['.pdf', '.txt', '.epub', '.md', '.doc', '.docx', '.rtf', '.html', '.htm'])
     
-    # Store to disk
+    # Persist the ANN index to disk (SQLite rows are already saved)
     client.memory_save()
 
 
 .. note::
-    - The `save` function preserves all model parameters, embeddings, and preprocessing configurations.
-    - Saved models can be shared with colleagues or used on another machine, provided LLMlight is installed.
+    - SQLite rows are written to disk immediately on ``memory_add``; ``memory_save`` persists the HNSW index alongside the database.
+    - Saved knowledge bases can be shared with colleagues or used on another machine, provided LLMlight is installed.
 
 Loading
 ################
 
-Loading a previously saved model can be done using the function :func:`LLMlight.LLMlight.LLMlight.memory_load`. This restores the model into memory, ready for predictions or further analysis.
+Loading a previously saved knowledge base can be done using :func:`LLMlight.LLMlight.LLMlight.memory_init` (which calls ``load`` internally when the store file exists) or the explicit :func:`LLMlight.LLMlight.LLMlight.memory_load`.
 
+.. code:: python
 
-https://erdogant.github.io/LLMlight/pages/html/Saving%20and%20Loading.html#loading
+    from LLMlight import LLMlight
 
+    # Initialize and load existing knowledge base
+    client = LLMlight(model='mistralai/mistral-small-3.2')
+    client.memory_init(store_path='local_database.db')
+
+    # Inspect top 5 chunks
+    client.memory_chunks(n=5)
+
+    # Search through chunks
+    out1 = client.memory.search('Attention Is All You Need', top_k=3)
+    out2 = client.memory.search('Enrichment analysis, Hypergeometric Networks', top_k=3)
+    out3 = client.memory.search('Capital of Amsterdam', top_k=3)
+
+    # Query using stored knowledge
+    response = client.prompt('What is an attention network?')
+    print(response)
 
 .. note::
-    - Ensure that the version of LLMlight used for loading is compatible with the version used to save the model.
-    - Loading a model does not require retraining, which can save substantial time for large or complex models.
-    - Models saved with additional local knowledge (MemVid databases) can be loaded with their memory intact, allowing immediate retrieval-augmented tasks.
+    - Ensure the version of LLMlight used for loading is compatible with the version used to save the database.
+    - Loading does not require reprocessing documents, which saves substantial time for large collections.
+
+
+Rebuilding the ANN Index
+##########################
+
+If the HNSW index file is missing or out of date (e.g. after manually editing the SQLite database), rebuild it with:
+
+.. code:: python
+
+    from LLMlight import LLMlight
+
+    client = LLMlight(model='mistralai/mistral-small-3.2')
+    client.memory_init(store_path='local_database.db')
+
+    # Rebuild and save the ANN index
+    client.memory_reindex(batch_size=64, save_index=True)
+
+    # Query as normal
+    response = client.prompt('What is the capital of France?')
+    print(response)
 
 
 Memory Management
@@ -61,14 +95,14 @@ Create, add to, and query a persistent memory:
 
     from LLMlight import LLMlight
 
-    client = LLMlight()
-    # Initialize a new video memory file
-    client.memory_init(file_path='knowledge_base.mp4')
+    client = LLMlight(model='mistralai/mistral-small-3.2')
+    # Initialize a new SQLite knowledge store
+    client.memory_init(store_path='knowledge_base.db')
 
     # Add knowledge (as chunks of text)
-    client.memory_add(text=['Apes like USB sticks', 'The capital of France is Paris.'], overwrite=True)
+    client.memory_add(text=['Apes like USB sticks', 'The capital of France is Paris.'])
 
-    # Store memory to disk
+    # Persist the ANN index
     client.memory_save()
 
     # Query from the memory
@@ -78,18 +112,28 @@ Create, add to, and query a persistent memory:
     client.memory.show_stats()
 
 
-Advanced: Load Existing Memory and Continue
-################################################
+Advanced: Remove Chunks and Re-query
+######################################
 
 .. code-block:: python
 
     from LLMlight import LLMlight
 
-    # Load previously saved video memory
-    client = LLMlight(model='mistralai/mistral-small-3.2', retrieval_method='knowledge_base.mp4')
+    client = LLMlight(model='mistralai/mistral-small-3.2')
+    client.memory_init(store_path='knowledge_base.db')
 
-    # Query from loaded memory
-    print(client.prompt('What is the capital of France?'))
+    # Find chunks matching a query
+    results = client.memory.search('capital of France', top_k=3)
+    # results: [(id, score, metadata), ...]
+
+    # Remove by id
+    client.memory_remove(ids=results[0][0])
+
+    # Or remove top-3 matches for a query
+    client.memory_remove(query='USB sticks', top_k=3)
+
+    # Verify removal
+    client.memory_chunks(n=10)
 
 
 .. include:: add_bottom.add

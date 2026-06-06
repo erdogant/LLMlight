@@ -8,15 +8,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Installation &mdash; LLMlight LLMlight documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=03e43079" />
-      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
       <link rel="stylesheet" type="text/css" href="_static/css/custom.css?v=e0179649" />
 
   
       <script src="_static/jquery.js?v=5d32c60e"></script>
       <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
       <script src="_static/documentation_options.js?v=f9eecb16"></script>
-      <script src="_static/doctools.js?v=9bcbadda"></script>
-      <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+      <script src="_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="_static/js/theme.js"></script>
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
@@ -55,6 +55,7 @@
 <li class="toctree-l2"><a class="reference internal" href="#create-environment">Create environment</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#pypi">Pypi</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#github-source">Github source</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#optional-dependencies">Optional Dependencies</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="#uninstalling">Uninstalling</a><ul>
@@ -75,14 +76,17 @@
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="Examples.html">Basic Prompting</a></li>
 <li class="toctree-l1"><a class="reference internal" href="Examples.html#working-with-files-pdfs">Working with Files (PDFs)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Examples.html#loading-an-existing-knowledge-base">Loading an Existing Knowledge Base</a></li>
 <li class="toctree-l1"><a class="reference internal" href="Examples.html#create-summaries">Create Summaries</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Examples.html#adding-and-removing-memory-chunks">Adding and Removing Memory Chunks</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Saving and Loading</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="Saving%20and%20Loading.html">Saving</a></li>
 <li class="toctree-l1"><a class="reference internal" href="Saving%20and%20Loading.html#loading">Loading</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Saving%20and%20Loading.html#rebuilding-the-ann-index">Rebuilding the ANN Index</a></li>
 <li class="toctree-l1"><a class="reference internal" href="Saving%20and%20Loading.html#memory-management">Memory Management</a></li>
-<li class="toctree-l1"><a class="reference internal" href="Saving%20and%20Loading.html#advanced-load-existing-memory-and-continue">Advanced: Load Existing Memory and Continue</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Saving%20and%20Loading.html#advanced-remove-chunks-and-re-query">Advanced: Remove Chunks and Re-query</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Documentation</span></p>
 <ul>
@@ -143,6 +147,42 @@
 <h2>Github source<a class="headerlink" href="#github-source" title="Link to this heading"></a></h2>
 <div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="gp"># </span>Install<span class="w"> </span>directly<span class="w"> </span>from<span class="w"> </span>github
 <span class="go">pip install git+https://github.com/erdogant/LLMlight</span>
+</pre></div>
+</div>
+</section>
+<section id="optional-dependencies">
+<h2>Optional Dependencies<a class="headerlink" href="#optional-dependencies" title="Link to this heading"></a></h2>
+<p>LLMlight works out of the box with its core dependencies. The following optional packages unlock additional features:</p>
+<table class="docutils align-default">
+<colgroup>
+<col style="width: 30.0%" />
+<col style="width: 70.0%" />
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"><p>Package</p></th>
+<th class="head"><p>Purpose</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">sentence-transformers</span></code></p></td>
+<td><p>Semantic (BERT-style) embeddings for memory and context retrieval</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">hnswlib</span></code></p></td>
+<td><p>Fast approximate nearest-neighbour search (HNSW index); falls back to TF-IDF without it</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">memvid</span></code></p></td>
+<td><p>QR-code video memory backend (alternative to SQLite)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">distfit</span></code></p></td>
+<td><p>Statistical significance testing of retrieval scores (<code class="docutils literal notranslate"><span class="pre">alpha</span></code> parameter)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">llama-cpp-python</span></code></p></td>
+<td><p>Run local GGUF models without an API server</p></td>
+</tr>
+</tbody>
+</table>
+<p>Install all optional extras at once:</p>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">pip install sentence-transformers hnswlib distfit</span>
 </pre></div>
 </div>
 </section>

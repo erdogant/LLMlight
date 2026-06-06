@@ -8,15 +8,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Basic Prompting &mdash; LLMlight LLMlight documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=03e43079" />
-      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
       <link rel="stylesheet" type="text/css" href="_static/css/custom.css?v=e0179649" />
 
   
       <script src="_static/jquery.js?v=5d32c60e"></script>
       <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
       <script src="_static/documentation_options.js?v=f9eecb16"></script>
-      <script src="_static/doctools.js?v=9bcbadda"></script>
-      <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+      <script src="_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="_static/js/theme.js"></script>
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
@@ -66,14 +66,17 @@
 <ul class="current">
 <li class="toctree-l1 current"><a class="current reference internal" href="#">Basic Prompting</a></li>
 <li class="toctree-l1"><a class="reference internal" href="#working-with-files-pdfs">Working with Files (PDFs)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="#loading-an-existing-knowledge-base">Loading an Existing Knowledge Base</a></li>
 <li class="toctree-l1"><a class="reference internal" href="#create-summaries">Create Summaries</a></li>
+<li class="toctree-l1"><a class="reference internal" href="#adding-and-removing-memory-chunks">Adding and Removing Memory Chunks</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Saving and Loading</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="Saving%20and%20Loading.html">Saving</a></li>
 <li class="toctree-l1"><a class="reference internal" href="Saving%20and%20Loading.html#loading">Loading</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Saving%20and%20Loading.html#rebuilding-the-ann-index">Rebuilding the ANN Index</a></li>
 <li class="toctree-l1"><a class="reference internal" href="Saving%20and%20Loading.html#memory-management">Memory Management</a></li>
-<li class="toctree-l1"><a class="reference internal" href="Saving%20and%20Loading.html#advanced-load-existing-memory-and-continue">Advanced: Load Existing Memory and Continue</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Saving%20and%20Loading.html#advanced-remove-chunks-and-re-query">Advanced: Remove Chunks and Re-query</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Documentation</span></p>
 <ul>
@@ -115,7 +118,7 @@
 <p>LLMlight is a library for lightweight, modular and efficient use of LLM and RAG workflows. Below are quick examples using the main functions of the library.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">LLMlight</span><span class="w"> </span><span class="kn">import</span> <span class="n">LLMlight</span>
 
-<span class="c1"># Initialize an LLMlight client (default settings)</span>
+<span class="c1"># Initialize an LLMlight client</span>
 <span class="n">client</span> <span class="o">=</span> <span class="n">LLMlight</span><span class="p">(</span><span class="n">model</span><span class="o">=</span><span class="s1">&#39;mistralai/mistral-small-3.2&#39;</span><span class="p">)</span>
 
 <span class="c1"># Ask a question using a language model</span>
@@ -126,22 +129,36 @@
 </section>
 <section id="working-with-files-pdfs">
 <h1>Working with Files (PDFs)<a class="headerlink" href="#working-with-files-pdfs" title="Link to this heading"></a></h1>
-<p>Add the content of a PDF to memory:</p>
+<p>Add the content of a PDF to memory using the default SQLite backend:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Import library</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">LLMlight</span><span class="w"> </span><span class="kn">import</span> <span class="n">LLMlight</span>
 
 <span class="c1"># Initialize model and memory</span>
 <span class="n">client</span> <span class="o">=</span> <span class="n">LLMlight</span><span class="p">(</span><span class="n">model</span><span class="o">=</span><span class="s1">&#39;mistralai/mistral-small-3.2&#39;</span><span class="p">)</span>
-<span class="n">client</span><span class="o">.</span><span class="n">memory_init</span><span class="p">(</span><span class="n">file_path</span><span class="o">=</span><span class="s1">&#39;knowledge_base.mp4&#39;</span><span class="p">)</span>
+<span class="n">client</span><span class="o">.</span><span class="n">memory_init</span><span class="p">(</span><span class="n">store_path</span><span class="o">=</span><span class="s1">&#39;knowledge_base.db&#39;</span><span class="p">)</span>
 
 <span class="c1"># Add a PDF file to the memory (extracts and chunks text automatically)</span>
 <span class="n">client</span><span class="o">.</span><span class="n">memory_add</span><span class="p">(</span><span class="n">files</span><span class="o">=</span><span class="s1">&#39;https://erdogant.github.io/publications/papers/2020%20-%20Taskesen</span><span class="si">%20e</span><span class="s1">t</span><span class="si">%20a</span><span class="s1">l%20-%20HNet%20Hypergeometric%20Networks.pdf&#39;</span><span class="p">)</span>
 
-<span class="c1"># Store memory to disk</span>
-<span class="n">client</span><span class="o">.</span><span class="n">memory_save</span><span class="p">(</span><span class="n">overwrite</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="c1"># Store the ANN index to disk (SQLite DB is persisted automatically)</span>
+<span class="n">client</span><span class="o">.</span><span class="n">memory_save</span><span class="p">()</span>
 
 <span class="c1"># Query on the new knowledge</span>
 <span class="n">response</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">prompt</span><span class="p">(</span><span class="s1">&#39;Summarize the document.&#39;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">response</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="loading-an-existing-knowledge-base">
+<h1>Loading an Existing Knowledge Base<a class="headerlink" href="#loading-an-existing-knowledge-base" title="Link to this heading"></a></h1>
+<p>Reload a previously built SQLite knowledge base and query it:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">LLMlight</span><span class="w"> </span><span class="kn">import</span> <span class="n">LLMlight</span>
+
+<span class="n">client</span> <span class="o">=</span> <span class="n">LLMlight</span><span class="p">(</span><span class="n">model</span><span class="o">=</span><span class="s1">&#39;mistralai/mistral-small-3.2&#39;</span><span class="p">)</span>
+<span class="n">client</span><span class="o">.</span><span class="n">memory_init</span><span class="p">(</span><span class="n">store_path</span><span class="o">=</span><span class="s1">&#39;knowledge_base.db&#39;</span><span class="p">)</span>
+
+<span class="n">response</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">prompt</span><span class="p">(</span><span class="s1">&#39;What are Graphical Hypergeometric Networks?&#39;</span><span class="p">,</span>
+                         <span class="n">instructions</span><span class="o">=</span><span class="s1">&#39;Answer using only the context.&#39;</span><span class="p">)</span>
 <span class="nb">print</span><span class="p">(</span><span class="n">response</span><span class="p">)</span>
 </pre></div>
 </div>
@@ -161,6 +178,36 @@
 
 <span class="c1"># Create summary</span>
 <span class="n">text_summary</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">summarize</span><span class="p">(</span><span class="n">context</span><span class="o">=</span><span class="n">pdf_text</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">text_summary</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="adding-and-removing-memory-chunks">
+<h1>Adding and Removing Memory Chunks<a class="headerlink" href="#adding-and-removing-memory-chunks" title="Link to this heading"></a></h1>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">LLMlight</span><span class="w"> </span><span class="kn">import</span> <span class="n">LLMlight</span>
+
+<span class="n">client</span> <span class="o">=</span> <span class="n">LLMlight</span><span class="p">(</span><span class="n">model</span><span class="o">=</span><span class="s1">&#39;mistralai/mistral-small-3.2&#39;</span><span class="p">)</span>
+<span class="n">client</span><span class="o">.</span><span class="n">memory_init</span><span class="p">(</span><span class="n">store_path</span><span class="o">=</span><span class="s1">&#39;knowledge_store.db&#39;</span><span class="p">)</span>
+
+<span class="c1"># Add text chunks</span>
+<span class="n">client</span><span class="o">.</span><span class="n">memory_add</span><span class="p">(</span><span class="n">text</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;Apes like USB sticks.&#39;</span><span class="p">,</span> <span class="s1">&#39;The capital of France is Paris.&#39;</span><span class="p">])</span>
+
+<span class="c1"># Inspect stored chunks</span>
+<span class="n">client</span><span class="o">.</span><span class="n">memory_chunks</span><span class="p">(</span><span class="n">n</span><span class="o">=</span><span class="mi">10</span><span class="p">)</span>
+
+<span class="c1"># Search memory</span>
+<span class="n">results</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">memory</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="s1">&#39;apes&#39;</span><span class="p">,</span> <span class="n">top_k</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
+<span class="c1"># results: list of (id, score, metadata) tuples</span>
+
+<span class="c1"># Remove by id</span>
+<span class="n">client</span><span class="o">.</span><span class="n">memory_remove</span><span class="p">(</span><span class="n">ids</span><span class="o">=</span><span class="n">results</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">])</span>
+
+<span class="c1"># Or remove by query (top-1 match by default)</span>
+<span class="n">client</span><span class="o">.</span><span class="n">memory_remove</span><span class="p">(</span><span class="n">query</span><span class="o">=</span><span class="s1">&#39;capital of France&#39;</span><span class="p">)</span>
+
+<span class="c1"># Prompt using stored knowledge</span>
+<span class="n">response</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">prompt</span><span class="p">(</span><span class="s1">&#39;What do apes like?&#39;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">response</span><span class="p">)</span>
 </pre></div>
 </div>
 <hr>

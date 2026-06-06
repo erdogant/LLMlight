@@ -33,6 +33,35 @@ Github source
     pip install git+https://github.com/erdogant/LLMlight
 
 
+Optional Dependencies
+************************************
+
+LLMlight works out of the box with its core dependencies. The following optional packages unlock additional features:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 30 70
+
+   * - Package
+     - Purpose
+   * - ``sentence-transformers``
+     - Semantic (BERT-style) embeddings for memory and context retrieval
+   * - ``hnswlib``
+     - Fast approximate nearest-neighbour search (HNSW index); falls back to TF-IDF without it
+   * - ``memvid``
+     - QR-code video memory backend (alternative to SQLite)
+   * - ``distfit``
+     - Statistical significance testing of retrieval scores (``alpha`` parameter)
+   * - ``llama-cpp-python``
+     - Run local GGUF models without an API server
+
+Install all optional extras at once:
+
+.. code-block:: console
+
+    pip install sentence-transformers hnswlib distfit
+
+
 Uninstalling
 ################
 
