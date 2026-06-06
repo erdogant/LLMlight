@@ -1,3 +1,11 @@
+# %% Get models
+from LLMlight import LLMlight
+client = LLMlight()
+
+
+# %%
+
+
 from LLMlight import LLMlight
 client = LLMlight(model='gemma-4-e2b-it')
 client.memory_init(store_path='knowledge_store.db')
