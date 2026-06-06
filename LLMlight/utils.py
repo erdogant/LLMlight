@@ -4,8 +4,7 @@ from json_repair import repair_json
 import re
 import pymupdf
 import logging
-from llama_cpp import Llama
-import numpy as np
+import os
 import unicodedata
 
 logger = logging.getLogger(__name__)
@@ -87,38 +86,51 @@ def clean_text(text: str) -> str:
     return text
 
 # %%
-def read_pdf(file_path, title_pages=[1, 2], body_pages=[], reference_pages=[-1], return_type='dict'):
-    logger.info('Reading pdf')
+def read_pdf(file_path, title_pages=None, body_pages=None, reference_pages=None, return_type='dict'):
     """
-    Reads a PDF file and extracts its text content as a string.
+    Reads a PDF file and extracts its text content.
 
     Args:
-        pdf_path (str): Path to the PDF file.
+        file_path (str): Path to the PDF file.
+        title_pages (list of int): 1-based page numbers treated as title. Default [1, 2].
+        body_pages (list of int): 1-based page numbers treated as body. Default [] (all non-title/reference pages).
+        reference_pages (list of int): 1-based page numbers treated as references. Negative indices count from the end. Default [-1].
+        return_type (str): 'dict' returns {'title', 'body', 'references'}; any other value returns a plain string.
 
     Returns:
-        str: Extracted text from the PDF.
-
+        dict or str: Extracted text, or None if the file is missing or not a PDF.
     """
+    logger.info('Reading pdf')
     if not os.path.isfile(file_path):
         logger.error(f'File not found on disk: {file_path}')
         return None
     if not file_path.lower().endswith('.pdf'):
         logger.error("The provided file path is not a valid PDF file.")
         return None
-    if title_pages is None: title_pages = []
+    if title_pages is None: title_pages = [1, 2]
     if body_pages is None: body_pages = []
-    if reference_pages is None: reference_pages = []
+    if reference_pages is None: reference_pages = [-1]
     if isinstance(title_pages, (str, int)): title_pages = [title_pages]
     if isinstance(body_pages, (str, int)): body_pages = [body_pages]
     if isinstance(reference_pages, (str, int)): reference_pages = [reference_pages]
+    # Coerce all elements to int so string inputs like "-1" don't cause TypeError
+    # during negative-index resolution or membership tests.
+    try:
+        title_pages     = [int(p) for p in title_pages]
+        body_pages      = [int(p) for p in body_pages]
+        reference_pages = [int(p) for p in reference_pages]
+    except (ValueError, TypeError) as e:
+        logger.error(f"Page list contains non-integer value: {e}")
+        return {"title": "", "body": "", "references": ""} if return_type == 'dict' else ""
 
     try:
         # Open pdf
         doc = pymupdf.open(file_path)
         # Get the total number of pages
         num_pages = len(doc)
-        # Replace negative indices with corresponding positive indices
-        reference_pages = [num_pages + page if page < 0 else page for page in reference_pages]
+        # Resolve negative indices to 1-based page numbers.
+        # e.g. -1 on a 10-page doc -> 10, not 9.
+        reference_pages = [num_pages + page + 1 if page < 0 else page for page in reference_pages]
 
         title_text = ""
         body_text = []
@@ -132,18 +144,20 @@ def read_pdf(file_path, title_pages=[1, 2], body_pages=[], reference_pages=[-1],
             page_text = clean_text(page_text)
 
             # Set title text
-            if np.isin(page_num + 1, title_pages):
+            if (page_num + 1) in title_pages:
                 title_text += "\n" + page_text
-            elif np.isin(page_num + 1, reference_pages):
+            elif (page_num + 1) in reference_pages:
                 references_text += "\n" + page_text
-            elif np.isin(page_num + 1, body_pages):
+            elif (page_num + 1) in body_pages:
                 body_text.append(page_text)
-            elif len(body_pages)==0:
+            elif len(body_pages) == 0:
                 body_text.append(page_text)
 
     except Exception as e:
         logger.error(f"Error reading PDF: {e}")
-        return {"title": "", "body": "", "references": ""}
+        if return_type == 'dict':
+            return {"title": "", "body": "", "references": ""}
+        return ""
 
     # Return
     if return_type=='dict':
@@ -152,7 +166,8 @@ def read_pdf(file_path, title_pages=[1, 2], body_pages=[], reference_pages=[-1],
                    "references": references_text.strip(),
                    }
     else:
-        context = title_text.strip() + "\n---\n".join(body_text).strip() + '\n---\n' + references_text.strip()
+        parts = [title_text.strip()] + body_text + [references_text.strip()]
+        context = "\n---\n".join(p for p in parts if p)
 
     # Return
     return context

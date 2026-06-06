@@ -286,10 +286,17 @@ class MemvidBackend:
                 if fpath and os.path.isfile(fpath):
                     os.remove(fpath)
 
-        # Merge previously-saved chunks with new buffer (for incremental saves)
+        # Merge previously-saved chunks with new buffer (for incremental saves).
+        # Use a dict keyed by text to deduplicate while preserving insertion order:
+        # existing chunks come first, new buffer chunks are appended after.
+        # Avoid set() which destroys order, and avoid calling clear() before the
+        # merged list is ready (clear() resets internal encoder state beyond just chunks).
         if hasattr(self, 'retriever'):
             existing = [m.get('text') for m in self.retriever.index_manager.metadata]
-            merged = list(set(existing + self.encoder.chunks))
+            seen = dict.fromkeys(existing)           # preserves order, deduplicates
+            for chunk in self.encoder.chunks:
+                seen.setdefault(chunk, None)         # appends new chunks not already present
+            merged = list(seen.keys())
             self.encoder.clear()
             self.encoder.chunks = merged
 
