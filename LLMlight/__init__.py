@@ -24,7 +24,7 @@ __version__ = '0.6.0'
 import logging
 _logger = logging.getLogger('LLMlight')
 _log_handler = logging.StreamHandler()
-_formatter = logging.Formatter(fmt='[{asctime}] [{name:<18.18}] [{levelname:<8}] {message}', style='{', datefmt='%d-%m-%Y %H:%M:%S')
+_formatter = logging.Formatter(fmt='[{asctime}] [{name:<12.12}] [{levelname:<8}] {message}', style='{', datefmt='%d-%m-%Y %H:%M:%S')
 _log_handler.setFormatter(_formatter)
 _log_handler.setLevel(logging.DEBUG)
 # avoid duplicate handlers if re-imported
@@ -43,7 +43,7 @@ Example
 -------
 >>> from LLMlight import LLMlight
 >>> # Initialize with endpoint
->>> client = LLMlight(endpoint="http://localhost:1234/v1/chat/completions")
+>>> client = LLMlight(model='mistralai/mistral-small-3.2', endpoint="http://localhost:1234/v1/chat/completions")
 >>> # Run queries
 >>> response = client.prompt('Explain quantum computing in simple terms')
 >>> print(response)
@@ -53,7 +53,7 @@ Example
 >>> # Use the entire context without RAG or embeddings
 >>> from LLMlight import LLMlight
 >>> # Initialize with endpoint
->>> client = LLMlight(endpoint="http://localhost:1234/v1/chat/completions", context_strategy=None, embedding=None, retrieval_method=None)
+>>> client = LLMlight(model='mistralai/mistral-small-3.2', endpoint="http://localhost:1234/v1/chat/completions", context_strategy=None, embedding=None, retrieval_method=None)
 >>> # Run query with user-context
 >>> response = client.prompt('What is the capital of France?', context='The capital of France is Amsterdam.', instructions='Do not argue with the information in the context. Only return the information from the context.')
 >>> print(response)
@@ -76,7 +76,7 @@ Example
 >>> # Import library
 >>> from LLMlight import LLMlight
 >>> # Initialize model
->>> client = LLMlight(context_strategy='global_reasoning')
+>>> client = LLMlight(model='mistralai/mistral-small-3.2', context_strategy='global_reasoning')
 >>> # Read pdf
 >>> context = client.read_pdf(r'c://path_to_your_files//article_1.pdf', return_type='string')
 >>> # Create response
@@ -89,7 +89,7 @@ Example
 >>> # Import library
 >>> from LLMlight import LLMlight
 >>> # Initialize with default settings
->>> client = LLMlight(retrieval_method=None)
+>>> client = LLMlight(model='mistralai/mistral-small-3.2', retrieval_method=None)
 >>> # Create new video memory
 >>> client.memory_init()
 >>> # Add pdf file
@@ -113,7 +113,7 @@ Example
 >>> # Import library
 >>> from LLMlight import LLMlight
 >>> # Initialize with default settings
->>> client = LLMlight(retrieval_method="knowledge_base.mp4")
+>>> client = LLMlight(model='mistralai/mistral-small-3.2', retrieval_method="knowledge_base.mp4")
 >>> # Create queries
 >>> response = client.prompt('What do apes like?', instructions='Only return the information from the context. Answer with maximum of 3 words, and starts with "Apes like: "')
 >>> print(response)
@@ -129,7 +129,23 @@ Example
 >>> response = client.prompt('What do apes like?', instructions='Only return the information from the context. Answer with maximum of 3 words, and starts with "Apes like: "')
 >>> print(response)
 
+Example
+-------
+>>> client = LLMlight(model='mistralai/mistral-small-3.2')
+>>> response = client.prompt('What is the capital of France?')
+>>> print(response)
 
+Example
+-------
+>>> # With context and instructions
+>>> response = client.prompt('What do apes like?', context='Apes like USB sticks.', instructions='Answer in one sentence using only the context.')
+>>> print(response)
+
+Example
+-------
+>>> # Override temperature for a single call
+>>> response = client.prompt('Write a short poem.', temperature=1.0)
+>>> print(response)
 
 References
 ----------

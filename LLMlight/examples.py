@@ -1,3 +1,6 @@
+# %%
+
+
 # %% Get models
 from LLMlight import LLMlight
 client = LLMlight()
@@ -45,7 +48,7 @@ client.prompt('what do you know about BMC?')
 # Load library
 from LLMlight import LLMlight
 # normal init
-client = LLMlight(model='gemma-4-e2b-it')
+client = LLMlight(model='gemma-4-e2b-it', embedding='bert')
 # Initialize a local SQLite+HNSW memory (default backend)
 client.memory_init(store_path='knowledge_store.db')  # creates 'knowledge_store.db'
 # Initialize memvid backend (video-memory)
@@ -134,6 +137,7 @@ out = client.memory.get_all_chunks()
 print(out)
 len(out)
 client.prompt('What is the capital of france?', instructions='Your response must be the truth.')
+client.prompt('What is the capital of france?', instructions='only use the context')
 
 # %%
 

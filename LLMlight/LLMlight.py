@@ -93,7 +93,7 @@ class LLMlight:
     -----------------------
     The system can be configured through various parameters to optimize for different use cases, from simple Q&A to complex document analysis.
     The model generates responses using:
-    - Temperature control: Adjusts response randomness (0.7 default)
+    - Temperature control: Adjusts response randomness (0.8 default)
     - Top-p sampling: Controls response diversity
     - Context window management: Handles token limits efficiently
 
@@ -121,20 +121,15 @@ class LLMlight:
     embedding : str, dict, or None, default ``None``
         Controls how text is vectorised for retrieval.
 
-        ``None``          -- Retrieval embedding **disabled**. Memory retrieval and
-                            context retrieval both skip the similarity step and fall
-                            through to the full-context path.
+        ``None``          -- Retrieval embedding **disabled**. Memory retrieval and context retrieval both skip the similarity step and fall through to the full-context path.
         ``'automatic'``   -- Shorthand for ``{'memory': 'memvid', 'context': 'bert'}``.
         A string          -- Applies the same method to both memory and context paths.
                             Valid values: ``'tfidf'``, ``'bow'``, ``'bert'``,
                             ``'bge-small'``, ``'memvid'``.
-                            Note: ``'memvid'`` is only valid for the memory path; it is
-                            silently corrected to ``'bert'`` when used as the context
-                            embedding.
+                            Note: ``'memvid'`` is only valid for the memory path; it is silently corrected to ``'bert'`` when used as the context embedding.
         A dict            -- Specify paths independently:
                             ``{'memory': 'memvid', 'context': 'bert'}``.
-                            Keys ``'memory'`` and ``'context'`` are both optional;
-                            omitted keys inherit the ``'automatic'`` defaults.
+                            Keys ``'memory'`` and ``'context'`` are both optional; omitted keys inherit the ``'automatic'`` defaults.
 
         Guidance by use-case:
           ``'tfidf'``    -- Structured text, query terms likely present verbatim.
@@ -144,13 +139,10 @@ class LLMlight:
           ``'memvid'``   -- Use the memvid backend's built-in FAISS similarity.
     context_strategy : str or None, default ``None``
         None               -- Raw (or retrieved) context is passed directly to the LLM.
-        'chunk-wise'       -- Each chunk is analysed independently against the query;
-                             per-chunk answers are combined in a final pass.
-        'global-reasoning' -- Each chunk is summarised; summaries are merged into one
-                             coherent response.
-    temperature : float, default ``0.7``
-        Sampling temperature in ``[0, 2]``. ``0`` is deterministic; higher values
-        increase randomness.
+        'chunk-wise'       -- Each chunk is analysed independently against the query; per-chunk answers are combined in a final pass.
+        'global-reasoning' -- Each chunk is summarised; summaries are merged into one coherent response.
+    temperature : float, default ``0.8``
+        Sampling temperature in ``[0, 2]``. ``0`` is deterministic; higher values increase randomness.
     top_p : float, default ``1.0``
         Nucleus sampling threshold in ``(0, 1]``. ``1.0`` disables filtering.
     chunks : dict or None, default ``None``
@@ -158,12 +150,8 @@ class LLMlight:
         Keys:
 
         ``'method'``  -- ``'chars'`` (default) or ``'words'``.
-        ``'size'``    -- Chunk length in characters or words (default ``1000``).
-                        Smaller sizes improve retrieval precision but reduce the
-                        context available to the LLM. Rough estimate: 1 000 words
-                        ≈ 3 000 tokens.
-        ``'overlap'`` -- Overlap between consecutive chunks (default ``200``).
-                        Must be less than ``'size'``.
+        ``'size'``    -- Chunk length in characters or words (default ``1000``). Smaller sizes improve retrieval precision but reduce the context available to the LLM. Rough estimate: 1 000 words ≈ 3 000 tokens.
+        ``'overlap'`` -- Overlap between consecutive chunks (default ``200``). Must be less than ``'size'``.
 
         Legacy aliases accepted: ``'type'`` -> ``'method'``,
         ``'chunk_size'`` -> ``'size'``.
@@ -192,42 +180,33 @@ class LLMlight:
     >>> print(response)
 
     >>> # RAG over a PDF with bert embeddings
-    >>> client = LLMlight(model='mistralai/mistral-small-3.2',
-    ...                   retrieval_method='naive_rag',
-    ...                   embedding='bert',
-    ...                   top_chunks=5)
-    >>> context = client.read_pdf('https://example.com/paper.pdf')
-    >>> response = client.prompt('Summarize the main contributions.',
-    ...                          context=context)
+    >>> client = LLMlight(model='mistralai/mistral-small-3.2', retrieval_method='naive_rag', embedding='bert', top_chunks=5)
+    >>> context = client.read_pdf('https://proceedings.neurips.cc/paper_files/paper/2017/file/3f5ee243547dee91fbd053c1c4a845aa-Paper.pdf')
+    >>> response = client.prompt('Summarize the main contributions.', context=context)
     >>> print(response)
 
     >>> # Persistent SQLite memory store
-    >>> client = LLMlight(model='mistralai/mistral-small-3.2',
-    ...                   embedding='automatic')
+    >>> client = LLMlight(model='mistralai/mistral-small-3.2', embedding='automatic')
     >>> client.memory_init(store_path='knowledge.db')
-    >>> client.memory_add(text=['Apes like USB sticks.',
-    ...                         'The capital of France is Amsterdam.'])
+    >>> client.memory_add(text=['Apes like USB sticks.', 'The capital of France is Amsterdam.'])
     >>> client.memory_save()
     >>> response = client.prompt('What do apes like?')
     >>> print(response)
 
     >>> # Disable embedding entirely -- full context passed to LLM
-    >>> client = LLMlight(model='mistralai/mistral-small-3.2',
-    ...                   embedding=None,
-    ...                   retrieval_method=None)
-    >>> response = client.prompt('Summarise this.',
-    ...                          context='Short enough to fit in context window.')
+    >>> client = LLMlight(model='mistralai/mistral-small-3.2', embedding=None, retrieval_method=None)
+    >>> response = client.prompt('Summarise this.', context='Short enough to fit in context window.')
     >>> print(response)
 
     """
     def __init__(self,
                  model: str = None,
                  retrieval_method: str = 'naive_rag',
-                 embedding=None,
+                 embedding='bert',
                  context_strategy: str = None,
                  alpha: float = None,
                  top_chunks: int = 5,
-                 temperature: float = 0.7,
+                 temperature: float = 0.8,
                  top_p: float = 1.0,
                  chunks: dict = None,
                  n_ctx: int = 4096,
@@ -384,11 +363,7 @@ class LLMlight:
         >>> print(response)
 
         >>> # With context and instructions
-        >>> response = client.prompt(
-        ...     'What do apes like?',
-        ...     context='Apes like USB sticks.',
-        ...     instructions='Answer in one sentence using only the context.',
-        ... )
+        >>> response = client.prompt('What do apes like?', context='Apes like USB sticks.', instructions='Answer in one sentence using only the context.')
         >>> print(response)
 
         >>> # Override temperature for a single call
@@ -436,14 +411,6 @@ class LLMlight:
 
         # Return
         return response
-
-    # def _get_context(self, context):
-    #     # First get the context
-    #     if context is None:
-    #         context = self.context
-    #     # if isinstance(context, dict):
-    #     #     context = '\n\n'.join(context.values())
-    #     return context
 
     def requests_post_gguf(self, prompt, system, temperature=0.8, top_p=1, headers=None, task='max', stream=False, return_type='string'):
         # Note that it is better to use messages_prompt instead of a dict (messages_dict) because most GGUF-based models don't have a tokenizer/parser that can interpret the JSON-style message structure.
@@ -532,7 +499,7 @@ class LLMlight:
             logger.error(f"{response.status_code} - {response}")
             return f"Error: {response.status_code} - {response}"
 
-    def memory_init(self, store_path: str = None, config: dict = None, embedding: str = None, backend: str = None):
+    def memory_init(self, store_path: str = None, config: dict = None, embedding: str = None, backend: str = None, overwrite: bool = False):
         """Prepare a memory store for writing.
 
         Creates a new store or re-opens an existing one so that chunks can be
@@ -557,6 +524,13 @@ class LLMlight:
             infers the backend from the file extension.
         """
         resolved = self._resolve_file_path(store_path) or self.store_path
+        if os.path.isfile(resolved):
+            logger.warning('sqlite database already exists. Use overwrite=True to create new empty database.')
+        
+        if overwrite and os.path.isfile(resolved):
+            # logger.info('Existing sqlite database is removed.')
+            memory.close_and_remove(resolved)
+            # os.remove(resolved)
 
         # Skip if the same store is already initialised
         if hasattr(self, 'memory') and self.memory.store_path == resolved:
@@ -648,6 +622,7 @@ class LLMlight:
             show_progress=show_progress,
         )
         self.memory.load()
+        logger.info(f'Memory is saved to local database: {self.store_path}')
 
     def memory_remove(self,
                       ids: list = None,
@@ -1374,7 +1349,7 @@ class LLMlight:
     # Public retrieval entry points
     # ------------------------------------------------------------------
 
-    def relevant_memory_retrieval(self, query: str, return_type: str = 'list'):
+    def relevant_memory_retrieval(self, query: str, return_type: str = 'dict'):
         """Return the top-k most relevant chunks from the persistent memory store.
 
         Returns ``None`` when no store is loaded, the store file does not exist,
@@ -1392,6 +1367,7 @@ class LLMlight:
         return_type : str, default ``'list'``
             ``'list'``   -- list of str chunks, highest relevance first.
             ``'string'`` -- chunks joined with ``### Chunk N:`` headers.
+            ``'dict'`` -- score and string chunks
 
         Returns
         -------
@@ -1410,13 +1386,11 @@ class LLMlight:
             return None
 
         if self.embedding['memory'] is None:
-            logger.info("Memory retrieval skipped: embedding disabled.")
+            logger.warning("Memory retrieval skipped: embedding disabled.")
             return None
 
-        logger.info(
-            "Retrieving [%d] chunks from memory store (embedding='%s').",
-            self.top_chunks, self.embedding['memory'],
-        )
+        logger.info("Retrieving [%d] chunks from memory store (embedding='%s').",
+                    self.top_chunks, self.embedding['memory'])
 
         if self.embedding['memory'] == 'memvid':
             # Backend provides its own similarity scores
@@ -1433,7 +1407,10 @@ class LLMlight:
 
         if return_type == 'string':
             return "\n\n---\n\n".join(f"### Chunk {i+1}:\n{c}" for i, c in enumerate(chunks))
-        return chunks
+        elif return_type == 'list':
+            return chunks
+        else:
+            return scored
 
     def relevant_context_retrieval(self, query: str, context: str, return_type: str = 'list'):
         """Return the most relevant portion of *context* for *query*.
@@ -1606,9 +1583,6 @@ class LLMlight:
         if os.path.isfile(file_path):
             # Read pdf
             context = utils.read_pdf(file_path, title_pages=title_pages, body_pages=body_pages, reference_pages=reference_pages, return_type=return_type)
-            # if return_type=='dict':
-            #     counts = utils.count_words(self.context['body'])
-            #     self.context['body'] = self.context['body']
         else:
             logger.error(f'file_path does not exist: {file_path}')
 

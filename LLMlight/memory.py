@@ -62,6 +62,31 @@ def _resolve_store_path(store_path: str, backend: str) -> str:
     return store_path
 
 
+def close_and_remove(path):
+    """Close *backend* then delete *path* and its companion files (.hnsw, -wal, -shm).
+
+    Swallows all errors so it is safe to call from addCleanup().
+    """
+    # Close the SQLite connection first so Windows releases the file lock.
+    try:
+        sq = SqliteBackend(path)
+        sq.close()
+    except Exception:
+        pass
+
+    # Remove the .db and any SQLite journal / WAL side-files.
+    for suffix in ('', '-wal', '-shm', '.hnsw'):
+        p = path + suffix if suffix.startswith('-') else os.path.splitext(path)[0] + suffix + os.path.splitext(path)[1] if suffix == '' else path + suffix
+        # Simpler: just try both combinations
+        for candidate in (path + suffix, os.path.splitext(path)[0] + suffix):
+            try:
+                if os.path.isfile(candidate):
+                    os.remove(candidate)
+                    logger.info(f'Removed: {candidate}')
+            except Exception:
+                pass
+
+
 # ---------------------------------------------------------------------------
 # Memvid backend
 # ---------------------------------------------------------------------------
@@ -172,13 +197,10 @@ class MemvidBackend:
             tempdir: str = None):
         """Add text chunks or files to the pending encoder buffer."""
         if filetypes is None:
-            filetypes = ['.pdf', '.txt', '.epub', '.md', '.doc', '.docx',
-                         '.rtf', '.html', '.htm']
+            filetypes = ['.pdf', '.txt', '.epub', '.md', '.doc', '.docx', '.rtf', '.html', '.htm']
 
         if not hasattr(self, 'encoder'):
-            raise RuntimeError(
-                'Memory store is not initialised. Call memory_init() first.'
-            )
+            raise RuntimeError('Memory store is not initialised. Call memory_init() first.')
         if self.store_path and os.path.isfile(self.store_path) and not overwrite:
             logger.warning(f'Store already exists and overwrite=False: {self.store_path}')
             return
