@@ -46,7 +46,7 @@ def extract_eml_from_pst(pst_path, output_dir="exported_eml"):
             filename = f"email_{email_count:05d}.eml"
             filepath = os.path.join(current_path, filename)
             with open(filepath, "wb") as f:
-                f.write(bytes(msg))
+                f.write(msg.as_bytes())
 
             email_count += 1
 
@@ -61,9 +61,8 @@ def extract_eml_from_pst(pst_path, output_dir="exported_eml"):
 
     return email_count
 
-
-
 #%%
+
 from libratom.lib.pff import PffArchive
 import os
 import json
@@ -137,8 +136,8 @@ def save_body(message, message_folder):
             body = message.rtf_body
             body_file = os.path.join(message_folder, "body.rtf")
             # Decode RTF body from bytes to string
-            with open(body_file, "wb") as msg_file:
-                msg_file.write(body)
+            with open(body_file, "wb") as f:
+                f.write(body)
         except UnicodeEncodeError:
             # Handle encoding error by using a different encoding
             logging.error("Encoding error encountered while processing RTF body.")
@@ -242,11 +241,11 @@ def download_emails(pst_file_path, output_folder):
 
                 email_count += 1
 
-    print("SENDERS", len(senders))
-    print("POST FILTER EMAIL COUNT", len(email_list))
+        print("SENDERS", len(senders))
+        print("POST FILTER EMAIL COUNT", len(email_list))
 
-    with open("emails.json", "w", encoding="utf-8") as json_file:
-        json.dump(email_list, json_file, indent=4)
+        with open("emails.json", "w", encoding="utf-8") as json_file:
+            json.dump(email_list, json_file, indent=4)
 
 def clean_workspace(output_folder):
     if os.path.exists(output_folder):
@@ -265,8 +264,9 @@ def main():
     clean_workspace(output_folder)
 
     download_emails(pst_file_path, output_folder)
-    
+
 #%%
+
 def process_pst_file(pst_path, output_csv='emails.csv', attachments_dir='attachments'):
     # Ensure attachments directory exists
     os.makedirs(attachments_dir, exist_ok=True)
