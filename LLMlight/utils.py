@@ -4,7 +4,7 @@ from json_repair import repair_json
 import re
 import pymupdf
 import logging
-import os
+from llama_cpp import Llama
 import numpy as np
 import unicodedata
 
@@ -104,7 +104,7 @@ def read_pdf(file_path, title_pages=[1, 2], body_pages=[], reference_pages=[-1],
         return None
     if not file_path.lower().endswith('.pdf'):
         logger.error("The provided file path is not a valid PDF file.")
-        None
+        return None
     if title_pages is None: title_pages = []
     if body_pages is None: body_pages = []
     if reference_pages is None: reference_pages = []
