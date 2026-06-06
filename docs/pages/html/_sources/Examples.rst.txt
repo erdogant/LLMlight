@@ -6,15 +6,34 @@ LLMlight is a library for lightweight, modular and efficient use of LLM and RAG 
 .. code-block:: python
 
     from LLMlight import LLMlight
-
+    
     # Initialize an LLMlight client
-    client = LLMlight(model='mistralai/mistral-small-3.2')
-
+    client = LLMlight(model='liquid/lfm2-24b-a2b')
+    
     # Ask a question using a language model
     response = client.prompt('What is the capital of France?')
     print(response)
 
 
+Loading an Existing Knowledge Base
+####################################
+
+Reload a previously built SQLite knowledge base and query it:
+
+.. code-block:: python
+
+    from LLMlight import LLMlight
+    
+    # Initialize an LLMlight client
+    client = LLMlight(model='liquid/lfm2-24b-a2b')
+    client.memory_load(store_path='local_database.db')
+    
+    # Ask a question using a language model
+    response = client.prompt('What is the capital of France?')
+    print(response)
+
+
+    
 Working with Files (PDFs)
 ################################
 
@@ -39,22 +58,6 @@ Add the content of a PDF to memory using the default SQLite backend:
     response = client.prompt('Summarize the document.')
     print(response)
 
-
-Loading an Existing Knowledge Base
-####################################
-
-Reload a previously built SQLite knowledge base and query it:
-
-.. code-block:: python
-
-    from LLMlight import LLMlight
-
-    client = LLMlight(model='mistralai/mistral-small-3.2')
-    client.memory_init(store_path='knowledge_base.db')
-
-    response = client.prompt('What are Graphical Hypergeometric Networks?',
-                             instructions='Answer using only the context.')
-    print(response)
 
 
 Create Summaries

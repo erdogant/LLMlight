@@ -65,8 +65,8 @@
 <p class="caption" role="heading"><span class="caption-text">Examples</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="Examples.html">Basic Prompting</a></li>
-<li class="toctree-l1"><a class="reference internal" href="Examples.html#working-with-files-pdfs">Working with Files (PDFs)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="Examples.html#loading-an-existing-knowledge-base">Loading an Existing Knowledge Base</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Examples.html#working-with-files-pdfs">Working with Files (PDFs)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="Examples.html#create-summaries">Create Summaries</a></li>
 <li class="toctree-l1"><a class="reference internal" href="Examples.html#adding-and-removing-memory-chunks">Adding and Removing Memory Chunks</a></li>
 </ul>
@@ -166,53 +166,77 @@ Retrieving available models can be done via the <a class="reference internal" hr
 <p>The first step is <strong>Preprocessing &amp; Chunking</strong>. Input documents are split into manageable chunks to allow efficient embedding and retrieval. Headers, footers, and boilerplate text are removed to reduce noise. Chunks are sized appropriately (typically &gt;200 characters) to avoid hallucinations.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">LLMlight</span><span class="w"> </span><span class="kn">import</span> <span class="n">LLMlight</span>
 
-<span class="c1"># Initialize with default settings</span>
-<span class="n">client</span> <span class="o">=</span> <span class="n">LLMlight</span><span class="p">(</span><span class="n">model</span><span class="o">=</span><span class="s1">&#39;mistralai/mistral-small-3.2&#39;</span><span class="p">)</span>
-<span class="n">client</span><span class="o">.</span><span class="n">memory_init</span><span class="p">(</span><span class="n">store_path</span><span class="o">=</span><span class="s1">&#39;local_database.db&#39;</span><span class="p">)</span>
+<span class="c1"># Initialize with default settings and only use the top 5 chunks in the analysis</span>
+<span class="n">client</span> <span class="o">=</span> <span class="n">LLMlight</span><span class="p">(</span><span class="n">model</span><span class="o">=</span><span class="s1">&#39;liquid/lfm2-24b-a2b&#39;</span><span class="p">,</span> <span class="n">top_chunks</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span> <span class="n">chunks</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;method&#39;</span><span class="p">:</span> <span class="s1">&#39;words&#39;</span><span class="p">,</span> <span class="s1">&#39;size&#39;</span><span class="p">:</span> <span class="mi">1000</span><span class="p">,</span> <span class="s1">&#39;overlap&#39;</span><span class="p">:</span> <span class="mi">200</span><span class="p">})</span>
 
-<span class="c1"># Example PDFs to process</span>
-<span class="n">url1</span> <span class="o">=</span> <span class="s1">&#39;https://proceedings.neurips.cc/paper_files/paper/2017/file/3f5ee243547dee91fbd053c1c4a845aa-Paper.pdf&#39;</span>
-<span class="n">url2</span> <span class="o">=</span> <span class="s1">&#39;https://erdogant.github.io/publications/papers/2020%20-%20Taskesen</span><span class="si">%20e</span><span class="s1">t</span><span class="si">%20a</span><span class="s1">l%20-%20HNet%20Hypergeometric%20Networks.pdf&#39;</span>
+<span class="c1"># Create local database</span>
+<span class="n">client</span><span class="o">.</span><span class="n">memory_init</span><span class="p">(</span><span class="n">store_path</span><span class="o">=</span><span class="s1">&#39;local_database.db&#39;</span><span class="p">,</span> <span class="n">overwrite</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+<span class="c1"># Add multiple PDF files to the database</span>
+<span class="n">url</span> <span class="o">=</span> <span class="s1">&#39;https://proceedings.neurips.cc/paper_files/paper/2017/file/3f5ee243547dee91fbd053c1c4a845aa-Paper.pdf&#39;</span>
+<span class="n">pdf_text1</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">read_pdf</span><span class="p">(</span><span class="n">url</span><span class="p">)</span>
+<span class="n">client</span><span class="o">.</span><span class="n">memory_add</span><span class="p">(</span><span class="n">text</span><span class="o">=</span><span class="n">pdf_text1</span><span class="p">)</span>
+<span class="c1"># Ad another pdf</span>
+<span class="n">url</span> <span class="o">=</span> <span class="s1">&#39;https://proceedings.neurips.cc/paper_files/paper/2017/file/3f5ee243547dee91fbd053c1c4a845aa-Paper.pdf&#39;</span>
+<span class="n">pdf_text2</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">read_pdf</span><span class="p">(</span><span class="n">url</span><span class="p">)</span>
+<span class="n">client</span><span class="o">.</span><span class="n">memory_add</span><span class="p">(</span><span class="n">text</span><span class="o">=</span><span class="n">pdf_text2</span><span class="p">)</span>
+
+<span class="c1"># Or alternatively</span>
+<span class="c1"># client.memory_add(files=[pdf_text1, pdf_text2])</span>
+
+<span class="c1"># Get all chunks</span>
+<span class="n">out</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">memory</span><span class="o">.</span><span class="n">get_all_chunks</span><span class="p">()</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;Number of chunks stored: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+
+<span class="c1"># Make prompt</span>
+<span class="n">client</span><span class="o">.</span><span class="n">prompt</span><span class="p">(</span><span class="s1">&#39;Explain the working of HNet - hypergeometric networks in 4 sentences.&#39;</span><span class="p">)</span>
 </pre></div>
 </div>
 </section>
 <section id="embedding-local-storage">
 <h1>Embedding &amp; Local Storage<a class="headerlink" href="#embedding-local-storage" title="Link to this heading"></a></h1>
 <p>In <strong>Embedding &amp; Local Storage</strong>, each chunk is transformed into a vector representation. These embeddings are stored in a local SQLite database (default backend) with an optional HNSW index, making retrieval fast, offline-friendly, and portable. Users can also add small text chunks or entire directories.</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Add multiple PDF files to the database</span>
-<span class="n">client</span><span class="o">.</span><span class="n">memory_add</span><span class="p">(</span><span class="n">files</span><span class="o">=</span><span class="p">[</span><span class="n">url1</span><span class="p">,</span> <span class="n">url2</span><span class="p">])</span>
-
-<span class="c1"># Add additional text chunks</span>
-<span class="n">client</span><span class="o">.</span><span class="n">memory_add</span><span class="p">(</span><span class="n">text</span><span class="o">=</span><span class="p">[</span>
-    <span class="s1">&#39;Small chunk that is also added to the database.&#39;</span><span class="p">,</span>
-    <span class="s1">&#39;The capital of France is Amsterdam.&#39;</span>
-<span class="p">])</span>
-
-<span class="c1"># Add all supported file types from a directory</span>
-<span class="n">client</span><span class="o">.</span><span class="n">memory_add</span><span class="p">(</span>
-    <span class="n">dirpath</span><span class="o">=</span><span class="s1">&#39;c:/my_documents/&#39;</span><span class="p">,</span>
-    <span class="n">filetypes</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;.pdf&#39;</span><span class="p">,</span> <span class="s1">&#39;.txt&#39;</span><span class="p">,</span> <span class="s1">&#39;.epub&#39;</span><span class="p">,</span> <span class="s1">&#39;.md&#39;</span><span class="p">,</span> <span class="s1">&#39;.doc&#39;</span><span class="p">,</span> <span class="s1">&#39;.docx&#39;</span><span class="p">,</span> <span class="s1">&#39;.rtf&#39;</span><span class="p">,</span> <span class="s1">&#39;.html&#39;</span><span class="p">,</span> <span class="s1">&#39;.htm&#39;</span><span class="p">]</span>
-<span class="p">)</span>
-
-<span class="c1"># Store the database to disk (SQLite is auto-persisted; this also saves the ANN index)</span>
-<span class="n">client</span><span class="o">.</span><span class="n">memory_save</span><span class="p">()</span>
-</pre></div>
-</div>
+<p>summary_text = client.summarize(context=pdf_text)</p>
+<blockquote>
+<div><p># Add additional text chunks
+client.memory_add(text=[</p>
+<blockquote>
+<div><p>‘Apes like USB sticks.’,
+‘The capital of France is Amsterdam.’</p>
+</div></blockquote>
+<p>])</p>
+<p># Add all supported file types from a directory
+client.memory_add(</p>
+<blockquote>
+<div><p>dirpath=’c:/my_documents/’,
+filetypes=[‘.pdf’, ‘.txt’, ‘.epub’, ‘.md’, ‘.doc’, ‘.docx’, ‘.rtf’, ‘.html’, ‘.htm’]</p>
+</div></blockquote>
+<p>)</p>
+<p># Store the database to disk (SQLite is auto-persisted; this also saves the ANN index)
+client.memory_save()</p>
+<p>client.prompt(‘What is the capital of france?’, instructions=’Your response must be the truth.’)
+# ‘The provided context states that “The capital of France is Amsterdam.” However, this information is incorrect based on general knowledge. The actual capital of France is Paris. The context given here contains an error or is intentionally misleading. nn### Summary 1: nThe correct capital of France is Paris, not Amsterdam as stated in the context.’</p>
+<p>client.prompt(‘What is the capital of france?’, instructions=’only use the context.’, response_format=’only output 1 word.’)
+# Amsterdam</p>
+</div></blockquote>
 </section>
 <section id="rag-with-statistical-validation">
 <h1>RAG with Statistical Validation<a class="headerlink" href="#rag-with-statistical-validation" title="Link to this heading"></a></h1>
 <p>During <strong>Retrieval-Augmented Generation (RAG)</strong>, queries are compared against stored chunks using similarity measures. LLMlight constructs a null distribution of scores to evaluate statistical significance. Only chunks that are likely relevant are selected and aggregated for the language model to generate grounded responses.</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Load database for inference</span>
-<span class="n">client</span> <span class="o">=</span> <span class="n">LLMlight</span><span class="p">(</span><span class="n">model</span><span class="o">=</span><span class="s1">&#39;mistralai/mistral-small-3.2&#39;</span><span class="p">)</span>
-<span class="n">client</span><span class="o">.</span><span class="n">memory_init</span><span class="p">(</span><span class="n">store_path</span><span class="o">=</span><span class="s1">&#39;local_database.db&#39;</span><span class="p">)</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Load database for inference.</span>
+<span class="n">client</span> <span class="o">=</span> <span class="n">LLMlight</span><span class="p">(</span><span class="n">model</span><span class="o">=</span><span class="s1">&#39;liquid/lfm2-24b-a2b&#39;</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=</span><span class="mf">0.1</span><span class="p">)</span>
+<span class="n">client</span><span class="o">.</span><span class="n">memory_init</span><span class="p">(</span><span class="n">store_path</span><span class="o">=</span><span class="s1">&#39;local_database1.db&#39;</span><span class="p">)</span>
 
-<span class="c1"># Inspect top 5 chunks</span>
-<span class="n">client</span><span class="o">.</span><span class="n">memory_chunks</span><span class="p">(</span><span class="n">n</span><span class="o">=</span><span class="mi">5</span><span class="p">)</span>
+<span class="c1"># Inspect top 2 chunks</span>
+<span class="n">client</span><span class="o">.</span><span class="n">memory_chunks</span><span class="p">(</span><span class="n">n</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
 
 <span class="c1"># Search through chunks using queries</span>
-<span class="n">out1</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">memory</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="s1">&#39;Attention Is All You Need&#39;</span><span class="p">,</span> <span class="n">top_k</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
-<span class="n">out2</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">memory</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="s1">&#39;Enrichment analysis, Hypergeometric Networks&#39;</span><span class="p">,</span> <span class="n">top_k</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
-<span class="n">out3</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">memory</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="s1">&#39;Capital of Amsterdam&#39;</span><span class="p">,</span> <span class="n">top_k</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
+<span class="n">out1a</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">relevant_memory_retrieval</span><span class="p">(</span><span class="s1">&#39;Attention Is All You Need&#39;</span><span class="p">)</span>
+<span class="n">out2a</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">relevant_memory_retrieval</span><span class="p">(</span><span class="s1">&#39;Enrichment analysis, Hypergeometric Networks&#39;</span><span class="p">)</span>
+
+<span class="c1"># RAG only</span>
+<span class="n">out1b</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">memory</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="s1">&#39;Attention Is All You Need&#39;</span><span class="p">)</span>
+<span class="n">out2b</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">memory</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="s1">&#39;Enrichment analysis, Hypergeometric Networks&#39;</span><span class="p">,</span> <span class="n">top_k</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
 </pre></div>
 </div>
 <div class="admonition note">

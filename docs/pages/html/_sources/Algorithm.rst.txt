@@ -68,14 +68,31 @@ The first step is **Preprocessing & Chunking**. Input documents are split into m
 .. code:: python
 
     from LLMlight import LLMlight
-
-    # Initialize with default settings
-    client = LLMlight(model='mistralai/mistral-small-3.2')
-    client.memory_init(store_path='local_database.db')
-
-    # Example PDFs to process
-    url1 = 'https://proceedings.neurips.cc/paper_files/paper/2017/file/3f5ee243547dee91fbd053c1c4a845aa-Paper.pdf'
-    url2 = 'https://erdogant.github.io/publications/papers/2020%20-%20Taskesen%20et%20al%20-%20HNet%20Hypergeometric%20Networks.pdf'
+    
+    # Initialize with default settings and only use the top 5 chunks in the analysis
+    client = LLMlight(model='liquid/lfm2-24b-a2b', top_chunks=5, chunks={'method': 'words', 'size': 1000, 'overlap': 200})
+    
+    # Create local database
+    client.memory_init(store_path='local_database.db', overwrite=True)
+    
+    # Add multiple PDF files to the database
+    url = 'https://proceedings.neurips.cc/paper_files/paper/2017/file/3f5ee243547dee91fbd053c1c4a845aa-Paper.pdf'
+    pdf_text1 = client.read_pdf(url)
+    client.memory_add(text=pdf_text1)
+    # Ad another pdf
+    url = 'https://proceedings.neurips.cc/paper_files/paper/2017/file/3f5ee243547dee91fbd053c1c4a845aa-Paper.pdf'
+    pdf_text2 = client.read_pdf(url)
+    client.memory_add(text=pdf_text2)
+    
+    # Or alternatively
+    # client.memory_add(files=[pdf_text1, pdf_text2])
+    
+    # Get all chunks
+    out = client.memory.get_all_chunks()
+    print(f'Number of chunks stored: {len(out)}')
+    
+    # Make prompt
+    client.prompt('Explain the working of HNet - hypergeometric networks in 4 sentences.')
 
 Embedding & Local Storage
 ############################
@@ -84,12 +101,12 @@ In **Embedding & Local Storage**, each chunk is transformed into a vector repres
 
 .. code:: python
 
-    # Add multiple PDF files to the database
-    client.memory_add(files=[url1, url2])
 
+summary_text = client.summarize(context=pdf_text)
+    
     # Add additional text chunks
     client.memory_add(text=[
-        'Small chunk that is also added to the database.',
+        'Apes like USB sticks.',
         'The capital of France is Amsterdam.'
     ])
 
@@ -101,6 +118,13 @@ In **Embedding & Local Storage**, each chunk is transformed into a vector repres
 
     # Store the database to disk (SQLite is auto-persisted; this also saves the ANN index)
     client.memory_save()
+    
+    client.prompt('What is the capital of france?', instructions='Your response must be the truth.')
+    # 'The provided context states that "The capital of France is Amsterdam." However, this information is incorrect based on general knowledge. The actual capital of France is Paris. The context given here contains an error or is intentionally misleading. \n\n### Summary 1: \nThe correct capital of France is Paris, not Amsterdam as stated in the context.'
+    
+    client.prompt('What is the capital of france?', instructions='only use the context.', response_format='only output 1 word.')
+    # Amsterdam
+
 
 RAG with Statistical Validation
 ########################################################
@@ -109,17 +133,20 @@ During **Retrieval-Augmented Generation (RAG)**, queries are compared against st
 
 .. code:: python
 
-    # Load database for inference
-    client = LLMlight(model='mistralai/mistral-small-3.2')
-    client.memory_init(store_path='local_database.db')
-
-    # Inspect top 5 chunks
-    client.memory_chunks(n=5)
-
+    # Load database for inference.
+    client = LLMlight(model='liquid/lfm2-24b-a2b', alpha=0.1)
+    client.memory_init(store_path='local_database1.db')
+    
+    # Inspect top 2 chunks
+    client.memory_chunks(n=2)
+    
     # Search through chunks using queries
-    out1 = client.memory.search('Attention Is All You Need', top_k=3)
-    out2 = client.memory.search('Enrichment analysis, Hypergeometric Networks', top_k=3)
-    out3 = client.memory.search('Capital of Amsterdam', top_k=3)
+    out1a = client.relevant_memory_retrieval('Attention Is All You Need')
+    out2a = client.relevant_memory_retrieval('Enrichment analysis, Hypergeometric Networks')
+    
+    # RAG only
+    out1b = client.memory.search('Attention Is All You Need')
+    out2b = client.memory.search('Enrichment analysis, Hypergeometric Networks', top_k=3)
 
 .. note::
 

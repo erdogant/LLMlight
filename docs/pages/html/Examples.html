@@ -65,8 +65,8 @@
 <p class="caption" role="heading"><span class="caption-text">Examples</span></p>
 <ul class="current">
 <li class="toctree-l1 current"><a class="current reference internal" href="#">Basic Prompting</a></li>
-<li class="toctree-l1"><a class="reference internal" href="#working-with-files-pdfs">Working with Files (PDFs)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="#loading-an-existing-knowledge-base">Loading an Existing Knowledge Base</a></li>
+<li class="toctree-l1"><a class="reference internal" href="#working-with-files-pdfs">Working with Files (PDFs)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="#create-summaries">Create Summaries</a></li>
 <li class="toctree-l1"><a class="reference internal" href="#adding-and-removing-memory-chunks">Adding and Removing Memory Chunks</a></li>
 </ul>
@@ -119,7 +119,22 @@
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">LLMlight</span><span class="w"> </span><span class="kn">import</span> <span class="n">LLMlight</span>
 
 <span class="c1"># Initialize an LLMlight client</span>
-<span class="n">client</span> <span class="o">=</span> <span class="n">LLMlight</span><span class="p">(</span><span class="n">model</span><span class="o">=</span><span class="s1">&#39;mistralai/mistral-small-3.2&#39;</span><span class="p">)</span>
+<span class="n">client</span> <span class="o">=</span> <span class="n">LLMlight</span><span class="p">(</span><span class="n">model</span><span class="o">=</span><span class="s1">&#39;liquid/lfm2-24b-a2b&#39;</span><span class="p">)</span>
+
+<span class="c1"># Ask a question using a language model</span>
+<span class="n">response</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">prompt</span><span class="p">(</span><span class="s1">&#39;What is the capital of France?&#39;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">response</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="loading-an-existing-knowledge-base">
+<h1>Loading an Existing Knowledge Base<a class="headerlink" href="#loading-an-existing-knowledge-base" title="Link to this heading"></a></h1>
+<p>Reload a previously built SQLite knowledge base and query it:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">LLMlight</span><span class="w"> </span><span class="kn">import</span> <span class="n">LLMlight</span>
+
+<span class="c1"># Initialize an LLMlight client</span>
+<span class="n">client</span> <span class="o">=</span> <span class="n">LLMlight</span><span class="p">(</span><span class="n">model</span><span class="o">=</span><span class="s1">&#39;liquid/lfm2-24b-a2b&#39;</span><span class="p">)</span>
+<span class="n">client</span><span class="o">.</span><span class="n">memory_load</span><span class="p">(</span><span class="n">store_path</span><span class="o">=</span><span class="s1">&#39;local_database.db&#39;</span><span class="p">)</span>
 
 <span class="c1"># Ask a question using a language model</span>
 <span class="n">response</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">prompt</span><span class="p">(</span><span class="s1">&#39;What is the capital of France?&#39;</span><span class="p">)</span>
@@ -145,20 +160,6 @@
 
 <span class="c1"># Query on the new knowledge</span>
 <span class="n">response</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">prompt</span><span class="p">(</span><span class="s1">&#39;Summarize the document.&#39;</span><span class="p">)</span>
-<span class="nb">print</span><span class="p">(</span><span class="n">response</span><span class="p">)</span>
-</pre></div>
-</div>
-</section>
-<section id="loading-an-existing-knowledge-base">
-<h1>Loading an Existing Knowledge Base<a class="headerlink" href="#loading-an-existing-knowledge-base" title="Link to this heading"></a></h1>
-<p>Reload a previously built SQLite knowledge base and query it:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">LLMlight</span><span class="w"> </span><span class="kn">import</span> <span class="n">LLMlight</span>
-
-<span class="n">client</span> <span class="o">=</span> <span class="n">LLMlight</span><span class="p">(</span><span class="n">model</span><span class="o">=</span><span class="s1">&#39;mistralai/mistral-small-3.2&#39;</span><span class="p">)</span>
-<span class="n">client</span><span class="o">.</span><span class="n">memory_init</span><span class="p">(</span><span class="n">store_path</span><span class="o">=</span><span class="s1">&#39;knowledge_base.db&#39;</span><span class="p">)</span>
-
-<span class="n">response</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">prompt</span><span class="p">(</span><span class="s1">&#39;What are Graphical Hypergeometric Networks?&#39;</span><span class="p">,</span>
-                         <span class="n">instructions</span><span class="o">=</span><span class="s1">&#39;Answer using only the context.&#39;</span><span class="p">)</span>
 <span class="nb">print</span><span class="p">(</span><span class="n">response</span><span class="p">)</span>
 </pre></div>
 </div>

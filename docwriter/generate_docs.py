@@ -38,17 +38,16 @@ Usage
     python generate_docs.py --dry-run             # print to stdout only
     python generate_docs.py --max-iterations 2    # cap review loops
 """
+import logging
 
 import argparse
 import json
-import os
 import re
 import sys
-import textwrap
 from pathlib import Path
-from typing import Optional
-
 import requests
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -487,10 +486,86 @@ def generate_rst_page(
 
 
 # ---------------------------------------------------------------------------
-# CLI
+# API / Core Pipeline
 # ---------------------------------------------------------------------------
 
-def main():
+def main(
+    page=None,
+    source_dir=".",
+    output_dir=".",
+    max_iterations=2,
+    dry_run=False,
+    endpoint=None,
+    orchestrator_model=None,
+    analyst_model=None,
+    writer_model=None,
+    reviewer_model=None,
+):
+    """
+    Programmatic API entry point for the Multi-agent Sphinx RST generator.
+    """
+    global ENDPOINT
+    
+    # Apply model overrides if provided
+    if orchestrator_model:  MODELS["orchestrator"] = orchestrator_model
+    if analyst_model:       MODELS["analyst"] = analyst_model
+    if writer_model:        MODELS["writer"] = writer_model
+    if reviewer_model:      MODELS["reviewer"] = reviewer_model
+    if endpoint:            ENDPOINT = endpoint
+
+    source_base = Path(source_dir)
+    output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
+
+    pages = (
+        {page: RST_PAGES[page]}
+        if page
+        else RST_PAGES
+    )
+
+    results = {}
+    for page_name, config in pages.items():
+        print(f"\n{'='*60}")
+        print(f"   Generating: {page_name}")
+        print(f"{'='*60}")
+        try:
+            rst_text = generate_rst_page(
+                page_name=page_name,
+                config=config,
+                source_base=source_base,
+                max_iterations=max_iterations,
+                verbose=True,
+            )
+            results[page_name] = rst_text
+
+            if dry_run:
+                print(f"\n--- {page_name}.rst ---\n")
+                print(rst_text)
+            else:
+                out_file = output_path / f"{page_name}.rst"
+                out_file.write_text(rst_text, encoding="utf-8")
+                print(f"\n   Written: {out_file}  ({len(rst_text)} chars)")
+
+        except Exception as exc:
+            print(f"\n   ERROR generating {page_name}: {exc}", file=sys.stderr)
+            results[page_name] = None
+
+    # Summary
+    print(f"\n{'='*60}")
+    print("   Pipeline complete")
+    print(f"{'='*60}")
+    for name, rst in results.items():
+        status = f"{len(rst)} chars" if rst else "FAILED"
+        print(f"   {name:<30} {status}")
+        
+    return results
+
+
+# ---------------------------------------------------------------------------
+# CLI Execution Catch
+# ---------------------------------------------------------------------------
+
+if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Multi-agent Sphinx RST generator for LLMlight"
     )
@@ -542,59 +617,8 @@ def main():
         "--reviewer-model", default=MODELS["reviewer"],
         help="Override reviewer model"
     )
+    
     args = parser.parse_args()
 
-    # Apply model overrides
-    MODELS["orchestrator"] = args.orchestrator_model
-    MODELS["analyst"]      = args.analyst_model
-    MODELS["writer"]       = args.writer_model
-    MODELS["reviewer"]     = args.reviewer_model
-
-    source_base = Path(args.source_dir)
-    output_dir  = Path(args.output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    pages = (
-        {args.page: RST_PAGES[args.page]}
-        if args.page
-        else RST_PAGES
-    )
-
-    results = {}
-    for page_name, config in pages.items():
-        print(f"\n{'='*60}")
-        print(f"  Generating: {page_name}")
-        print(f"{'='*60}")
-        try:
-            rst_text = generate_rst_page(
-                page_name=page_name,
-                config=config,
-                source_base=source_base,
-                max_iterations=args.max_iterations,
-                verbose=True,
-            )
-            results[page_name] = rst_text
-
-            if args.dry_run:
-                print(f"\n--- {page_name}.rst ---\n")
-                print(rst_text)
-            else:
-                out_path = output_dir / f"{page_name}.rst"
-                out_path.write_text(rst_text, encoding="utf-8")
-                print(f"\n  Written: {out_path}  ({len(rst_text)} chars)")
-
-        except Exception as exc:
-            print(f"\n  ERROR generating {page_name}: {exc}", file=sys.stderr)
-            results[page_name] = None
-
-    # Summary
-    print(f"\n{'='*60}")
-    print("  Pipeline complete")
-    print(f"{'='*60}")
-    for name, rst in results.items():
-        status = f"{len(rst)} chars" if rst else "FAILED"
-        print(f"  {name:<30} {status}")
-
-
-if __name__ == "__main__":
-    main()
+    # Unpack the parsed CLI arguments directly into the main API function
+    main(**vars(args))
