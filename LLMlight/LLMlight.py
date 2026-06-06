@@ -2081,26 +2081,6 @@ def set_system_message(system):
     return system
 
 
-# %%
-def convert_verbose_to_new(verbose):
-    """Convert old verbosity to the new."""
-    # In case the new verbosity is used, convert to the old one.
-    if verbose is None: verbose=0
-    if not isinstance(verbose, str) and verbose<10:
-        status_map = {
-            'None': 'silent',
-            0: 'silent',
-            6: 'silent',
-            1: 'critical',
-            2: 'warning',
-            3: 'info',
-            4: 'debug',
-            5: 'debug'}
-        if verbose>=2: print('[LLMlight] WARNING use the standardized verbose status. The status [1-6] will be deprecated in future versions.')
-        return status_map.get(verbose, 0)
-    else:
-        return verbose
-
 def get_logger():
     return logger.getEffectiveLevel()
 
@@ -2131,8 +2111,6 @@ def set_logger(verbose: [str, int] = 'info'):
     > logger.critical("Hello critical")
 
     """
-    # Convert verbose to new
-    verbose = convert_verbose_to_new(verbose)
     # Set 0 and None as no messages.
     if (verbose==0) or (verbose is None):
         verbose=60
@@ -2147,14 +2125,6 @@ def set_logger(verbose: [str, int] = 'info'):
                   'error': 50,
                   'critical': 50}
         verbose = levels[verbose]
-
-    # Configure root logger if no handlers exist
-    # if not logger.handlers:
-    #     handler = logging.StreamHandler()
-    #     fmt = '[{asctime}] [{name}] [{levelname}] {msg}'
-    #     formatter = logging.Formatter(fmt=fmt, style='{', datefmt='%d-%m-%Y %H:%M:%S')
-    #     handler.setFormatter(formatter)
-    #     logger.addHandler(handler)
 
     # Set the level
     logger.setLevel(verbose)
