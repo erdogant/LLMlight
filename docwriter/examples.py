@@ -1,6 +1,8 @@
 import generate_docs
 
-generate_docs.main(source_dir="D://REPOS//LLMlight//LLMlight", output_dir="D://temp//docs")
+# generate_docs.main(source_dir="D://REPOS//LLMlight//LLMlight", output_dir="D://temp//docs")
+generate_docs.main(source_dir="D://REPOS//intruderscan//", output_dir="D://temp//docs/intruderscan")
+
 
 # %%
 
