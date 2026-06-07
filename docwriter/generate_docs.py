@@ -69,8 +69,8 @@ ENDPOINT = "http://localhost:1234/v1/chat/completions"
 
 MODELS: Dict[str, str] = {
     "orchestrator": "google/gemma-4-26b-a4b-qat",
-    "analyst":      "google/gemma-4-26b-a4b-qat",
-    "writer":       "openai/gpt-oss-20b",
+    "analyst":      "qwen3-coder-30b-a3b-instruct",
+    "writer":       "google/gemma-4-26b-a4b-qat",
     "reviewer":     "liquid/lfm2-24b-a2b",
     "small":        "gemma-4-e4b-it-qat",
 }
@@ -1020,7 +1020,7 @@ def _build_installation_rst(config: Dict, source_base: Path) -> str:
     opt_table_rows = ""
     if optional_imports:
         rows = "\n".join(
-            f"   * - ``pip install {pkg}``\n     - Optional feature" 
+            f"   * - ``pip install {pkg}``\n     - Optional feature"
             for pkg in sorted(optional_imports)
         )
         opt_table_rows = (
@@ -1083,10 +1083,10 @@ Install from GitHub
 {opt_table_rows}
 
 Uninstall
-*********
+############
 
 Remove environment
-==================
+******************
 
 .. code-block:: console
 
@@ -1096,14 +1096,13 @@ Remove environment
 
 
 Remove package
-==============
+**************
 
 .. code-block:: console
 
    pip uninstall {name}
 
 
-.. include:: add_bottom.add
 """
     return rst
 
