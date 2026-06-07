@@ -41,6 +41,7 @@ import sys
 from collections import Counter
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+from tqdm import tqdm
 
 import requests
 
@@ -50,7 +51,7 @@ import requests
 
 BLACKLIST_DIRS  = {"__pycache__", ".git", ".venv", "venv", ".mypy_cache", "tests", "test", ".secrets", ".secret", "depreciated", "old", "magweg"}
 BLACKLIST_FILES = {"setup.py", "conf.py", "helper.py", ".key", ".secret", "key", "secret"}
-BLACKLIST_FN = {"verbose", "wget", "logger", "download", "tqdm", "set_logger", "get_logger", "old"}
+BLACKLIST_FN = {"verbose", "wget", "logger", "download", "tqdm", "set_logger", "get_logger", "old", "messages", "print"}
 
 # Catch numpy docstring sections
 NUMPY_SECTIONS = ["Parameters", "Returns", "Examples", "Notes", "Attributes", "Raises", "See Also", "References"]
@@ -68,8 +69,8 @@ logger = logging.getLogger(__name__)
 ENDPOINT = "http://localhost:1234/v1/chat/completions"
 
 MODELS: Dict[str, str] = {
-    "orchestrator": "google/gemma-4-26b-a4b-qat",
-    "analyst":      "qwen3-coder-30b-a3b-instruct",
+    "orchestrator": "openai/gpt-oss-20b",
+    "analyst":      "qwen3.5-9b-glm5.1-distill-v1", # qwen3.5-9b-glm5.1-distill-v1, zai-org/glm-4.6v-flash
     "writer":       "google/gemma-4-26b-a4b-qat",
     "reviewer":     "liquid/lfm2-24b-a2b",
     "small":        "gemma-4-e4b-it-qat",
@@ -106,21 +107,21 @@ PROJECT SUMMARY:
 # LLM primitive
 # ---------------------------------------------------------------------------
 
-def _call_llm(model: str, system: str, user: str,
-              temperature: float = 0.3, max_tokens: int = 2048) -> str:
+def _call_llm(model: str, system: str, user: str, temperature: float = 0.3, max_tokens: int = 2048) -> str:
+
     payload = {
         "model": model,
         "messages": [{"role": "system", "content": system},
                      {"role": "user",   "content": user}],
         "temperature": temperature,
         "max_tokens":  max_tokens,
-        "stream":      False,
+        "stream": False,
     }
     try:
         resp = requests.post(
             ENDPOINT,
             headers={"Content-Type": "application/json"},
-            json=payload, timeout=180,
+            json=payload, timeout=320,
         )
         resp.raise_for_status()
         choice = resp.json()["choices"][0]["message"]
@@ -537,6 +538,7 @@ def discover_rst_pages(source_base: Path,
     prompt = DOC_STRUCTURE_PROMPT.format(project_summary=summary_text)
 
     logger.info(f"Discovering additional pages via LLM ({model}) ...")
+    # run LLM
     raw = _call_llm(model, "You are a technical writer. Output only valid JSON.", prompt, temperature=0.2, max_tokens=2000)
     pages_list = _parse_json_response(raw)
     if not isinstance(pages_list, list):
@@ -580,10 +582,11 @@ def enrich_manifest(
     branch  = git_meta.get("default_branch", "main")
     gh_url  = git_meta.get("remote_url", "")
     tag     = git_meta.get("last_tag", "")
-    is_git  = git_meta.get("is_git_repo") == "true"
+    # is_git  = git_meta.get("is_git_repo") == "true"
 
     install_desc = (
         f"Installation page for '{name}'. "
+        f"GitHub user name: {user}. "
         f"{'GitHub repo: ' + gh_url + '. ' if gh_url else ''}"
         f"{'Default branch: ' + branch + '. ' if branch else ''}"
         f"{'Latest tag/release: ' + tag + '. ' if tag else ''}"
@@ -616,9 +619,9 @@ def enrich_manifest(
         params = info.get("Parameters", "")
         notes  = info.get("Notes", "")
         if params:
-            param_snippets.append(f"[{key}] Parameters:\n{params[:300]}")
+            param_snippets.append(f"[{key}] Parameters:\n{params[:2000]}")
         if notes:
-            param_snippets.append(f"[{key}] Notes:\n{notes[:200]}")
+            param_snippets.append(f"[{key}] Notes:\n{notes[:2000]}")
 
     algo_desc = (
         "Technical workflow page. Describe the step-by-step algorithm and core functions: "
@@ -631,7 +634,7 @@ def enrich_manifest(
     # ── Examples ────────────────────────────────────────────────────────────
     # Embed the top pipeline examples directly in the description so the writer
     # has concrete code to render — no hallucination needed.
-    top_examples = pipeline_examples[:4]
+    top_examples = pipeline_examples
     examples_desc = (
         "Practical examples page. Show the most common user workflows as runnable "
         "code blocks. Use the following examples extracted from docstrings and "
@@ -679,16 +682,15 @@ def enrich_manifest(
         if key in manifest:
             existing = manifest[key]
             mand_cfg["description"] = mand_cfg["description"]
-            mand_cfg["sources"]     = list(dict.fromkeys(
-                mand_cfg["sources"] + existing.get("sources", [])
-            ))
+            mand_cfg["sources"] = list(dict.fromkeys(mand_cfg["sources"] + existing.get("sources", [])))
+        # Store
         out[key] = mand_cfg
 
     for key, cfg in manifest.items():
         norm_key = key.lower().replace(" ", "_")
         if not any(norm_key == m.lower() for m in mandatory):
             out[key] = cfg
-
+    # Return
     return out
 
 
@@ -727,40 +729,87 @@ def save_manifest(manifest: Dict[str, Dict], path: Path):
 # Source loading helpers
 # ===========================================================================
 
-def split_script(script: str) -> List[Dict]:
-    CHUNK = 1500
+def extract_functions(script: str) -> List[Dict]:
+    # Maximum code block chunk is 2500 chars
+    CHUNK = 2500
     try:
         tree = ast.parse(script)
     except SyntaxError:
-        return [{"type": "header", "name": None, "code": script[:3000]}]
-    lines = script.splitlines()
-    def src(n) -> str: return "\n".join(lines[n.lineno - 1 : n.end_lineno])
-    def cap(t: str) -> str: return t[:CHUNK] + (" [truncated]" if len(t) > CHUNK else "")
+        return [{"type": "header", "name": None, "code": script[:CHUNK]}]
 
-    first_def = next(
-        (n.lineno - 1 for n in tree.body
-         if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))),
-        len(lines),
-    )
+    lines = script.splitlines()
+
+    def src(n) -> str:
+        return "\n".join(lines[n.lineno - 1: n.end_lineno])
+
+    def truncate(t: str) -> str:
+        return t[:CHUNK] + (" [truncated]" if len(t) > CHUNK else "")
+
+    first_def = next((n.lineno - 1 for n in tree.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))), len(lines))
     parts = [{"type": "header", "name": None, "code": "\n".join(lines[:first_def])}]
 
     for node in tree.body:
-        if isinstance(node, ast.ClassDef):
-            methods = [
-                {"name": i.name, "code": cap(src(i))}
-                for i in node.body
-                if isinstance(i, (ast.FunctionDef, ast.AsyncFunctionDef))
-            ]
-            parts.append({"type": "class", "name": node.name,
-                          "code": cap(src(node)), "methods": methods})
 
-    for node in tree.body:
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            if not any(w in node.name.lower() for w in BLACKLIST_FN):
-                parts.append({"type": "function", "name": node.name, "code": cap(src(node))})
+        # ---------------- CLASS ----------------
+        if isinstance(node, ast.ClassDef):
+
+            class_code = truncate(src(node))
+
+            # method extraction + description per method
+            methods = []
+
+            for m in tqdm(node.body):
+                if isinstance(m, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    if any(b in m.name.lower() for b in BLACKLIST_FN):
+                        continue
+                    # Show message
+                    logger.info(f'Code Agent - Describe function: {m.name}')
+                    # Get code
+                    m_code = truncate(src(m))
+                    # Retrieve the description using LLM based on the code
+                    description = describe(m.name, m_code, context=f"Method inside class {node.name}")
+                    # Append
+                    methods.append({
+                        "name": m.name,
+                        "code": m_code,
+                        "description": description,
+                    })
+
+            parts.append({
+                "type": "class",
+                "name": node.name,
+                "code": class_code,
+                "description": describe(node.name, class_code, context="Python class"),
+                "methods": methods
+            })
+
+        # ---------------- FUNCTION ----------------
+        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+
+            if any(b in node.name.lower() for b in BLACKLIST_FN):
+                continue
+
+            # Get function code
+            func_code = truncate(src(node))
+            # Make the description of the code
+            description = describe(node.name, func_code, context="Standalone function")
+
+            parts.append({
+                "type": "function",
+                "name": node.name,
+                "code": func_code,
+                "description": description,
+            })
 
     return parts
 
+def describe(name, code, context=""):
+    # Build prompt
+    prompt = build_description_prompt(name=name, code=code, context=context)
+    # Run LLM
+    out = _call_llm(MODELS["analyst"], TECHNICAL_WRITER_SYSTEM, prompt)
+    # Return
+    return out
 
 def _load_sources(base: Path, whitelist: Optional[List[str]] = None) -> Dict[str, List]:
     wl: Optional[set] = None
@@ -775,7 +824,8 @@ def _load_sources(base: Path, whitelist: Optional[List[str]] = None) -> Dict[str
         if wl is not None and path.name.lower() not in wl and path.stem.lower() not in wl:
             continue
         try:
-            out[path.name] = split_script(path.read_text(encoding="utf-8", errors="ignore"))
+            # Get code seperated on class and functions
+            out[path.name] = extract_functions(path.read_text(encoding="utf-8", errors="ignore"))
         except Exception as e:
             out[path.name] = [{"type": "header", "name": None, "code": f"# ERROR: {e}"}]
     return out
@@ -799,28 +849,52 @@ def _load_existing_rst(name: str, base: Path) -> str:
 
 
 def _find_existing_rst(page_key: str, output_base: Path) -> str:
-    for candidate in output_base.glob("*.rst"):
-        if candidate.stem.lower() == page_key.lower():
-            return candidate.read_text(encoding="utf-8", errors="ignore")
-    return ""
+    """Find and return the content of an existing RST file recursively."""
+    page_key = page_key.lower()
 
+    rst_file = next(
+        (
+            f
+            for f in sorted(output_base.rglob("*.rst"))
+            if f.stem.lower() == page_key
+        ),
+        None,
+    )
+
+    return (rst_file.read_text(encoding="utf-8", errors="ignore") if rst_file else "")
 
 # ===========================================================================
 # Analyst helpers
 # ===========================================================================
 
-def _summarize_part(p: Dict, max_method_chars: int = 800) -> str:
+def _summarize_part(p: Dict, chunk: int = 3000) -> str:
     if p["type"] == "header":
-        return "MODULE HEADER:\n" + p["code"][:2000]
-    if p["type"] == "function":
-        return f"FUNCTION `{p['name']}`:\n{p['code']}"
-    if p["type"] == "class":
-        lines = [f"CLASS `{p['name']}`:", p["code"][:600], "", "  Methods:"]
-        for m in p.get("methods", []):
-            lines += [f"  --- {m['name']} ---", m["code"][:max_method_chars]]
-        return "\n".join(lines)
-    return ""
+        return "MODULE HEADER:\n" + p["code"][:chunk]
 
+    # Retrieve for func
+    if p["type"] == "function":
+        content = p.get('description', '') + '\n\nCODE:\n\n' + p.get('code', '')
+        content = content[:chunk]
+        # Return
+        return f"FUNCTION `{p['name']}`:\n{content}"
+
+    # Retrieve for class
+    if p["type"] == "class":
+        class_content =  p.get('description', '') + '\n\nCODE:\n\n' + p.get('code', '')
+        class_content = class_content[:chunk]
+
+        # Get lines
+        lines = [f"CLASS `{p['name']}`:", class_content, "", "  Methods:"]
+        # Go through all func in the class
+        for m in p.get("methods", []):
+            func_content = p.get('description', '') + '\n\nCODE:\n\n' + p.get('code', '')
+            func_content = func_content[:chunk]
+            # Make lines
+            lines += [f"  --- {m['name']} ---", func_content]
+        # Return
+        return "\n".join(lines)
+
+    return ""
 
 # ===========================================================================
 # Agents
@@ -849,40 +923,62 @@ JSON schema:
 }
 """
 
+TECHNICAL_WRITER_SYSTEM = """
+You are a senior software engineer and code analyst.
 
-def _analyze_single_file(fname: str, file_parts: List[Dict], model: str) -> str:
-    block = "\n\n".join(_summarize_part(p) for p in file_parts)[:6000]
+Your job is to explain Python functions clearly, precisely, and technically.
+
+Rules:
+- Do not guess behavior not supported by code
+- Focus on input/output behavior and logic
+- Be concise but complete
+- Prefer deterministic descriptions over vague explanations
+- Explain what the role of this function is in the complete pipeline
+"""
+
+def _analyze_single_file(fname: str, file_parts: List[Dict]) -> str:
+    block = "\n\n".join(_summarize_part(p) for p in file_parts)[:10000]
     prompt = (
         f"FILE: {fname}\n\nCONTENT:\n{block}\n\n"
         "Summarize this file. List key public classes and functions with one-line "
         "descriptions and important parameters. Return ONLY JSON: "
         "{file, purpose, classes, functions}"
     )
-    return _call_llm(model, ANALYST_SYSTEM, prompt, temperature=0.2, max_tokens=1000)
+    # Call llm
+    out = _call_llm(MODELS["writer"], ANALYST_SYSTEM, prompt, temperature=0.2, max_tokens=1000)
+    # return
+    return out
 
 
-def analyst_agent(page_name: str, page_description: str,
-                  parts: Dict[str, List],
-                  extra_context: str = "",
-                  model: str = MODELS["analyst"]) -> Dict:
+def analyst_agent(page_name: str, page_description: str, parts: Dict[str, List], extra_context: str = "") -> Dict:
     """MAP each file → summary. REDUCE → structured page spec."""
+    logger.info(f"{page_name} - Product Owner Agent ({MODELS['writer']}) working on specifications ...")
     file_summaries: Dict[str, str] = {}
+
+    # Go through all files and functions
     for fname, file_parts in parts.items():
         logger.info(f"  Analyst Agent is handling: {fname}")
-        file_summaries[fname] = _analyze_single_file(fname, file_parts, model)
+        file_summaries[fname] = _analyze_single_file(fname, file_parts)
 
-    summaries_block = "\n\n".join(f"FILE: {k}\nSUMMARY:\n{v}" for k, v in file_summaries.items())[:7000]
+    # Create summary block
+    summaries_block = "\n\n".join(f"FILE: {k}\nSUMMARY:\n{v}" for k, v in file_summaries.items())[:20000]
 
+    # Prompt
     reduce_prompt = (
         f"PAGE: {page_name}\n"
         f"DESCRIPTION: {page_description[:2000]}\n\n"
         f"FILE SUMMARIES:\n{summaries_block}\n"
         + (f"\nADDITIONAL CONTEXT:\n{extra_context[:1500]}\n" if extra_context else "")
-        + "\nCombine insights. Produce the page spec JSON."
-    )
-    raw = _call_llm(model, ANALYST_SYSTEM, reduce_prompt, temperature=0.2, max_tokens=2000)
+        + "\nCombine insights. Produce the page spec JSON.")
+
+    # Run LLM
+    raw = _call_llm(MODELS["writer"], ANALYST_SYSTEM, reduce_prompt, temperature=0.2, max_tokens=2000)
+    # structure
     result = _parse_json_response(raw)
-    return result if isinstance(result, dict) else {"page_title": page_name, "sections": [], "raw": raw}
+    # Create final string
+    out = result if isinstance(result, dict) else {"page_title": page_name, "sections": [], "raw": raw}
+    # Return
+    return out
 
 
 WRITER_SYSTEM = """\
@@ -904,8 +1000,9 @@ Output ONLY raw RST text. No preamble, no markdown fences.
 """
 
 
-def writer_agent(page_name: str, spec: Dict, existing_rst: str = "",
-                 model: str = MODELS["writer"]) -> str:
+def writer_agent(page_name: str, spec: Dict, existing_rst: str = "") -> str:
+    logger.info(f"{page_name} - Writer Agent ({MODELS['writer']}) drafting RST ...")
+    # dump json
     spec_json = json.dumps(spec, indent=2)[:5000]
     style_hint = (
         f"\nStyle reference (do NOT copy — write fresh):\n{existing_rst[:1500]}"
@@ -917,7 +1014,10 @@ def writer_agent(page_name: str, spec: Dict, existing_rst: str = "",
         f"{style_hint}\n\n"
         "Start with page title underlined by #. Output complete RST.\n"
     )
-    return _call_llm(model, WRITER_SYSTEM, user, temperature=0.4, max_tokens=3000)
+    # Call llm
+    raw = _call_llm(MODELS["writer"], WRITER_SYSTEM, user, temperature=0.4, max_tokens=3000)
+    # Return
+    return raw
 
 
 REVIEWER_SYSTEM = """\
@@ -935,15 +1035,14 @@ Minor issues → approved=true. Significant errors → approved=false + revised_
 """
 
 
-def reviewer_agent(page_name: str, draft_rst: str,
-                   raw_sources: Dict[str, str],
-                   model: str = MODELS["reviewer"]) -> Dict:
+def reviewer_agent(page_name: str, draft_rst: str, raw_sources: Dict[str, str]) -> Dict:
     snippet = "\n\n".join(f"### {f}\n{c[:2000]}" for f, c in raw_sources.items())
     user = (
         f"Page: {page_name}\n\nDRAFT:\n{draft_rst[:4000]}\n\n"
         f"SOURCE:\n{snippet}\n\nReview. Output JSON only.\n"
     )
-    raw = _call_llm(model, REVIEWER_SYSTEM, user, temperature=0.1, max_tokens=3000)
+    # run LLM
+    raw = _call_llm(MODELS["reviewer"], REVIEWER_SYSTEM, user, temperature=0.1, max_tokens=3000)
     result = _parse_json_response(raw)
     return result if isinstance(result, dict) else {"approved": True, "issues": [], "revised_rst": None}
 
@@ -955,8 +1054,9 @@ Output ONLY the corrected RST document.
 """
 
 
-def orchestrator_merge(page_name: str, draft_rst: str, review: Dict,
-                       model: str = MODELS["orchestrator"]) -> str:
+def orchestrator_merge(page_name: str, draft_rst: str, review: Dict) -> str:
+    logger.info("{page_name} - Orchestrator Agent is merging feedback ...")
+
     if review.get("revised_rst"):
         draft_rst = review["revised_rst"]
     issues = review.get("issues", [])
@@ -967,7 +1067,10 @@ def orchestrator_merge(page_name: str, draft_rst: str, review: Dict,
         f"ISSUES:\n" + "\n".join(f"- {i}" for i in issues) +
         "\n\nOutput the fully corrected RST.\n"
     )
-    return _call_llm(model, ORCHESTRATOR_SYSTEM, user, temperature=0.2, max_tokens=3000)
+    # run LLM
+    raw = _call_llm(MODELS["orchestrator"], ORCHESTRATOR_SYSTEM, user, temperature=0.2, max_tokens=3000)
+    # return
+    return raw
 
 
 # ===========================================================================
@@ -1148,86 +1251,202 @@ def _build_summary_spec(config: Dict, output_base: Path,
 # ===========================================================================
 # Pipeline: one RST page
 # ===========================================================================
+def generate_rst_page(
+    page_name: str,
+    config: Dict,
+    source_base: Path,
+    output_base: Path,
+    docstrings: Dict[str, Dict],
+    max_iterations: int = 2,
+    verbose: bool = True,
+) -> str:
 
-def generate_rst_page(page_name: str, config: Dict,
-                      source_base: Path, output_base: Path,
-                      docstrings: Dict[str, Dict],
-                      max_iterations: int = 2,
-                      verbose: bool = True) -> str:
-
-    def log(msg: str):
-        if verbose:
-            print(f"[{page_name}] {msg}", flush=True)
-
-    # ── Special case: Installation — template, no LLM analyst needed ────────
     if page_name == "Installation":
-        log("Building Installation.rst from template + git metadata ...")
+        logger.info(f"Building Installation.rst from template + git metadata ...")
         return _build_installation_rst(config, source_base)
 
-    source_files = config.get("sources", [])
-    sources_parsed = _load_sources(source_base, whitelist=source_files or None)
-    if not sources_parsed:
-        log("WARNING: no source files matched — loading all .py files")
-        sources_parsed = _load_sources(source_base)
-    log(f"Loaded {len(sources_parsed)} file(s): {list(sources_parsed.keys())}")
+    # load page sources
+    sources_parsed, raw_sources = _load_page_sources(config, source_base)
+    # load page rst
+    existing_rst = _load_page_rst(page_name, config, output_base)
+    # Build page specifications
+    spec = _build_page_spec(page_name, config, output_base, docstrings, sources_parsed)
+    # Create draft
+    draft = _load_or_create_draft(page_name, spec, existing_rst, output_base)
+    # Review and finalize
+    fin = _review_and_finalize(page_name, draft, raw_sources, max_iterations)
+    # Return
+    return fin
 
+def _load_page_sources(config, source_base):
+    source_files = config.get("sources", [])
+    sources = _load_sources(source_base, whitelist=source_files or None)
+    if not sources: 
+        logger.warning(f"No source files matched — loading all .py files")
+        sources = _load_sources(source_base)
+
+    # Get raw sources
     raw_sources = _load_raw_sources(source_base, source_files) if source_files else {}
 
-    existing_rst = _find_existing_rst(page_name, output_base)
-    if not existing_rst and config.get("existing_rst"):
-        existing_rst = _load_existing_rst(config["existing_rst"], output_base)
+    # return
+    logger.info(f"Loaded {len(sources)} file(s): {list(sources.keys())}")
+    return sources, raw_sources
 
-    # ── Summary — special spec that reads already-written pages ─────────────
+def _load_page_rst(page_name, config, output_base):
+    # look for existing rst page
+    rst = _find_existing_rst(page_name, output_base)
+
+    if not rst and config.get("existing_rst"):
+        rst = _load_existing_rst(config["existing_rst"], output_base)
+    # return
+    return rst
+
+def _build_page_spec(page_name, config, output_base, docstrings, sources):
     if page_name == "Summary":
-        log("Building Summary spec from existing RST pages + docstrings ...")
+        logger.info(f"{page_name} - Building Summary spec ...")
+
         spec = _build_summary_spec(config, output_base, docstrings)
-        extra_context = spec.pop("extra_context", "")
-    else:
-        # ── Algorithm / Examples / generic pages ───────────────────────────
-        extra_context = ""
-        if page_name == "Algorithm":
-            snippets = config.get("_param_snippets", [])
-            extra_context = "\n".join(snippets[:5])
-        elif page_name == "Examples":
-            pipeline_examples = config.get("_pipeline_examples", [])
-            extra_context = (
-                "MOST-USED PIPELINE EXAMPLES (render these as code-block:: python):\n\n"
-                + "\n\n---\n\n".join(pipeline_examples)
-            )
+        spec.pop("extra_context", None)
+        return spec
 
-        log(f"Analyst Agent ({MODELS['analyst']}) extracting spec ...")
-        spec = analyst_agent(page_name, config["description"], sources_parsed, extra_context=extra_context)
+    extra_context = ""
 
-    log(f"Spec sections: {[s.get('title','?') for s in spec.get('sections',[])]}")
+    if page_name == "Algorithm":
+        extra_context = "\n".join(config.get("_param_snippets", [])[:5])
 
-    # Re-use existing generated output if it already exists
-    existing_output = output_base / f"{page_name}.rst"
-    if existing_output.exists():
-        log(f"Loading existing generated page: {existing_output}")
-        draft = existing_output.read_text(encoding="utf-8", errors="ignore")
-    else:
-        log(f"Writer Agent ({MODELS['writer']}) drafting RST ...")
-        draft = writer_agent(page_name, spec, existing_rst)
-    log(f"Draft is created: {len(draft)} chars")
+    elif page_name == "Examples":
+        examples = config.get("_pipeline_examples", [])
+        extra_context = (
+            "MOST-USED PIPELINE EXAMPLES "
+            "(render these as code-block:: python):\n\n"
+            + "\n\n---\n\n".join(examples))
 
-    # ── Review loop ──────────────────────────────────────────────────────────
+    # Run analyst agent
+    raw = analyst_agent(page_name, config["description"], sources, extra_context=extra_context)
+    # return
+    return raw
+
+def _load_or_create_draft(page_name, spec, existing_rst, output_base):
+    # create output file
+    output_file = output_base / f"{page_name}.rst"
+
+    if output_file.exists():
+        logger.info(f"{page_name} - Loading existing generated page: {output_file}")
+        raw = output_file.read_text(encoding="utf-8", errors="ignore")
+        return raw
+
+    # Run the agent
+    draft = writer_agent(page_name, spec, existing_rst)
+
+    # return
+    logger.info(f"{page_name} - Draft created: {len(draft)} chars")
+    return draft
+
+def _review_and_finalize(page_name, draft, raw_sources, max_iterations):
     final = draft
     for iteration in range(max_iterations):
-        log(f"Reviewer Agent iteration {iteration + 1} ...")
+
         review = reviewer_agent(page_name, final, raw_sources)
-        issues   = review.get("issues", [])
+        issues = review.get("issues", [])
         approved = review.get("approved", True)
-        if issues:
-            for i, issue in enumerate(issues[:5], 1):
-                log(f"  {i}. {issue}")
+
         if approved and not issues:
-            log("Approved.")
+            logger.info(f"{page_name} - Approved.")
             break
-        log(f"Orchestrator Agent is merging feedback ...")
+
+        for i, issue in enumerate(issues[:5], 1):
+            logger.info(f"{page_name} - {i}. {issue}")
+
+        # Run agent
         final = orchestrator_merge(page_name, final, review)
-        log(f"Revised: {len(final)} chars")
 
     return final
+
+
+# def generate_rst_page(page_name: str, config: Dict,
+#                       source_base: Path, output_base: Path,
+#                       docstrings: Dict[str, Dict],
+#                       max_iterations: int = 2,
+#                       verbose: bool = True) -> str:
+
+#     def log(msg: str):
+#         if verbose:
+#             print(f"[{page_name}] {msg}", flush=True)
+
+#     # ── Special case: Installation — template, no LLM analyst needed ────────
+#     if page_name == "Installation":
+#         log("Building Installation.rst from template + git metadata ...")
+#         return _build_installation_rst(config, source_base)
+
+#     logger.info(f"Analyst Agent ({MODELS['analyst']}) analyzing code ...")
+#     source_files = config.get("sources", [])
+
+#     # Load code
+#     sources_parsed = _load_sources(source_base, whitelist=source_files or None)
+#     if not sources_parsed:
+#         log("WARNING: no source files matched — loading all .py files")
+#         sources_parsed = _load_sources(source_base)
+#     log(f"Loaded {len(sources_parsed)} file(s): {list(sources_parsed.keys())}")
+
+#     # Load RAW code
+#     raw_sources = _load_raw_sources(source_base, source_files) if source_files else {}
+
+#     # Look for existing rst files
+#     existing_rst = _find_existing_rst(page_name, output_base)
+#     if not existing_rst and config.get("existing_rst"):
+#         existing_rst = _load_existing_rst(config["existing_rst"], output_base)
+
+#     # ── Summary — special spec that reads already-written pages ─────────────
+#     if page_name == "Summary":
+#         log("Building Summary spec from existing RST pages + docstrings ...")
+#         spec = _build_summary_spec(config, output_base, docstrings)
+#         extra_context = spec.pop("extra_context", "")
+#     else:
+#         # ── Algorithm / Examples / generic pages ───────────────────────────
+#         extra_context = ""
+#         if page_name == "Algorithm":
+#             snippets = config.get("_param_snippets", [])
+#             extra_context = "\n".join(snippets[:5])
+#         elif page_name == "Examples":
+#             pipeline_examples = config.get("_pipeline_examples", [])
+#             extra_context = (
+#                 "MOST-USED PIPELINE EXAMPLES (render these as code-block:: python):\n\n"
+#                 + "\n\n---\n\n".join(pipeline_examples)
+#             )
+
+#         log(f"Product Owner Agent ({MODELS['writer']}) working on the specifications ...")
+#         spec = analyst_agent(page_name, config["description"], sources_parsed, extra_context=extra_context)
+
+#     log(f"Spec sections: {[s.get('title','?') for s in spec.get('sections',[])]}")
+
+#     # Re-use existing generated output if it already exists
+#     existing_output = output_base / f"{page_name}.rst"
+#     if existing_output.exists():
+#         log(f"Loading existing generated page: {existing_output}")
+#         draft = existing_output.read_text(encoding="utf-8", errors="ignore")
+#     else:
+#         log(f"Writer Agent ({MODELS['writer']}) drafting RST ...")
+#         draft = writer_agent(page_name, spec, existing_rst)
+#     log(f"Draft is created: {len(draft)} chars")
+
+#     # ── Review loop ──────────────────────────────────────────────────────────
+#     final = draft
+#     for iteration in range(max_iterations):
+#         log(f"Reviewer Agent iteration {iteration + 1} ...")
+#         review = reviewer_agent(page_name, final, raw_sources)
+#         issues   = review.get("issues", [])
+#         approved = review.get("approved", True)
+#         if issues:
+#             for i, issue in enumerate(issues[:5], 1):
+#                 log(f"  {i}. {issue}")
+#         if approved and not issues:
+#             log("Approved.")
+#             break
+#         log(f"Orchestrator Agent is merging feedback ...")
+#         final = orchestrator_merge(page_name, final, review)
+#         log(f"Revised: {len(final)} chars")
+
+#     return final
 
 
 # ===========================================================================
@@ -1435,9 +1654,156 @@ Indices and tables
     return index_rst
 
 
+def build_description_prompt(name: str, code: str, context: str = "") -> str:
+    return f"""
+FUNCTION NAME:
+{name}
+
+CONTEXT:
+{context}
+
+SOURCE CODE:
+{code}
+
+TASK:
+Explain what this function does.
+
+OUTPUT FORMAT:
+1. Summary (maximum 3-4 sentences)
+2. Key steps (bullet points)
+3. Inputs and outputs
+"""
+
 # ===========================================================================
 # Main
 # ===========================================================================
+
+# def main(
+#     page=None,
+#     source_dir=".",
+#     output_dir=".",
+#     max_iterations=2,
+#     dry_run=False,
+#     discover_only=False,
+#     pages_file=None,
+#     endpoint=None,
+#     orchestrator_model=None,
+#     analyst_model=None,
+#     writer_model=None,
+#     reviewer_model=None,
+# ):
+#     global ENDPOINT
+#     if orchestrator_model: MODELS["orchestrator"] = orchestrator_model
+#     if analyst_model:      MODELS["analyst"]      = analyst_model
+#     if writer_model:       MODELS["writer"]        = writer_model
+#     if reviewer_model:     MODELS["reviewer"]      = reviewer_model
+#     if endpoint:           ENDPOINT = endpoint
+
+#     source_base = Path(source_dir)
+#     output_path = Path(output_dir)
+#     output_path.mkdir(parents=True, exist_ok=True)
+
+#     # ── Phase 0: enrich from git + docstrings (no LLM) ──────────────────────
+#     print("\n[Phase 0] Extracting git metadata ...")
+#     git_meta = extract_git_meta(source_base)
+
+#     print("[Phase 0] Extracting numpy docstrings ...")
+#     docstrings = extract_numpy_docstrings(source_base)
+
+#     print("[Phase 0] Collecting pipeline examples ...")
+#     pipeline_examples = _collect_pipeline_examples(source_base, docstrings)
+#     print(f"  Found {len(pipeline_examples)} ranked example(s).")
+
+#     # ── Phase 1: discover pages ──────────────────────────────────────────────
+#     pf = Path(pages_file) if pages_file else source_base / "rst_pages.json"
+#     if not pf.exists():
+#         pf = None
+
+#     manifest = discover_rst_pages(source_base, model=MODELS["small"], pages_file=pf)
+
+#     # Drop any __init__ pages the LLM might have added
+#     manifest = {k: v for k, v in manifest.items() if not k.lower().startswith("__init__")}
+
+#     # Inject mandatory pages with enriched descriptions
+#     manifest = enrich_manifest(manifest, git_meta, docstrings, pipeline_examples, source_base)
+
+#     if pf is None: save_manifest(manifest, source_base / "rst_pages.json")
+
+#     if discover_only:
+#         print("\nDiscovered pages:")
+#         for key, cfg in manifest.items():
+#             print(f"  {key:<25}  {cfg['description'][:70]}...")
+#         print(f"\nManifest: {source_base / 'rst_pages.json'}")
+#         generate_index_rst(output_path, source_base, manifest, git_meta, dry_run=True)
+#         return manifest
+
+#     # ── Phase 2: generate pages ──────────────────────────────────────────────
+#     # Order: mandatory pages last so Summary can read already-written RSTs.
+#     mandatory_keys = set(MANDATORY_PAGES)
+#     extra_pages  = {k: v for k, v in manifest.items() if k not in mandatory_keys}
+#     mand_pages   = {k: manifest[k] for k in MANDATORY_PAGES if k in manifest}
+
+#     # If a single page was requested, just run that one
+#     if page:
+#         if page not in manifest:
+#             print(f"ERROR: '{page}' not in manifest. Available: {list(manifest.keys())}", file=sys.stderr)
+#             sys.exit(1)
+#         pages_to_generate = {page: manifest[page]}
+#         mand_pages = {}
+#         extra_pages = pages_to_generate
+#     else:
+#         pages_to_generate = {**extra_pages, **mand_pages}
+
+#     results: Dict[str, Optional[str]] = {}
+
+#     def _run_page(pname: str, pcfg: Dict):
+#         print(f"\n{'='*60}\n   Generating: {pname}\n{'='*60}")
+#         try:
+#             rst = generate_rst_page(
+#                 page_name=pname, config=pcfg,
+#                 source_base=source_base, output_base=output_path,
+#                 docstrings=docstrings,
+#                 max_iterations=max_iterations, verbose=True,
+#             )
+#             results[pname] = rst
+#             if dry_run:
+#                 print(f"\n--- {pname}.rst ---\n{rst}")
+#             else:
+#                 out_file = output_path / f"{pname}.rst"
+#                 out_file.write_text(rst, encoding="utf-8")
+#                 print(f"\n   Written: {out_file}  ({len(rst)} chars)")
+#         except Exception as exc:
+#             print(f"\n   ERROR: {pname}: {exc}", file=sys.stderr)
+#             results[pname] = None
+
+#     # Extra pages first
+#     for pname, pcfg in extra_pages.items():
+#         _run_page(pname, pcfg)
+
+#     # Mandatory pages after (Summary reads other RSTs)
+#     for pname in MANDATORY_PAGES:
+#         if pname in mand_pages:
+#             _run_page(pname, mand_pages[pname])
+
+#     # ── Phase 3: index ───────────────────────────────────────────────────────
+#     if page is None:
+#         print(f"\n{'='*60}\n   Generating: index.rst\n{'='*60}")
+#         try:
+#             index_rst = generate_index_rst(
+#                 output_path, source_base, manifest, git_meta, dry_run=dry_run
+#             )
+#             results["index"] = index_rst
+#         except Exception as exc:
+#             print(f"\n   ERROR: index.rst: {exc}", file=sys.stderr)
+#             results["index"] = None
+
+#     # ── Summary ──────────────────────────────────────────────────────────────
+#     print(f"\n{'='*60}\n   Pipeline complete\n{'='*60}")
+#     for n, rst in results.items():
+#         status = f"{len(rst)} chars" if rst else "FAILED"
+#         print(f"   {n:<30} {status}")
+
+#     return results
 
 def main(
     page=None,
@@ -1453,18 +1819,43 @@ def main(
     writer_model=None,
     reviewer_model=None,
 ):
-    global ENDPOINT
-    if orchestrator_model: MODELS["orchestrator"] = orchestrator_model
-    if analyst_model:      MODELS["analyst"]      = analyst_model
-    if writer_model:       MODELS["writer"]        = writer_model
-    if reviewer_model:     MODELS["reviewer"]      = reviewer_model
-    if endpoint:           ENDPOINT = endpoint
+    # Apply runtime
+    _apply_runtime_config(endpoint, orchestrator_model, analyst_model, writer_model, reviewer_model)
+    # Prepare paths
+    source_base, output_path = _prepare_paths(source_dir, output_dir)
 
-    source_base = Path(source_dir)
-    output_path = Path(output_dir)
-    output_path.mkdir(parents=True, exist_ok=True)
+    # =======================
+    # Phase 0 collect context
+    # =======================
+    git_meta, docstrings, pipeline_examples = _phase0_collect_context(source_base)
 
-    # ── Phase 0: enrich from git + docstrings (no LLM) ──────────────────────
+    # =======================
+    # Phase 1
+    # =======================
+    manifest = _phase1_discover_pages(source_base, pages_file, git_meta, docstrings, pipeline_examples, discover_only, output_path, dry_run)
+
+    if discover_only:
+        return manifest
+
+    # =======================
+    # Phase 2 - LLM
+    # =======================
+    results = _phase2_generate_pages(manifest, page, source_base, output_path, docstrings, max_iterations, dry_run)
+
+    # =======================
+    # Phase 3
+    # =======================
+    _phase3_generate_index_if_needed(page, output_path, source_base, manifest, git_meta, dry_run, results)
+
+    # =======================
+    # Summary
+    # =======================
+    _print_summary(results)
+
+    # return
+    return results
+
+def _phase0_collect_context(source_base):
     print("\n[Phase 0] Extracting git metadata ...")
     git_meta = extract_git_meta(source_base)
 
@@ -1473,20 +1864,22 @@ def main(
 
     print("[Phase 0] Collecting pipeline examples ...")
     pipeline_examples = _collect_pipeline_examples(source_base, docstrings)
+
     print(f"  Found {len(pipeline_examples)} ranked example(s).")
 
-    # ── Phase 1: discover pages ──────────────────────────────────────────────
+    return git_meta, docstrings, pipeline_examples
+
+def _phase1_discover_pages(source_base, pages_file, git_meta, docstrings, pipeline_examples, discover_only, output_path, dry_run):
     pf = Path(pages_file) if pages_file else source_base / "rst_pages.json"
-    if not pf.exists():
-        pf = None
+    pf = pf if pf.exists() else None
 
     manifest = discover_rst_pages(source_base, model=MODELS["small"], pages_file=pf)
 
-    # Drop any __init__ pages the LLM might have added
-    manifest = {k: v for k, v in manifest.items()
-                if not k.lower().startswith("__init__")}
+    manifest = {
+        k: v for k, v in manifest.items()
+        if not k.lower().startswith("__init__")
+    }
 
-    # Inject mandatory pages with enriched descriptions
     manifest = enrich_manifest(manifest, git_meta, docstrings, pipeline_examples, source_base)
 
     if pf is None:
@@ -1494,80 +1887,93 @@ def main(
 
     if discover_only:
         print("\nDiscovered pages:")
-        for key, cfg in manifest.items():
-            print(f"  {key:<25}  {cfg['description'][:70]}...")
+        for k, v in manifest.items():
+            print(f"  {k:<25}  {v['description'][:70]}...")
         print(f"\nManifest: {source_base / 'rst_pages.json'}")
+
         generate_index_rst(output_path, source_base, manifest, git_meta, dry_run=True)
-        return manifest
 
-    # ── Phase 2: generate pages ──────────────────────────────────────────────
-    # Order: mandatory pages last so Summary can read already-written RSTs.
-    mandatory_keys = set(MANDATORY_PAGES)
-    extra_pages  = {k: v for k, v in manifest.items() if k not in mandatory_keys}
-    mand_pages   = {k: manifest[k] for k in MANDATORY_PAGES if k in manifest}
+    # Return
+    return manifest
 
-    # If a single page was requested, just run that one
+def _phase2_generate_pages(manifest, page, source_base, output_path, docstrings, max_iterations, dry_run):
+    mandatory = set(MANDATORY_PAGES)
+    extra_pages = {k: v for k, v in manifest.items() if k not in mandatory}
+    mand_pages = {k: manifest[k] for k in MANDATORY_PAGES if k in manifest}
+
     if page:
         if page not in manifest:
-            print(f"ERROR: '{page}' not in manifest. Available: {list(manifest.keys())}", file=sys.stderr)
+            print(f"ERROR: '{page}' not in manifest.", file=sys.stderr)
             sys.exit(1)
-        pages_to_generate = {page: manifest[page]}
-        mand_pages = {}
-        extra_pages = pages_to_generate
-    else:
-        pages_to_generate = {**extra_pages, **mand_pages}
+        extra_pages, mand_pages = {page: manifest[page]}, {}
 
-    results: Dict[str, Optional[str]] = {}
+    results = {}
 
-    def _run_page(pname: str, pcfg: Dict):
-        print(f"\n{'='*60}\n   Generating: {pname}\n{'='*60}")
+    def run_page(pname, pcfg):
+        print(f"\n{'='*60}\nGenerating: {pname}\n{'='*60}")
         try:
-            rst = generate_rst_page(
-                page_name=pname, config=pcfg,
-                source_base=source_base, output_base=output_path,
-                docstrings=docstrings,
-                max_iterations=max_iterations, verbose=True,
-            )
+            rst = generate_rst_page(page_name=pname, config=pcfg, source_base=source_base, output_base=output_path, docstrings=docstrings, max_iterations=max_iterations, verbose=True)
             results[pname] = rst
+
             if dry_run:
                 print(f"\n--- {pname}.rst ---\n{rst}")
             else:
                 out_file = output_path / f"{pname}.rst"
                 out_file.write_text(rst, encoding="utf-8")
-                print(f"\n   Written: {out_file}  ({len(rst)} chars)")
-        except Exception as exc:
-            print(f"\n   ERROR: {pname}: {exc}", file=sys.stderr)
+                print(f"Written: {out_file}")
+
+        except Exception as e:
+            print(f"ERROR: {pname}: {e}", file=sys.stderr)
             results[pname] = None
 
-    # Extra pages first
-    for pname, pcfg in extra_pages.items():
-        _run_page(pname, pcfg)
+    for p, c in extra_pages.items():
+        run_page(p, c)
 
-    # Mandatory pages after (Summary reads other RSTs)
-    for pname in MANDATORY_PAGES:
-        if pname in mand_pages:
-            _run_page(pname, mand_pages[pname])
-
-    # ── Phase 3: index ───────────────────────────────────────────────────────
-    if page is None:
-        print(f"\n{'='*60}\n   Generating: index.rst\n{'='*60}")
-        try:
-            index_rst = generate_index_rst(
-                output_path, source_base, manifest, git_meta, dry_run=dry_run
-            )
-            results["index"] = index_rst
-        except Exception as exc:
-            print(f"\n   ERROR: index.rst: {exc}", file=sys.stderr)
-            results["index"] = None
-
-    # ── Summary ──────────────────────────────────────────────────────────────
-    print(f"\n{'='*60}\n   Pipeline complete\n{'='*60}")
-    for n, rst in results.items():
-        status = f"{len(rst)} chars" if rst else "FAILED"
-        print(f"   {n:<30} {status}")
-
+    for p in MANDATORY_PAGES:
+        if p in mand_pages:
+            run_page(p, mand_pages[p])
+    # Return
     return results
 
+def _phase3_generate_index_if_needed(page, output_path, source_base, manifest, git_meta, dry_run, results):
+    if page is not None:
+        return
+
+    print(f"\n{'='*60}\nGenerating: index.rst\n{'='*60}")
+
+    try:
+        results["index"] = generate_index_rst(output_path, source_base, manifest, git_meta, dry_run=dry_run)
+    except Exception as e:
+        print(f"ERROR: index.rst: {e}", file=sys.stderr)
+        results["index"] = None
+        
+def _print_summary(results):
+    print(f"\n{'='*60}\nPipeline complete\n{'='*60}")
+    for name, rst in results.items():
+        status = f"{len(rst)} chars" if rst else "FAILED"
+        print(f"{name:<30} {status}")
+
+def _apply_runtime_config(endpoint, orchestrator_model, analyst_model, writer_model, reviewer_model):
+
+    global ENDPOINT
+
+    if orchestrator_model:
+        MODELS["orchestrator"] = orchestrator_model
+    if analyst_model:
+        MODELS["analyst"] = analyst_model
+    if writer_model:
+        MODELS["writer"] = writer_model
+    if reviewer_model:
+        MODELS["reviewer"] = reviewer_model
+
+    if endpoint:
+        ENDPOINT = endpoint
+        
+def _prepare_paths(source_dir: str, output_dir: str):
+    source_base = Path(source_dir)
+    output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
+    return source_base, output_path
 
 # ===========================================================================
 # CLI
