@@ -71,7 +71,7 @@ ENDPOINT = "http://localhost:1234/v1/chat/completions"
 MODELS: Dict[str, str] = {
     "orchestrator": "openai/gpt-oss-20b",
     "analyst":      "qwen3.5-9b-glm5.1-distill-v1", # qwen3.5-9b-glm5.1-distill-v1, zai-org/glm-4.6v-flash
-    "writer":       "google/gemma-4-26b-a4b-qat",
+    "writer":       "google/gemma-4-26b-a4b-qat", # google/gemma-4-26b-a4b-qat
     "reviewer":     "liquid/lfm2-24b-a2b",
     "small":        "gemma-4-e4b-it-qat",
 }
@@ -532,7 +532,7 @@ def discover_rst_pages(source_base: Path,
 
     logger.info("Running AST project scan ...")
     ps = _build_project_summary(source_base)
-    logger.info(f"  {len(ps['files'])} source files found.")
+    logger.info(f"{len(ps['files'])} source files found.")
 
     summary_text = _format_project_summary_for_prompt(ps)
     prompt = DOC_STRUCTURE_PROMPT.format(project_summary=summary_text)
@@ -763,7 +763,7 @@ def extract_functions(script: str) -> List[Dict]:
                     if any(b in m.name.lower() for b in BLACKLIST_FN):
                         continue
                     # Show message
-                    logger.info(f'Code Agent - Describe function: {m.name}')
+                    logger.info(f'[Code Agent]> Describing function: {m.name}')
                     # Get code
                     m_code = truncate(src(m))
                     # Retrieve the description using LLM based on the code
@@ -952,12 +952,12 @@ def _analyze_single_file(fname: str, file_parts: List[Dict]) -> str:
 
 def analyst_agent(page_name: str, page_description: str, parts: Dict[str, List], extra_context: str = "") -> Dict:
     """MAP each file → summary. REDUCE → structured page spec."""
-    logger.info(f"{page_name} - Product Owner Agent ({MODELS['writer']}) working on specifications ...")
+    logger.info(f"[Product Owner Agent]> {page_name} - ({MODELS['writer']}) working on specifications ...")
     file_summaries: Dict[str, str] = {}
 
     # Go through all files and functions
     for fname, file_parts in parts.items():
-        logger.info(f"  Analyst Agent is handling: {fname}")
+        logger.info(f"[Analyst Agent]> Working on all functions of {fname}")
         file_summaries[fname] = _analyze_single_file(fname, file_parts)
 
     # Create summary block
@@ -972,6 +972,7 @@ def analyst_agent(page_name: str, page_description: str, parts: Dict[str, List],
         + "\nCombine insights. Produce the page spec JSON.")
 
     # Run LLM
+    logger.info(f"[Analyst Agent]> Collected all information and is now going to combine and structure all information.")
     raw = _call_llm(MODELS["writer"], ANALYST_SYSTEM, reduce_prompt, temperature=0.2, max_tokens=2000)
     # structure
     result = _parse_json_response(raw)
@@ -1001,7 +1002,7 @@ Output ONLY raw RST text. No preamble, no markdown fences.
 
 
 def writer_agent(page_name: str, spec: Dict, existing_rst: str = "") -> str:
-    logger.info(f"{page_name} - Writer Agent ({MODELS['writer']}) drafting RST ...")
+    logger.info(f"[Writer Agent]> {page_name} - ({MODELS['writer']}) drafting RST ...")
     # dump json
     spec_json = json.dumps(spec, indent=2)[:5000]
     style_hint = (
@@ -1055,7 +1056,7 @@ Output ONLY the corrected RST document.
 
 
 def orchestrator_merge(page_name: str, draft_rst: str, review: Dict) -> str:
-    logger.info("{page_name} - Orchestrator Agent is merging feedback ...")
+    logger.info("[Orchestrator Agent]> merging feedback of {page_name}...")
 
     if review.get("revised_rst"):
         draft_rst = review["revised_rst"]
@@ -1303,7 +1304,7 @@ def _load_page_rst(page_name, config, output_base):
 
 def _build_page_spec(page_name, config, output_base, docstrings, sources):
     if page_name == "Summary":
-        logger.info(f"{page_name} - Building Summary spec ...")
+        logger.info(f"Building Summary specifications for {page_name} ...")
 
         spec = _build_summary_spec(config, output_base, docstrings)
         spec.pop("extra_context", None)
@@ -1361,92 +1362,6 @@ def _review_and_finalize(page_name, draft, raw_sources, max_iterations):
         final = orchestrator_merge(page_name, final, review)
 
     return final
-
-
-# def generate_rst_page(page_name: str, config: Dict,
-#                       source_base: Path, output_base: Path,
-#                       docstrings: Dict[str, Dict],
-#                       max_iterations: int = 2,
-#                       verbose: bool = True) -> str:
-
-#     def log(msg: str):
-#         if verbose:
-#             print(f"[{page_name}] {msg}", flush=True)
-
-#     # ── Special case: Installation — template, no LLM analyst needed ────────
-#     if page_name == "Installation":
-#         log("Building Installation.rst from template + git metadata ...")
-#         return _build_installation_rst(config, source_base)
-
-#     logger.info(f"Analyst Agent ({MODELS['analyst']}) analyzing code ...")
-#     source_files = config.get("sources", [])
-
-#     # Load code
-#     sources_parsed = _load_sources(source_base, whitelist=source_files or None)
-#     if not sources_parsed:
-#         log("WARNING: no source files matched — loading all .py files")
-#         sources_parsed = _load_sources(source_base)
-#     log(f"Loaded {len(sources_parsed)} file(s): {list(sources_parsed.keys())}")
-
-#     # Load RAW code
-#     raw_sources = _load_raw_sources(source_base, source_files) if source_files else {}
-
-#     # Look for existing rst files
-#     existing_rst = _find_existing_rst(page_name, output_base)
-#     if not existing_rst and config.get("existing_rst"):
-#         existing_rst = _load_existing_rst(config["existing_rst"], output_base)
-
-#     # ── Summary — special spec that reads already-written pages ─────────────
-#     if page_name == "Summary":
-#         log("Building Summary spec from existing RST pages + docstrings ...")
-#         spec = _build_summary_spec(config, output_base, docstrings)
-#         extra_context = spec.pop("extra_context", "")
-#     else:
-#         # ── Algorithm / Examples / generic pages ───────────────────────────
-#         extra_context = ""
-#         if page_name == "Algorithm":
-#             snippets = config.get("_param_snippets", [])
-#             extra_context = "\n".join(snippets[:5])
-#         elif page_name == "Examples":
-#             pipeline_examples = config.get("_pipeline_examples", [])
-#             extra_context = (
-#                 "MOST-USED PIPELINE EXAMPLES (render these as code-block:: python):\n\n"
-#                 + "\n\n---\n\n".join(pipeline_examples)
-#             )
-
-#         log(f"Product Owner Agent ({MODELS['writer']}) working on the specifications ...")
-#         spec = analyst_agent(page_name, config["description"], sources_parsed, extra_context=extra_context)
-
-#     log(f"Spec sections: {[s.get('title','?') for s in spec.get('sections',[])]}")
-
-#     # Re-use existing generated output if it already exists
-#     existing_output = output_base / f"{page_name}.rst"
-#     if existing_output.exists():
-#         log(f"Loading existing generated page: {existing_output}")
-#         draft = existing_output.read_text(encoding="utf-8", errors="ignore")
-#     else:
-#         log(f"Writer Agent ({MODELS['writer']}) drafting RST ...")
-#         draft = writer_agent(page_name, spec, existing_rst)
-#     log(f"Draft is created: {len(draft)} chars")
-
-#     # ── Review loop ──────────────────────────────────────────────────────────
-#     final = draft
-#     for iteration in range(max_iterations):
-#         log(f"Reviewer Agent iteration {iteration + 1} ...")
-#         review = reviewer_agent(page_name, final, raw_sources)
-#         issues   = review.get("issues", [])
-#         approved = review.get("approved", True)
-#         if issues:
-#             for i, issue in enumerate(issues[:5], 1):
-#                 log(f"  {i}. {issue}")
-#         if approved and not issues:
-#             log("Approved.")
-#             break
-#         log(f"Orchestrator Agent is merging feedback ...")
-#         final = orchestrator_merge(page_name, final, review)
-#         log(f"Revised: {len(final)} chars")
-
-#     return final
 
 
 # ===========================================================================
@@ -1678,133 +1593,6 @@ OUTPUT FORMAT:
 # Main
 # ===========================================================================
 
-# def main(
-#     page=None,
-#     source_dir=".",
-#     output_dir=".",
-#     max_iterations=2,
-#     dry_run=False,
-#     discover_only=False,
-#     pages_file=None,
-#     endpoint=None,
-#     orchestrator_model=None,
-#     analyst_model=None,
-#     writer_model=None,
-#     reviewer_model=None,
-# ):
-#     global ENDPOINT
-#     if orchestrator_model: MODELS["orchestrator"] = orchestrator_model
-#     if analyst_model:      MODELS["analyst"]      = analyst_model
-#     if writer_model:       MODELS["writer"]        = writer_model
-#     if reviewer_model:     MODELS["reviewer"]      = reviewer_model
-#     if endpoint:           ENDPOINT = endpoint
-
-#     source_base = Path(source_dir)
-#     output_path = Path(output_dir)
-#     output_path.mkdir(parents=True, exist_ok=True)
-
-#     # ── Phase 0: enrich from git + docstrings (no LLM) ──────────────────────
-#     print("\n[Phase 0] Extracting git metadata ...")
-#     git_meta = extract_git_meta(source_base)
-
-#     print("[Phase 0] Extracting numpy docstrings ...")
-#     docstrings = extract_numpy_docstrings(source_base)
-
-#     print("[Phase 0] Collecting pipeline examples ...")
-#     pipeline_examples = _collect_pipeline_examples(source_base, docstrings)
-#     print(f"  Found {len(pipeline_examples)} ranked example(s).")
-
-#     # ── Phase 1: discover pages ──────────────────────────────────────────────
-#     pf = Path(pages_file) if pages_file else source_base / "rst_pages.json"
-#     if not pf.exists():
-#         pf = None
-
-#     manifest = discover_rst_pages(source_base, model=MODELS["small"], pages_file=pf)
-
-#     # Drop any __init__ pages the LLM might have added
-#     manifest = {k: v for k, v in manifest.items() if not k.lower().startswith("__init__")}
-
-#     # Inject mandatory pages with enriched descriptions
-#     manifest = enrich_manifest(manifest, git_meta, docstrings, pipeline_examples, source_base)
-
-#     if pf is None: save_manifest(manifest, source_base / "rst_pages.json")
-
-#     if discover_only:
-#         print("\nDiscovered pages:")
-#         for key, cfg in manifest.items():
-#             print(f"  {key:<25}  {cfg['description'][:70]}...")
-#         print(f"\nManifest: {source_base / 'rst_pages.json'}")
-#         generate_index_rst(output_path, source_base, manifest, git_meta, dry_run=True)
-#         return manifest
-
-#     # ── Phase 2: generate pages ──────────────────────────────────────────────
-#     # Order: mandatory pages last so Summary can read already-written RSTs.
-#     mandatory_keys = set(MANDATORY_PAGES)
-#     extra_pages  = {k: v for k, v in manifest.items() if k not in mandatory_keys}
-#     mand_pages   = {k: manifest[k] for k in MANDATORY_PAGES if k in manifest}
-
-#     # If a single page was requested, just run that one
-#     if page:
-#         if page not in manifest:
-#             print(f"ERROR: '{page}' not in manifest. Available: {list(manifest.keys())}", file=sys.stderr)
-#             sys.exit(1)
-#         pages_to_generate = {page: manifest[page]}
-#         mand_pages = {}
-#         extra_pages = pages_to_generate
-#     else:
-#         pages_to_generate = {**extra_pages, **mand_pages}
-
-#     results: Dict[str, Optional[str]] = {}
-
-#     def _run_page(pname: str, pcfg: Dict):
-#         print(f"\n{'='*60}\n   Generating: {pname}\n{'='*60}")
-#         try:
-#             rst = generate_rst_page(
-#                 page_name=pname, config=pcfg,
-#                 source_base=source_base, output_base=output_path,
-#                 docstrings=docstrings,
-#                 max_iterations=max_iterations, verbose=True,
-#             )
-#             results[pname] = rst
-#             if dry_run:
-#                 print(f"\n--- {pname}.rst ---\n{rst}")
-#             else:
-#                 out_file = output_path / f"{pname}.rst"
-#                 out_file.write_text(rst, encoding="utf-8")
-#                 print(f"\n   Written: {out_file}  ({len(rst)} chars)")
-#         except Exception as exc:
-#             print(f"\n   ERROR: {pname}: {exc}", file=sys.stderr)
-#             results[pname] = None
-
-#     # Extra pages first
-#     for pname, pcfg in extra_pages.items():
-#         _run_page(pname, pcfg)
-
-#     # Mandatory pages after (Summary reads other RSTs)
-#     for pname in MANDATORY_PAGES:
-#         if pname in mand_pages:
-#             _run_page(pname, mand_pages[pname])
-
-#     # ── Phase 3: index ───────────────────────────────────────────────────────
-#     if page is None:
-#         print(f"\n{'='*60}\n   Generating: index.rst\n{'='*60}")
-#         try:
-#             index_rst = generate_index_rst(
-#                 output_path, source_base, manifest, git_meta, dry_run=dry_run
-#             )
-#             results["index"] = index_rst
-#         except Exception as exc:
-#             print(f"\n   ERROR: index.rst: {exc}", file=sys.stderr)
-#             results["index"] = None
-
-#     # ── Summary ──────────────────────────────────────────────────────────────
-#     print(f"\n{'='*60}\n   Pipeline complete\n{'='*60}")
-#     for n, rst in results.items():
-#         status = f"{len(rst)} chars" if rst else "FAILED"
-#         print(f"   {n:<30} {status}")
-
-#     return results
-
 def main(
     page=None,
     source_dir=".",
@@ -1838,14 +1626,19 @@ def main(
         return manifest
 
     # =======================
-    # Phase 2 - LLM
+    # Phase 2 — per-source draft pages
     # =======================
     results = _phase2_generate_pages(manifest, page, source_base, output_path, docstrings, max_iterations, dry_run)
 
     # =======================
-    # Phase 3
+    # Phase 3 — compile drafts into dense final pages
     # =======================
-    _phase3_generate_index_if_needed(page, output_path, source_base, manifest, git_meta, dry_run, results)
+    _phase3_compile(page, output_path, source_base, manifest, docstrings, git_meta, dry_run, results)
+
+    # =======================
+    # Phase 4 — index.rst
+    # =======================
+    _phase4_generate_index(page, output_path, source_base, manifest, git_meta, dry_run, results)
 
     # =======================
     # Summary
@@ -1910,7 +1703,7 @@ def _phase2_generate_pages(manifest, page, source_base, output_path, docstrings,
     results = {}
 
     def run_page(pname, pcfg):
-        print(f"\n{'='*60}\nGenerating: {pname}\n{'='*60}")
+        print(f"\n{'='*60}\nProcessing: {pname}\n{'='*60}")
         try:
             rst = generate_rst_page(page_name=pname, config=pcfg, source_base=source_base, output_base=output_path, docstrings=docstrings, max_iterations=max_iterations, verbose=True)
             results[pname] = rst
@@ -1935,23 +1728,340 @@ def _phase2_generate_pages(manifest, page, source_base, output_path, docstrings,
     # Return
     return results
 
-def _phase3_generate_index_if_needed(page, output_path, source_base, manifest, git_meta, dry_run, results):
+# ===========================================================================
+# PHASE 3 — Compilation: route draft RSTs → dense final pages
+# ===========================================================================
+
+# Pages that are never archived (always kept as final output).
+FINAL_PAGES = {"Installation", "Summary", "Algorithm", "Examples", "index"}
+
+COMPILER_ROUTER_SYSTEM = """\
+You are a documentation architect. You receive a set of draft RST documentation pages
+generated from individual Python source files. Your job is to route every meaningful
+content block into one of the final documentation pages.
+
+Final pages available:
+  - Installation  : setup, dependencies, environment, uninstall
+  - Summary       : background, overview, goals, workflow diagram, what the library produces
+  - Algorithm     : technical workflow, chunking, embedding, retrieval, core functions,
+                    parameters, statistical validation, internal architecture
+  - Examples      : runnable code examples, usage patterns, full pipelines
+
+For each draft page decide ONE best-fit target from the list above.
+If a draft covers a distinct topic that does not fit any of those four, propose a
+new short snake_case page name (e.g. "api_reference", "configuration").
+
+Output ONLY a JSON object — no fences, no preamble:
+{
+  "routing": {
+    "<draft_stem>": "<target_page_name>",
+    ...
+  },
+  "new_pages": ["page_name_if_any"]
+}
+"""
+
+COMPILER_WRITER_SYSTEM = """\
+You are a senior technical writer producing dense, comprehensive Sphinx RST documentation.
+
+DENSITY REQUIREMENTS — every section must have:
+  - At least 3–5 full prose paragraphs (not bullet lists of one-liners)
+  - A complete parameter table (.. list-table:: with Type, Default, Description columns)
+    for every class or function that has parameters
+  - At least one runnable .. code-block:: python example per major function/class
+  - Clear explanation of WHY each component exists, not just WHAT it does
+
+RST RULES:
+  - Page title underlined with #
+  - Section headings underlined with =
+  - Subsection headings underlined with -
+  - Code examples: .. code-block:: python
+  - Console commands: .. code-block:: console
+  - Parameter tables: .. list-table:: with :header-rows: 1
+  - Workflow diagrams: .. code-block:: text  (ASCII art)
+  - No .. toctree::  No page-level metadata.
+  - End the page with EXACTLY:  .. include:: add_bottom.add
+
+QUALITY RULES:
+  - Do NOT invent method names or parameters absent from the provided content
+  - Do NOT write placeholder text like "See documentation for details"
+  - Merge duplicate information — if two drafts say the same thing, write it once, better
+  - Prefer concrete specifics over vague generalities
+
+Output ONLY raw RST. No preamble. No markdown fences.
+"""
+
+
+def _read_all_drafts(output_base: Path, skip: set = None) -> Dict[str, str]:
+    """Read all .rst files in output_base except those in skip set and index."""
+    skip = (skip or set()) | {"index"}
+    out: Dict[str, str] = {}
+    for rst_file in sorted(output_base.glob("*.rst")):
+        if rst_file.stem.lower() in {s.lower() for s in skip}:
+            continue
+        try:
+            out[rst_file.stem] = rst_file.read_text(encoding="utf-8", errors="ignore")
+        except Exception:
+            pass
+    return out
+
+
+def compiler_router_agent(drafts: Dict[str, str]) -> Dict[str, Any]:
+    """
+    Ask the LLM to route each draft RST stem to a final page name.
+    Returns {"routing": {stem: target}, "new_pages": [str]}.
+    """
+    # Build a compact listing: stem + first 300 chars of content
+    listing = "\n\n".join(
+        f"DRAFT: {stem}\nCONTENT PREVIEW:\n{text[:400]}"
+        for stem, text in drafts.items()
+    )
+    # Cap to avoid flooding context
+    listing = listing[:12000]
+
+    user = (
+        f"Route these draft documentation pages to final pages.\n\n"
+        f"{listing}\n\n"
+        "Output ONLY the JSON routing object."
+    )
+    logger.info(f"[Compiler Router Agent]> ({MODELS['orchestrator']}) routing {len(drafts)} drafts ...")
+    raw = _call_llm(MODELS["orchestrator"], COMPILER_ROUTER_SYSTEM, user, temperature=0.1, max_tokens=1000)
+    result = _parse_json_response(raw)
+    if not isinstance(result, dict):
+        # Fallback: route everything to Algorithm
+        logger.warning("Router returned invalid JSON — routing all drafts to Algorithm.")
+        result = {"routing": {s: "Algorithm" for s in drafts}, "new_pages": []}
+    result.setdefault("routing", {})
+    result.setdefault("new_pages", [])
+    return result
+
+
+def compiler_writer_agent(
+    page_name: str,
+    content_blocks: List[str],
+    raw_sources: Dict[str, str],
+    git_meta: Dict[str, str],
+    docstrings: Dict[str, Dict],
+    existing_rst: str = "",
+) -> str:
+    """
+    Write a dense, comprehensive RST page from routed content blocks.
+    content_blocks: list of draft RST texts assigned to this page.
+    raw_sources:    raw .py source snippets relevant to this page.
+    """
+    # Combine all routed content (cap per block to manage context)
+    combined = "\n\n" + ("=" * 60) + "\n\n".join(
+        f"[FROM: {i + 1}]\n{block[:3000]}"
+        for i, block in enumerate(content_blocks)
+    )
+    combined = combined[:14000]
+
+    # Source snippets for grounding
+    source_snippet = "\n\n".join(
+        f"### {fname}\n{code[:1500]}" for fname, code in list(raw_sources.items())[:4]
+    )
+
+    # Style hint from existing reference RST
+    style_hint = (
+        f"\nStyle reference (structure only — do NOT copy text):\n{existing_rst[:800]}"
+        if existing_rst else ""
+    )
+
+    # Extra metadata for Installation
+    install_hint = ""
+    if page_name == "Installation":
+        name   = git_meta.get("github_repo") or git_meta.get("pypi_name") or "package"
+        url    = git_meta.get("remote_url", "")
+        branch = git_meta.get("default_branch", "main")
+        install_hint = (
+            f"\nGIT METADATA (use for exact install commands):\n"
+            f"  package name : {name}\n"
+            f"  remote url   : {url}\n"
+            f"  branch       : {branch}\n"
+        )
+
+    user = (
+        f"Write the final, comprehensive Sphinx RST page for: **{page_name}**\n\n"
+        f"ROUTED CONTENT (from draft pages — extract, merge, and expand):\n{combined}\n"
+        f"\nSOURCE CODE REFERENCE:\n{source_snippet}\n"
+        f"{install_hint}{style_hint}\n\n"
+        "Requirements:\n"
+        "- Every section: minimum 3 full prose paragraphs\n"
+        "- Every class/function with params: include a complete .. list-table:: parameter table\n"
+        "- Every major feature: include a .. code-block:: python example\n"
+        "- Merge duplicate content from different drafts into one clear explanation\n"
+        "- Do not write placeholder text\n\n"
+        "Output the complete RST document. Start with the page title underlined by #.\n"
+    )
+
+    logger.info(f"[Compiler Writer Agent]> ({MODELS['writer']}) building: {page_name} "
+                f"({len(content_blocks)} routed block(s)) ...")
+    return _call_llm(MODELS["writer"], COMPILER_WRITER_SYSTEM, user,
+                     temperature=0.35, max_tokens=4000)
+
+
+def archive_drafts(output_base: Path, keep: set) -> List[Path]:
+    """
+    Move .rst files NOT in keep into output_base/_drafts/.
+    Returns list of archived paths.
+    """
+    drafts_dir = output_base / "_drafts"
+    drafts_dir.mkdir(exist_ok=True)
+    archived: List[Path] = []
+    for rst_file in sorted(output_base.glob("*.rst")):
+        if rst_file.stem.lower() not in {k.lower() for k in keep}:
+            dest = drafts_dir / rst_file.name
+            rst_file.rename(dest)
+            archived.append(dest)
+            logger.info(f"Archived: {rst_file.name} → _drafts/")
+    return archived
+
+
+def compile_rst_pages(
+    output_base: Path,
+    source_base: Path,
+    manifest: Dict[str, Dict],
+    docstrings: Dict[str, Dict],
+    git_meta: Dict[str, str],
+    dry_run: bool = False,
+) -> Dict[str, str]:
+    """
+    Phase 3: read all draft RSTs, route content, write dense final pages, archive drafts.
+
+    Steps:
+      3A  Read all draft RSTs from output_base
+      3B  Router agent: assign each draft → target final page
+      3C  For each final page: compiler_writer_agent produces dense RST
+      3D  Reviewer pass (one iteration) per final page
+      3E  Archive superseded drafts to _drafts/
+    Returns {page_name: rst_text}
+    """
+    print(f"\n{'='*60}\n[Phase 3] Compiling draft pages into final documentation\n{'='*60}")
+
+    # 3A — Read drafts (skip Installation — it's template-built and already correct)
+    all_drafts = _read_all_drafts(output_base, skip={"Installation", "index"})
+    if not all_drafts:
+        logger.warning("No draft RST files found in output directory — skipping compilation.")
+        return {}
+
+    print(f"  Found {len(all_drafts)} draft page(s): {sorted(all_drafts.keys())}")
+
+    # 3B — Route
+    routing_result = compiler_router_agent(all_drafts)
+    routing: Dict[str, str] = routing_result.get("routing", {})
+    new_pages: List[str]    = routing_result.get("new_pages", [])
+
+    # Unrouted drafts default to Algorithm
+    for stem in all_drafts:
+        if stem not in routing:
+            routing[stem] = "Algorithm"
+
+    print(f"  Routing: { {v: [k for k,vv in routing.items() if vv==v] for v in set(routing.values())} }")
+    if new_pages:
+        print(f"  New pages proposed: {new_pages}")
+
+    # Build the set of final page names (mandatory + any new)
+    final_page_names = list(FINAL_PAGES) + [p for p in new_pages if p not in FINAL_PAGES]
+
+    # 3C — Invert routing: target → [list of draft content blocks]
+    target_blocks: Dict[str, List[str]] = {p: [] for p in final_page_names}
+    for draft_stem, target in routing.items():
+        if target not in target_blocks:
+            target_blocks[target] = []
+        if draft_stem in all_drafts:
+            target_blocks[target].append(all_drafts[draft_stem])
+
+    # 3D — Write each final page (skip Installation — already written)
+    compiled: Dict[str, str] = {}
+    for page_name in final_page_names:
+        if page_name in ("Installation", "index"):
+            continue
+
+        blocks = target_blocks.get(page_name, [])
+        if not blocks:
+            logger.info(f"{page_name} - No content routed — skipping.")
+            continue
+
+        # Gather raw source files relevant to this page
+        page_cfg = manifest.get(page_name, {})
+        page_sources = page_cfg.get("sources", [])
+        raw_sources = _load_raw_sources(source_base, page_sources) if page_sources else {}
+
+        # Style reference from original hand-written RST if available
+        existing_rst = _find_existing_rst(page_name, output_base)
+
+        # Write
+        rst_text = compiler_writer_agent(
+            page_name=page_name,
+            content_blocks=blocks,
+            raw_sources=raw_sources,
+            git_meta=git_meta,
+            docstrings=docstrings,
+            existing_rst=existing_rst,
+        )
+
+        # One reviewer pass
+        print(f"  Reviewer checking: {page_name} ...")
+        review = reviewer_agent(page_name, rst_text, raw_sources)
+        if not review.get("approved", True) or review.get("issues"):
+            rst_text = orchestrator_merge(page_name, rst_text, review)
+
+        compiled[page_name] = rst_text
+
+        if not dry_run:
+            out_file = output_base / f"{page_name}.rst"
+            out_file.write_text(rst_text, encoding="utf-8")
+            print(f"  Written: {out_file}  ({len(rst_text)} chars)")
+        else:
+            print(f"\n--- {page_name}.rst ---\n{rst_text[:1000]}...\n")
+
+    # 3E — Archive superseded drafts (keep final pages + Installation + index)
+    keep_stems = {p.lower() for p in FINAL_PAGES} | {p.lower() for p in compiled} | {"installation"}
+    print("\n  Archiving superseded draft pages ...")
+    archived = archive_drafts(output_base, keep={k for k in keep_stems})
+    print(f"  Archived {len(archived)} draft file(s) to _drafts/")
+
+    return compiled
+
+
+def _phase3_compile(page, output_path, source_base, manifest,
+                    docstrings, git_meta, dry_run, results):
+    """Run the compilation phase (Phase 3) unless a single page was requested."""
     if page is not None:
+        # Single-page mode: skip compilation
         return
 
-    print(f"\n{'='*60}\nGenerating: index.rst\n{'='*60}")
+    compiled = compile_rst_pages(
+        output_base=output_path,
+        source_base=source_base,
+        manifest=manifest,
+        docstrings=docstrings,
+        git_meta=git_meta,
+        dry_run=dry_run,
+    )
+    results.update(compiled)
 
+
+def _phase4_generate_index(page, output_path, source_base, manifest,
+                           git_meta, dry_run, results):
+    """Generate index.rst as the very last step."""
+    if page is not None:
+        return
+    print(f"\n{'='*60}\n[Phase 4] Generating: index.rst\n{'='*60}")
     try:
-        results["index"] = generate_index_rst(output_path, source_base, manifest, git_meta, dry_run=dry_run)
+        results["index"] = generate_index_rst(
+            output_path, source_base, manifest, git_meta, dry_run=dry_run
+        )
     except Exception as e:
         print(f"ERROR: index.rst: {e}", file=sys.stderr)
         results["index"] = None
-        
+
+
 def _print_summary(results):
     print(f"\n{'='*60}\nPipeline complete\n{'='*60}")
     for name, rst in results.items():
         status = f"{len(rst)} chars" if rst else "FAILED"
-        print(f"{name:<30} {status}")
+        print(f"   {name:<30} {status}")
 
 def _apply_runtime_config(endpoint, orchestrator_model, analyst_model, writer_model, reviewer_model):
 
