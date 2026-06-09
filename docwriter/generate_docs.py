@@ -37,6 +37,7 @@ import configparser
 import json
 import logging
 import re
+import os
 import sys
 from collections import Counter
 from pathlib import Path
@@ -70,12 +71,16 @@ ENDPOINT = "http://localhost:1234/v1/chat/completions"
 
 MODELS: Dict[str, str] = {
     "orchestrator": "openai/gpt-oss-20b",
-    "analyst":      "qwen3.5-9b-glm5.1-distill-v1", # qwen3.5-9b-glm5.1-distill-v1, zai-org/glm-4.6v-flash
-    "writer":       "google/gemma-4-26b-a4b-qat", # google/gemma-4-26b-a4b-qat
-    "reviewer":     "liquid/lfm2-24b-a2b",
-    "small":        "gemma-4-e4b-it-qat",
+    "analyst":      "microsoft/phi-4", #"qwen/qwen2.5-coder-32b",
+    "writer":       "mistralai/mistral-small-3.2",
+    "reviewer":     "microsoft/phi-4",
+    "small":        "zai-org/glm-4.6v-flash",
 }
-
+    # "analyst":      "qwen3.5-9b-glm5.1-distill-v1", # qwen3.5-9b-glm5.1-distill-v1, zai-org/glm-4.6v-flash
+    # "writer":       "google/gemma-4-26b-a4b-qat", # google/gemma-4-26b-a4b-qat
+    # "reviewer":     "liquid/lfm2-24b-a2b",
+    # "small":        "gemma-4-e4b-it-qat",
+    
 # ---------------------------------------------------------------------------
 # DOC_STRUCTURE_PROMPT
 # ---------------------------------------------------------------------------
@@ -609,7 +614,7 @@ def enrich_manifest(
         "and a schematic overview of the end-to-end workflow. "
         "Synthesise from: all already-written .rst files in the output directory, "
         "plus the following class descriptions extracted from source docstrings:\n"
-        + "\n".join(class_summaries[:10])
+        + "\n".join(class_summaries[:20])
     )
 
     # ── Algorithm and Core functions ───────────────────────────────────────────────────────────
@@ -619,16 +624,16 @@ def enrich_manifest(
         params = info.get("Parameters", "")
         notes  = info.get("Notes", "")
         if params:
-            param_snippets.append(f"[{key}] Parameters:\n{params[:2000]}")
+            param_snippets.append(f"[{key}] Parameters:\n{params[:5000]}")
         if notes:
-            param_snippets.append(f"[{key}] Notes:\n{notes[:2000]}")
+            param_snippets.append(f"[{key}] Notes:\n{notes[:5000]}")
 
     algo_desc = (
         "Technical workflow page. Describe the step-by-step algorithm and core functions: "
         "data ingestion, chunking, embedding, storage, retrieval, and inference. "
         "Include a schematic ASCII workflow diagram showing how components connect. "
         "Draw on these parameter/notes sections from the source docstrings:\n"
-        + "\n".join(param_snippets[:8])
+        + "\n".join(param_snippets[:15])
     )
 
     # ── Examples ────────────────────────────────────────────────────────────
@@ -654,16 +659,16 @@ def enrich_manifest(
         "Summary": {
             "page_title":  "Summary",
             "description": summary_desc,
-            "sources":     all_py[:6],
+            "sources":     all_py[:20],
             "existing_rst": "Summary.rst",
             "_class_summaries": class_summaries,
         },
         "Algorithm": {
             "page_title":  "Algorithm",
             "description": algo_desc,
-            "sources":     all_py[:8],
+            "sources":     all_py[:20],
             "existing_rst": "Algorithm.rst",
-            "_param_snippets": param_snippets[:8],
+            "_param_snippets": param_snippets[:20],
         },
         "Examples": {
             "page_title":  "Examples",
@@ -730,8 +735,8 @@ def save_manifest(manifest: Dict[str, Dict], path: Path):
 # ===========================================================================
 
 def extract_functions(script: str) -> List[Dict]:
-    # Maximum code block chunk is 2500 chars
-    CHUNK = 2500
+    # Maximum code block chunk is 5000 chars
+    CHUNK = 5000
     try:
         tree = ast.parse(script)
     except SyntaxError:
@@ -867,7 +872,7 @@ def _find_existing_rst(page_key: str, output_base: Path) -> str:
 # Analyst helpers
 # ===========================================================================
 
-def _summarize_part(p: Dict, chunk: int = 3000) -> str:
+def _summarize_part(p: Dict, chunk: int = 5000) -> str:
     if p["type"] == "header":
         return "MODULE HEADER:\n" + p["code"][:chunk]
 
@@ -887,7 +892,7 @@ def _summarize_part(p: Dict, chunk: int = 3000) -> str:
         lines = [f"CLASS `{p['name']}`:", class_content, "", "  Methods:"]
         # Go through all func in the class
         for m in p.get("methods", []):
-            func_content = p.get('description', '') + '\n\nCODE:\n\n' + p.get('code', '')
+            func_content = m.get('description', '') + '\n\nCODE:\n\n' + m.get('code', '')
             func_content = func_content[:chunk]
             # Make lines
             lines += [f"  --- {m['name']} ---", func_content]
@@ -945,7 +950,7 @@ def _analyze_single_file(fname: str, file_parts: List[Dict]) -> str:
         "{file, purpose, classes, functions}"
     )
     # Call llm
-    out = _call_llm(MODELS["writer"], ANALYST_SYSTEM, prompt, temperature=0.2, max_tokens=1000)
+    out = _call_llm(MODELS["analyst"], ANALYST_SYSTEM, prompt, temperature=0.2, max_tokens=3000)
     # return
     return out
 
@@ -1016,7 +1021,7 @@ def writer_agent(page_name: str, spec: Dict, existing_rst: str = "") -> str:
         "Start with page title underlined by #. Output complete RST.\n"
     )
     # Call llm
-    raw = _call_llm(MODELS["writer"], WRITER_SYSTEM, user, temperature=0.4, max_tokens=3000)
+    raw = _call_llm(MODELS["writer"], WRITER_SYSTEM, user, temperature=0.4, max_tokens=4000)
     # Return
     return raw
 
@@ -1039,7 +1044,7 @@ Minor issues → approved=true. Significant errors → approved=false + revised_
 def reviewer_agent(page_name: str, draft_rst: str, raw_sources: Dict[str, str]) -> Dict:
     snippet = "\n\n".join(f"### {f}\n{c[:2000]}" for f, c in raw_sources.items())
     user = (
-        f"Page: {page_name}\n\nDRAFT:\n{draft_rst[:4000]}\n\n"
+        f"Page: {page_name}\n\nDRAFT:\n{draft_rst[:10000]}\n\n"
         f"SOURCE:\n{snippet}\n\nReview. Output JSON only.\n"
     )
     # run LLM
@@ -1282,7 +1287,7 @@ def generate_rst_page(
 def _load_page_sources(config, source_base):
     source_files = config.get("sources", [])
     sources = _load_sources(source_base, whitelist=source_files or None)
-    if not sources: 
+    if not sources:
         logger.warning(f"No source files matched — loading all .py files")
         sources = _load_sources(source_base)
 
@@ -1313,7 +1318,7 @@ def _build_page_spec(page_name, config, output_base, docstrings, sources):
     extra_context = ""
 
     if page_name == "Algorithm":
-        extra_context = "\n".join(config.get("_param_snippets", [])[:5])
+        extra_context = "\n".join(config.get("_param_snippets", [])[:15])
 
     elif page_name == "Examples":
         examples = config.get("_pipeline_examples", [])
@@ -1355,7 +1360,7 @@ def _review_and_finalize(page_name, draft, raw_sources, max_iterations):
             logger.info(f"{page_name} - Approved.")
             break
 
-        for i, issue in enumerate(issues[:5], 1):
+        for i, issue in enumerate(issues[:15], 1):
             logger.info(f"{page_name} - {i}. {issue}")
 
         # Run agent
@@ -1584,7 +1589,7 @@ TASK:
 Explain what this function does.
 
 OUTPUT FORMAT:
-1. Summary (maximum 3-4 sentences)
+1. Summary (maximum 4-5 sentences)
 2. Key steps (bullet points)
 3. Inputs and outputs
 """
@@ -1702,10 +1707,18 @@ def _phase2_generate_pages(manifest, page, source_base, output_path, docstrings,
 
     results = {}
 
-    def run_page(pname, pcfg):
+    def create_rst_page(pname, pcfg):
         print(f"\n{'='*60}\nProcessing: {pname}\n{'='*60}")
         try:
-            rst = generate_rst_page(page_name=pname, config=pcfg, source_base=source_base, output_base=output_path, docstrings=docstrings, max_iterations=max_iterations, verbose=True)
+            filepath = os.path.join(output_path, pname + '.rst')
+            if os.path.isfile(filepath):
+                logger.info(f'{pname}.rst already created. Importing...')
+                with open(filepath, 'r', encoding='utf-8') as file:
+                    rst = file.read()
+            else:
+                rst = generate_rst_page(page_name=pname, config=pcfg, source_base=source_base, output_base=output_path, docstrings=docstrings, max_iterations=max_iterations, verbose=True)
+
+            # Store
             results[pname] = rst
 
             if dry_run:
@@ -1720,11 +1733,11 @@ def _phase2_generate_pages(manifest, page, source_base, output_path, docstrings,
             results[pname] = None
 
     for p, c in extra_pages.items():
-        run_page(p, c)
+        create_rst_page(p, c)
 
     for p in MANDATORY_PAGES:
         if p in mand_pages:
-            run_page(p, mand_pages[p])
+            create_rst_page(p, mand_pages[p])
     # Return
     return results
 
@@ -1766,6 +1779,7 @@ You are a senior technical writer producing dense, comprehensive Sphinx RST docu
 
 DENSITY REQUIREMENTS — every section must have:
   - At least 3–5 full prose paragraphs (not bullet lists of one-liners)
+  - Re-use ALL information from the .rst pages.
   - A complete parameter table (.. list-table:: with Type, Default, Description columns)
     for every class or function that has parameters
   - At least one runnable .. code-block:: python example per major function/class
@@ -1813,7 +1827,7 @@ def compiler_router_agent(drafts: Dict[str, str]) -> Dict[str, Any]:
     """
     # Build a compact listing: stem + first 300 chars of content
     listing = "\n\n".join(
-        f"DRAFT: {stem}\nCONTENT PREVIEW:\n{text[:400]}"
+        f"DRAFT: {stem}\nCONTENT PREVIEW:\n{text[:3000]}"
         for stem, text in drafts.items()
     )
     # Cap to avoid flooding context
@@ -1825,7 +1839,7 @@ def compiler_router_agent(drafts: Dict[str, str]) -> Dict[str, Any]:
         "Output ONLY the JSON routing object."
     )
     logger.info(f"[Compiler Router Agent]> ({MODELS['orchestrator']}) routing {len(drafts)} drafts ...")
-    raw = _call_llm(MODELS["orchestrator"], COMPILER_ROUTER_SYSTEM, user, temperature=0.1, max_tokens=1000)
+    raw = _call_llm(MODELS["orchestrator"], COMPILER_ROUTER_SYSTEM, user, temperature=0.1, max_tokens=5000)
     result = _parse_json_response(raw)
     if not isinstance(result, dict):
         # Fallback: route everything to Algorithm
@@ -1854,7 +1868,7 @@ def compiler_writer_agent(
         f"[FROM: {i + 1}]\n{block[:3000]}"
         for i, block in enumerate(content_blocks)
     )
-    combined = combined[:14000]
+    combined = combined[:20000]
 
     # Source snippets for grounding
     source_snippet = "\n\n".join(
@@ -1894,10 +1908,8 @@ def compiler_writer_agent(
         "Output the complete RST document. Start with the page title underlined by #.\n"
     )
 
-    logger.info(f"[Compiler Writer Agent]> ({MODELS['writer']}) building: {page_name} "
-                f"({len(content_blocks)} routed block(s)) ...")
-    return _call_llm(MODELS["writer"], COMPILER_WRITER_SYSTEM, user,
-                     temperature=0.35, max_tokens=4000)
+    logger.info(f"[Compiler Writer Agent]> ({MODELS['writer']}) building: {page_name} ({len(content_blocks)} routed block(s)) ...")
+    return _call_llm(MODELS["writer"], COMPILER_WRITER_SYSTEM, user, temperature=0.35, max_tokens=4000)
 
 
 def archive_drafts(output_base: Path, keep: set) -> List[Path]:
@@ -2078,7 +2090,7 @@ def _apply_runtime_config(endpoint, orchestrator_model, analyst_model, writer_mo
 
     if endpoint:
         ENDPOINT = endpoint
-        
+
 def _prepare_paths(source_dir: str, output_dir: str):
     source_base = Path(source_dir)
     output_path = Path(output_dir)
