@@ -766,7 +766,8 @@ class LLMlight:
             tempdir=self.tempdir,
         )
 
-    def memory_chunks(self, n: int = 10) -> list:
+
+    def memory_chunks(self, n: int = None) -> list:
         """Return up to *n* stored chunks from the memory store.
 
         Parameters
@@ -791,7 +792,11 @@ class LLMlight:
                 'Call memory_save() to persist them.'
             )
 
+
         chunks = self.memory.get_all_chunks()
+        if n is None:
+            return chunks
+
         logger.info(f'Returning {min(n, len(chunks))} of {len(chunks)} stored chunks.')
         return chunks[:n]
 
