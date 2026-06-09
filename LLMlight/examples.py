@@ -1,3 +1,521 @@
+from LLMlight import LLMlight
+
+# ====================================================
+# Agent A: Data Scientist
+# ====================================================
+agent_a = LLMlight(
+    model="google/gemma-4-26b-a4b-qat",
+    retrieval_method="naive_rag",
+    embedding="bert",
+    context_strategy=None,
+    top_chunks=5,
+    temperature=0.7,
+)
+
+agent_a.memory_init(store_path="agent_a.db")
+
+agent_a.memory_add("""
+Large Language Models are one of the most important step we did in the field of AI
+It helps the workload and the work easier and faster.
+""")
+
+agent_a.memory_add("""
+Large Language Models use transformer architectures and are trained on
+massive text corpora using self-supervised learning.
+""")
+
+
+# ====================================================
+# Agent B: Farmer
+# ====================================================
+agent_b = LLMlight(
+    model="google/gemma-4-26b-a4b-qat",
+    retrieval_method="naive_rag",
+    embedding="bert",
+    context_strategy=None,
+    top_chunks=5,
+    temperature=0.7,
+)
+
+agent_b.memory_init(store_path="agent_b.db")
+
+agent_b.memory_add("""
+The use of AI and machine learning consumes to much power and there is no need for this
+new technology. The human work was good enough and there is no need to change that.
+Recent research shows that LLMs hallucinate and do not solve real world applications.
+""")
+
+
+# ====================================================
+# Discussion Loop
+# ====================================================
+
+topic = "Discuss the importance of the use of Large Language Models and AI."
+
+message = topic
+
+for turn in range(5):
+
+    print(f"\n{'='*80}")
+    print(f"ROUND {turn+1}")
+    print(f"{'='*80}")
+
+    response_a = agent_a.prompt(
+        f"""
+        You are a Data Scientist.
+
+        Topic:
+        {message}
+
+        Give your opinion in 1-2 paragraphs and ask a question to the farmer.
+        """
+    )
+
+    print("\nAgent A:")
+    print(response_a)
+
+    response_b = agent_b.prompt(
+        f"""
+        You are a farmer.
+
+        The Data Scientist said:
+
+        {response_a}
+
+        Respond to the discussion in 1-2 paragraphs and ask a follow-up question to the data scientist.
+        """
+    )
+
+    print("\nAgent B:")
+    print(response_b)
+
+    message = response_b
+
+
+# %%
+
+from LLMlight import LLMlight
+
+# ====================================================
+# Agent A: Data Scientist
+# ====================================================
+agent_a = LLMlight(
+    model="google/gemma-4-26b-a4b-qat",
+    retrieval_method="naive_rag",
+    context_strategy=None,
+    top_chunks=5,
+    temperature=0.7,
+)
+
+agent_a.memory_init(store_path="agent_a.db")
+
+agent_a.memory_add("""
+Large Language Models are one of the most important step we did in the field of AI
+It helps the workload and the work easier and faster.
+Large Language Models use transformer architectures and are trained on
+massive text corpora using self-supervised learning.
+""")
+
+# ====================================================
+# Agent B: Farmer
+# ====================================================
+agent_b = LLMlight(
+    model="google/gemma-4-26b-a4b-qat",
+    retrieval_method="naive_rag",
+    context_strategy=None,
+    top_chunks=5,
+    temperature=0.7,
+)
+
+agent_b.memory_init(store_path="agent_b.db")
+
+agent_b.memory_add("""
+The use of AI and machine learning consumes to much power and there is no need for this
+new technology. The human work was good enough and there is no need to change that.
+Recent research shows that LLMs hallucinate and do not solve real world applications.
+""")
+
+
+# ====================================================
+# Agent C: Moderator
+# ====================================================
+moderator = LLMlight(
+    model="google/gemma-4-26b-a4b-qat",
+    retrieval_method="naive_rag",
+    context_strategy=None,
+    top_chunks=5,
+    temperature=0.3,  # lower temperature for objective summaries
+)
+
+moderator.memory_init(store_path="moderator.db")
+
+
+# ====================================================
+# Shared discussion memory
+# ====================================================
+shared_memory = LLMlight(model="google/gemma-4-26b-a4b-qat")
+
+shared_memory.memory_init(store_path="discussion.db")
+
+
+# ====================================================
+# Discussion Loop
+# ====================================================
+topic = "Discuss the importance of the use of Large Language Models and AI."
+message = topic
+
+for turn in range(5):
+
+    print(f"\n{'='*80}")
+    print(f"ROUND {turn+1}")
+    print(f"{'='*80}")
+
+    # --------------------------------------------
+    # Agent A responds
+    # --------------------------------------------
+    response_a = agent_a.prompt(
+        f"""
+        You are a Data Scientist.
+
+        Current discussion:
+        {message}
+
+        Provide your opinion and ask a question to the Farmer in 1-2 paragraphs.
+        """
+    )
+
+    print("\nData Scientist:")
+    print(response_a)
+
+    # --------------------------------------------
+    # Agent B responds
+    # --------------------------------------------
+    response_b = agent_b.prompt(
+        f"""
+        You are a Farmer.
+
+        The Data Scientist said:
+
+        {response_a}
+
+        Respond and ask a follow-up question in 1-2 paragraphs.
+        """
+    )
+
+    print("\nFarmer:")
+    print(response_b)
+
+    # --------------------------------------------
+    # Moderator summarizes
+    # --------------------------------------------
+    moderator_summary = moderator.prompt(
+        f"""
+        You are a neutral moderator.
+
+        Data Scientist:
+        {response_a}
+
+        Farmer:
+        {response_b}
+
+        Perform the following tasks:
+        1. Summarize the key arguments.
+        2. Identify agreements.
+        3. Identify disagreements.
+        4. Propose one question that helps both agents move toward consensus.
+
+        Keep the output concise.
+        """
+    )
+
+    print("\nModerator:")
+    print(moderator_summary)
+
+    # Store discussion history
+    shared_memory.memory_add(response_a)
+    shared_memory.memory_add(response_b)
+    shared_memory.memory_add(moderator_summary)
+
+    # Next round starts from moderator guidance
+    message = moderator_summary
+
+
+# ====================================================
+# Final consensus
+# ====================================================
+consensus = shared_memory.prompt(
+    """
+    Review the discussion and provide:
+
+    - Main conclusions
+    - Remaining disagreements
+    - Final consensus statement
+
+    Keep it under 200 words.
+    """
+)
+
+print("\nFINAL CONSENSUS")
+print("=" * 80)
+print(consensus)
+
+# %%
+
+from LLMlight import LLMlight
+
+# ====================================================
+# Agent A: Data Scientist
+# ====================================================
+agent_a = LLMlight(
+    model="google/gemma-4-26b-a4b-qat",
+    retrieval_method="naive_rag",
+    context_strategy=None,
+    top_chunks=5,
+    temperature=0.7,
+)
+agent_a.memory_init(store_path="agent_a.db")
+
+# ====================================================
+# Agent B: Farmer
+# ====================================================
+agent_b = LLMlight(
+    model="google/gemma-4-26b-a4b-qat",
+    retrieval_method="naive_rag",
+    context_strategy=None,
+    top_chunks=5,
+    temperature=0.7,
+)
+agent_b.memory_init(store_path="agent_b.db")
+
+# ====================================================
+# Moderator Agent (keeps discussion structured)
+# ====================================================
+moderator = LLMlight(
+    model="google/gemma-4-26b-a4b-qat",
+    retrieval_method="naive_rag",
+    context_strategy=None,
+    top_chunks=5,
+    temperature=0.3,
+)
+moderator.memory_init(store_path="moderator.db")
+
+# ====================================================
+# Scoring Agent (decides convergence / stopping)
+# ====================================================
+scoring_agent = LLMlight(
+    model="google/gemma-4-26b-a4b-qat",
+    retrieval_method="naive_rag",
+    context_strategy=None,
+    top_chunks=5,
+    temperature=0.0,  # deterministic scoring
+)
+scoring_agent.memory_init(store_path="scoring.db")
+
+
+# ====================================================
+# Shared memory (optional logging)
+# ====================================================
+shared_memory = LLMlight(model="google/gemma-4-26b-a4b-qat")
+shared_memory.memory_init(store_path="discussion.db")
+
+
+# ====================================================
+# Discussion Loop with early stopping
+# ====================================================
+topic = "Discuss the importance of attention mechanisms in modern AI."
+message = topic
+
+MAX_ROUNDS = 5
+AGREEMENT_THRESHOLD = 0.85  # stop if convergence is high enough
+
+for turn in range(MAX_ROUNDS):
+
+    print(f"\n{'='*80}")
+    print(f"ROUND {turn+1}")
+    print(f"{'='*80}")
+
+    # --------------------------
+    # Agent A
+    # --------------------------
+    response_a = agent_a.prompt(f"""
+    You are a Data Scientist.
+
+    Topic:
+    {message}
+
+    Respond in 1-2 paragraphs and ask a question.
+    """)
+
+    print("\nAgent A:")
+    print(response_a)
+
+    # --------------------------
+    # Agent B
+    # --------------------------
+    response_b = agent_b.prompt(f"""
+    You are a Farmer.
+
+    Data Scientist said:
+    {response_a}
+
+    Respond in 1-2 paragraphs and continue the discussion.
+    """)
+
+    print("\nAgent B:")
+    print(response_b)
+
+    # --------------------------
+    # Moderator summary
+    # --------------------------
+    moderator_summary = moderator.prompt(f"""
+    You are a neutral moderator.
+
+    Data Scientist:
+    {response_a}
+
+    Farmer:
+    {response_b}
+
+    Summarize:
+    - agreements
+    - disagreements
+    - next question toward consensus
+    """)
+
+    print("\nModerator:")
+    print(moderator_summary)
+
+    # --------------------------
+    # Scoring Agent (convergence check)
+    # --------------------------
+    score_output = scoring_agent.prompt(f"""
+    You are a scoring system.
+
+    Evaluate agreement between the two agents.
+
+    Data Scientist:
+    {response_a}
+
+    Farmer:
+    {response_b}
+
+    Moderator summary:
+    {moderator_summary}
+
+    Return ONLY a number between 0 and 1:
+    - 1.0 = full agreement / consensus reached
+    - 0.0 = complete disagreement
+    """)
+
+    try:
+        score = float(score_output.strip())
+    except:
+        score = 0.0
+
+    print("\nAgreement Score:", score)
+
+    # --------------------------
+    # Store memory
+    # --------------------------
+    shared_memory.memory_add(response_a)
+    shared_memory.memory_add(response_b)
+    shared_memory.memory_add(moderator_summary)
+
+    # --------------------------
+    # Early stopping condition
+    # --------------------------
+    if score >= AGREEMENT_THRESHOLD:
+        print("\nConsensus reached early. Stopping discussion.")
+        break
+
+    # Next round context
+    message = moderator_summary
+
+
+# ====================================================
+# Final summary
+# ====================================================
+final_summary = shared_memory.prompt("""
+Summarize the full discussion:
+
+- final consensus
+- key arguments
+- remaining open points (if any)
+""")
+
+print("\nFINAL SUMMARY")
+print("=" * 80)
+print(final_summary)
+
+# %%
+
+
+# Import library
+from LLMlight import LLMlight
+
+# Initialize model and memory
+client = LLMlight(model='google/gemma-4-26b-a4b-qat', retrieval_method='naive_rag', context_strategy='global-reasoning', top_chunks=6)
+client = LLMlight(model='google/gemma-4-26b-a4b-qat', retrieval_method='naive_rag', context_strategy='chunk-wise', top_chunks=6)
+client = LLMlight(model='google/gemma-4-26b-a4b-qat', retrieval_method='naive_rag', context_strategy=None, top_chunks=6)
+
+# Create (or load) database
+client.memory_init(store_path='knowledge_base.db')
+
+# Add a PDF file to the database (extracts and chunks text automatically)
+url = 'https://proceedings.neurips.cc/paper_files/paper/2017/file/3f5ee243547dee91fbd053c1c4a845aa-Paper.pdf'
+pdf_text = client.read_pdf(url)
+
+# Write to db
+client.memory_add(text=pdf_text)
+len(client.memory_chunks())
+client.memory_chunks(1)
+
+# Store to disk (SQLite DB is persisted automatically)
+client.memory_save()
+
+# Query on the new knowledge
+response = client.prompt('What are attention networks? Summarize in 2 sentence')
+print(response)
+
+# %% Context strategy : global-reasoning
+from LLMlight import LLMlight
+
+# Initialize model and memory
+client = LLMlight(model='google/gemma-4-26b-a4b-qat', retrieval_method='naive_rag', context_strategy='global-reasoning', top_chunks=6)
+# client = LLMlight(model='google/gemma-4-26b-a4b-qat', retrieval_method='naive_rag', context_strategy='chunk-wise', top_chunks=6)
+# client = LLMlight(model='google/gemma-4-26b-a4b-qat', retrieval_method='naive_rag', context_strategy=None, top_chunks=6)
+
+# Create (or load) database
+client.memory_init(store_path='knowledge_base4.db')
+len(client.memory_chunks())
+
+# Query on the new knowledge
+response = client.prompt('What are attention networks? Summarize in 2 sentence')
+print(response)
+
+# %%
+from LLMlight import LLMlight
+
+# Initialize an LLMlight client
+client = LLMlight(model='google/gemma-4-26b-a4b-qat')
+
+# Ask a question using a language model
+response = client.prompt('What is the capital of France?')
+print(response)
+
+# [LLMlight.LLM] [INFO    ] Model            : google/gemma-4-26b-a4b-qat
+# [LLMlight.LLM] [INFO    ] Context strategy : disabled
+# [LLMlight.LLM] [INFO    ] Retrieval method : naive_rag
+# [LLMlight.LLM] [INFO    ] Embedding        : {'memory': 'bert', 'context': 'bert'}
+# [LLMlight.LLM] [INFO    ] Alpha (sig. test): None
+# [LLMlight.LLM] [INFO    ] Chunk config     : {'method': 'chars', 'size': 1000, 'overlap': 200}
+# [LLMlight.LLM] [INFO    ] LLMlight initialised.
+# [LLMlight.LLM] [INFO    ] Creating response with google/gemma-4-26b-a4b-qat..
+# [LLMlight.LLM] [INFO    ] No context strategy applied.
+# [LLMlight.LLM] [INFO    ] No context is provided into the prompt.
+# [LLMlight.LLM] [INFO    ] Running model: google/gemma-4-26b-a4b-qat 
+# The capital of France is Paris.
+
 # %%
 
 
@@ -116,7 +634,7 @@ print(results)
 
 from LLMlight import LLMlight
 client = LLMlight(model='gemma-4-e2b-it', top_chunks=5)
-client.memory_init(store_path='neurips_store1.db')
+client.memory_init(store_path='neurips_store10.db')
 
 # Add multiple PDF files to the database
 url = 'https://proceedings.neurips.cc/paper_files/paper/2017/file/3f5ee243547dee91fbd053c1c4a845aa-Paper.pdf'
