@@ -81,6 +81,9 @@ Creating summaries can be done using the summary functionality. In this example,
     text_summary = client.summarize(context=pdf_text)
     print(text_summary)
 
+    # release the file lock
+    client.memory_close()
+
 
 Adding and Removing Memory Chunks
 ####################################

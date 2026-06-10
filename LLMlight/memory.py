@@ -9,6 +9,7 @@ create_memory_backend(store_path, config, backend)
 Every backend exposes the same interface:
     .store_path  (str)  – resolved absolute path to the persisted store
     .add(text, input_files, dirpath, ...)
+    .close()
     .load()
     .save(...)
     .search(query, top_k)  -> list[str]
@@ -62,17 +63,33 @@ def _resolve_store_path(store_path: str, backend: str) -> str:
     return store_path
 
 
-def close_and_remove(path):
+def close_and_remove(path, backend_instance=None):
     """Close *backend* then delete *path* and its companion files (.hnsw, -wal, -shm).
+
+    Parameters
+    ----------
+    path : str
+        Absolute path to the store file to delete.
+    backend_instance : backend object, optional
+        An already-open backend whose ``close()`` method should be called
+        first.  When supplied this avoids opening a second connection to the
+        same file (which can cause a locking race on Windows).  When *None*
+        a temporary ``SqliteBackend`` is opened just to flush WAL and close.
 
     Swallows all errors so it is safe to call from addCleanup().
     """
-    # Close the SQLite connection first so Windows releases the file lock.
-    try:
-        sq = SqliteBackend(path)
-        sq.close()
-    except Exception:
-        pass
+    # Close via the supplied instance when available; otherwise open a fresh one.
+    if backend_instance is not None:
+        try:
+            backend_instance.close()
+        except Exception:
+            pass
+    else:
+        try:
+            sq = SqliteBackend(path)
+            sq.close()
+        except Exception:
+            pass
 
     # Remove the .db and any SQLite journal / WAL side-files.
     for suffix in ('', '-wal', '-shm', '.hnsw'):
@@ -464,6 +481,19 @@ class MemvidBackend:
 
         return to_delete_ids
 
+    def close(self):
+        """Release in-memory retriever and encoder references.
+
+        For the memvid backend there is no persistent connection to close, but
+        dropping the references frees memory and prevents stale state from
+        interfering with a subsequent :meth:`load` or :meth:`save`.
+        """
+        if hasattr(self, 'retriever'):
+            del self.retriever
+        if hasattr(self, 'encoder'):
+            self.encoder.clear()
+        logger.debug('MemvidBackend closed.')
+
     def show_stats(self):
         """Log a summary of the last save operation."""
         if not hasattr(self, 'build_stats'):
@@ -540,8 +570,21 @@ class SqliteBackend:
 
     # Delegate everything to the wrapped implementation
     def close(self):
+        """Close the underlying SQLite connection and release the file lock.
+
+        Safe to call multiple times.  After closing, the backend must be
+        re-initialised before it can be used again.
+        """
         if hasattr(self._impl, "close"):
             self._impl.close()
+        # Explicitly close any sqlite3 connection that lives directly on _impl
+        conn = getattr(self._impl, '_conn', None) or getattr(self._impl, 'conn', None)
+        if conn is not None:
+            try:
+                conn.close()
+                logger.debug('SqliteBackend: connection closed.')
+            except Exception as exc:
+                logger.debug('SqliteBackend.close(): %s', exc)
     def __getattr__(self, name):
         # Only called when the attribute is NOT found on SqliteBackend itself,
         # so self._impl is always available via __dict__ lookup.

@@ -485,13 +485,22 @@ client = LLMlight(model='google/gemma-4-26b-a4b-qat', retrieval_method='naive_ra
 # client = LLMlight(model='google/gemma-4-26b-a4b-qat', retrieval_method='naive_rag', context_strategy='chunk-wise', top_chunks=6)
 # client = LLMlight(model='google/gemma-4-26b-a4b-qat', retrieval_method='naive_rag', context_strategy=None, top_chunks=6)
 
+
+# or: overwrite in one go
+client.memory_init('knowledge_base.db', overwrite=True)
+
+
 # Create (or load) database
-client.memory_init(store_path='knowledge_base4.db')
+client.memory_init(store_path='knowledge_base.db')
 len(client.memory_chunks())
 
 # Query on the new knowledge
 response = client.prompt('What are attention networks? Summarize in 2 sentence')
 print(response)
+
+# release the file lock
+client.memory_close()
+
 
 # %%
 from LLMlight import LLMlight

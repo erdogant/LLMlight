@@ -524,13 +524,19 @@ class LLMlight:
             infers the backend from the file extension.
         """
         resolved = self._resolve_file_path(store_path) or self.store_path
-        if os.path.isfile(resolved):
-            logger.warning('sqlite database already exists. Use overwrite=True to create new empty database.')
+        if os.path.isfile(resolved) and not overwrite:
+            logger.warning('sqlite database already exists and is loaded.')
+        elif os.path.isfile(resolved) and overwrite:
+            logger.warning('sqlite database is overwritten with a new empty database.')
         
         if overwrite and os.path.isfile(resolved):
-            # logger.info('Existing sqlite database is removed.')
-            memory.close_and_remove(resolved)
-            # os.remove(resolved)
+            # Pass the already-open backend (if any) so close_and_remove can
+            # flush WAL and release the file lock without opening a second
+            # connection to the same file.
+            existing_backend = getattr(self, 'memory', None)
+            memory.close_and_remove(resolved, backend_instance=existing_backend)
+            if hasattr(self, 'memory'):
+                del self.memory
 
         # Skip if the same store is already initialised
         if hasattr(self, 'memory') and self.memory.store_path == resolved:
@@ -543,6 +549,41 @@ class LLMlight:
         if embedding is not None:
             self.embedding['memory'] = embedding
             logger.info(f'Memory embedding updated: {self.embedding}')
+
+    def memory_close(self):
+        """Close the memory backend and release the file lock.
+
+        Calls ``close()`` on the active backend (flushing any WAL journal and
+        releasing the SQLite file lock), then removes ``self.memory`` so the
+        instance is in a clean state.  Safe to call even when no store is open.
+
+        This is the recommended way to free the lock before deleting or
+        overwriting the store file — especially on Windows where an open
+        connection prevents deletion.
+
+        Examples
+        --------
+        >>> client.memory_close()          # release lock
+        >>> os.remove('knowledge.db')      # now safe to delete
+
+        >>> # Overwrite the database entirely
+        >>> client.memory_close()
+        >>> client.memory_init('knowledge.db', overwrite=True)
+        >>> client.memory_add(text=['fresh data'])
+        >>> client.memory_save()
+        """
+        if not hasattr(self, 'memory'):
+            logger.info('memory_close(): no memory store is open.')
+            return
+
+        path = getattr(self.memory, 'store_path', None)
+        try:
+            self.memory.close()
+            logger.info(f'Memory store closed: {path}')
+        except Exception as exc:
+            logger.warning('memory_close(): close() raised %s — continuing.', exc)
+        finally:
+            del self.memory
 
     def memory_load(self, store_path: str = None, config: dict = None, backend: str = None):
         """Load an existing memory store from disk so it is ready for querying.
