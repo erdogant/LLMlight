@@ -142,7 +142,7 @@ See the code block below to combine memory, retrieval, and language generation t
         top_chunks=5,
         temperature=0.7,
     )
-    agent_a.memory_init(store_path="agent_a.db")
+    agent_a.memory_init(store_path="agent_a.db", overwrite=True)
     
     # ====================================================
     # Agent B: Farmer
@@ -154,7 +154,7 @@ See the code block below to combine memory, retrieval, and language generation t
         top_chunks=5,
         temperature=0.7,
     )
-    agent_b.memory_init(store_path="agent_b.db")
+    agent_b.memory_init(store_path="agent_b.db", overwrite=True)
     
     # ====================================================
     # Moderator Agent (keeps discussion structured)
@@ -166,7 +166,7 @@ See the code block below to combine memory, retrieval, and language generation t
         top_chunks=5,
         temperature=0.3,
     )
-    moderator.memory_init(store_path="moderator.db")
+    moderator.memory_init(store_path="moderator.db", overwrite=True)
     
     # ====================================================
     # Scoring Agent (decides convergence / stopping)
@@ -178,14 +178,14 @@ See the code block below to combine memory, retrieval, and language generation t
         top_chunks=5,
         temperature=0.0,  # deterministic scoring
     )
-    scoring_agent.memory_init(store_path="scoring.db")
+    scoring_agent.memory_init(store_path="scoring.db", overwrite=True)
     
     
     # ====================================================
     # Shared memory (optional logging)
     # ====================================================
     shared_memory = LLMlight(model="google/gemma-4-26b-a4b-qat")
-    shared_memory.memory_init(store_path="discussion.db")
+    shared_memory.memory_init(store_path="discussion.db", overwrite=True)
     
     
     # ====================================================

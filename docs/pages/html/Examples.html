@@ -235,7 +235,7 @@ This allows the agents to reason from different perspectives, challenge each oth
     <span class="n">top_chunks</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span>
     <span class="n">temperature</span><span class="o">=</span><span class="mf">0.7</span><span class="p">,</span>
 <span class="p">)</span>
-<span class="n">agent_a</span><span class="o">.</span><span class="n">memory_init</span><span class="p">(</span><span class="n">store_path</span><span class="o">=</span><span class="s2">&quot;agent_a.db&quot;</span><span class="p">)</span>
+<span class="n">agent_a</span><span class="o">.</span><span class="n">memory_init</span><span class="p">(</span><span class="n">store_path</span><span class="o">=</span><span class="s2">&quot;agent_a.db&quot;</span><span class="p">,</span> <span class="n">overwrite</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 
 <span class="c1"># ====================================================</span>
 <span class="c1"># Agent B: Farmer</span>
@@ -247,7 +247,7 @@ This allows the agents to reason from different perspectives, challenge each oth
     <span class="n">top_chunks</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span>
     <span class="n">temperature</span><span class="o">=</span><span class="mf">0.7</span><span class="p">,</span>
 <span class="p">)</span>
-<span class="n">agent_b</span><span class="o">.</span><span class="n">memory_init</span><span class="p">(</span><span class="n">store_path</span><span class="o">=</span><span class="s2">&quot;agent_b.db&quot;</span><span class="p">)</span>
+<span class="n">agent_b</span><span class="o">.</span><span class="n">memory_init</span><span class="p">(</span><span class="n">store_path</span><span class="o">=</span><span class="s2">&quot;agent_b.db&quot;</span><span class="p">,</span> <span class="n">overwrite</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 
 <span class="c1"># ====================================================</span>
 <span class="c1"># Moderator Agent (keeps discussion structured)</span>
@@ -259,7 +259,7 @@ This allows the agents to reason from different perspectives, challenge each oth
     <span class="n">top_chunks</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span>
     <span class="n">temperature</span><span class="o">=</span><span class="mf">0.3</span><span class="p">,</span>
 <span class="p">)</span>
-<span class="n">moderator</span><span class="o">.</span><span class="n">memory_init</span><span class="p">(</span><span class="n">store_path</span><span class="o">=</span><span class="s2">&quot;moderator.db&quot;</span><span class="p">)</span>
+<span class="n">moderator</span><span class="o">.</span><span class="n">memory_init</span><span class="p">(</span><span class="n">store_path</span><span class="o">=</span><span class="s2">&quot;moderator.db&quot;</span><span class="p">,</span> <span class="n">overwrite</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 
 <span class="c1"># ====================================================</span>
 <span class="c1"># Scoring Agent (decides convergence / stopping)</span>
@@ -271,14 +271,14 @@ This allows the agents to reason from different perspectives, challenge each oth
     <span class="n">top_chunks</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span>
     <span class="n">temperature</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span>  <span class="c1"># deterministic scoring</span>
 <span class="p">)</span>
-<span class="n">scoring_agent</span><span class="o">.</span><span class="n">memory_init</span><span class="p">(</span><span class="n">store_path</span><span class="o">=</span><span class="s2">&quot;scoring.db&quot;</span><span class="p">)</span>
+<span class="n">scoring_agent</span><span class="o">.</span><span class="n">memory_init</span><span class="p">(</span><span class="n">store_path</span><span class="o">=</span><span class="s2">&quot;scoring.db&quot;</span><span class="p">,</span> <span class="n">overwrite</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 
 
 <span class="c1"># ====================================================</span>
 <span class="c1"># Shared memory (optional logging)</span>
 <span class="c1"># ====================================================</span>
 <span class="n">shared_memory</span> <span class="o">=</span> <span class="n">LLMlight</span><span class="p">(</span><span class="n">model</span><span class="o">=</span><span class="s2">&quot;google/gemma-4-26b-a4b-qat&quot;</span><span class="p">)</span>
-<span class="n">shared_memory</span><span class="o">.</span><span class="n">memory_init</span><span class="p">(</span><span class="n">store_path</span><span class="o">=</span><span class="s2">&quot;discussion.db&quot;</span><span class="p">)</span>
+<span class="n">shared_memory</span><span class="o">.</span><span class="n">memory_init</span><span class="p">(</span><span class="n">store_path</span><span class="o">=</span><span class="s2">&quot;discussion.db&quot;</span><span class="p">,</span> <span class="n">overwrite</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 
 
 <span class="c1"># ====================================================</span>
