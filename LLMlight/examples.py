@@ -1,8 +1,3 @@
-
-# Import
-from LLMlight import LLMlight
-
-
 # %%
 
 # 
@@ -59,7 +54,6 @@ Recent research shows that LLMs hallucinate and do not solve real world applicat
 # ====================================================
 
 topic = "Discuss the importance of the use of Large Language Models and AI."
-
 message = topic
 
 for turn in range(5):
@@ -69,29 +63,32 @@ for turn in range(5):
     print(f"{'='*80}")
 
     response_a = agent_a.prompt(
+        system="You are a Data Scientist.",
+        query=
         f"""
-        You are a Data Scientist.
 
         Topic:
         {message}
 
-        Give your opinion in 1-2 paragraphs and ask a question to the farmer.
-        """
+        """,
+
+        response_format="Give your opinion in 1-2 paragraphs and ask a question to the farmer.",
     )
 
     print("\nAgent A:")
     print(response_a)
 
     response_b = agent_b.prompt(
+        system="You are a farmer.",
+        query=
         f"""
-        You are a farmer.
 
         The Data Scientist said:
 
         {response_a}
-
-        Respond to the discussion in 1-2 paragraphs and ask a follow-up question to the data scientist.
-        """
+        
+        """,
+        response_format="Respond to the discussion in 1-2 paragraphs and ask a follow-up question to the data scientist.",
     )
 
     print("\nAgent B:")

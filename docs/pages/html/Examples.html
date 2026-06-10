@@ -299,14 +299,17 @@ This allows the agents to reason from different perspectives, challenge each oth
     <span class="c1"># --------------------------</span>
     <span class="c1"># Agent A</span>
     <span class="c1"># --------------------------</span>
-    <span class="n">response_a</span> <span class="o">=</span> <span class="n">agent_a</span><span class="o">.</span><span class="n">prompt</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;&quot;&quot;</span>
-<span class="s2">    You are a Data Scientist.</span>
+    <span class="n">response_a</span> <span class="o">=</span> <span class="n">agent_a</span><span class="o">.</span><span class="n">prompt</span><span class="p">(</span>
+    <span class="n">system</span><span class="o">=</span><span class="s1">&#39;You are a Data Scientist.&#39;</span><span class="p">,</span>
+    <span class="n">query</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;&quot;&quot;</span>
 
 <span class="s2">    Topic:</span>
 <span class="s2">    </span><span class="si">{</span><span class="n">message</span><span class="si">}</span>
 
-<span class="s2">    Respond in 1-2 paragraphs and ask a question.</span>
-<span class="s2">    &quot;&quot;&quot;</span><span class="p">)</span>
+<span class="s2">    &quot;&quot;&quot;</span><span class="p">,</span>
+    <span class="n">instructions</span><span class="o">=</span><span class="s1">&#39;Ask a question.&#39;</span><span class="p">,</span>
+    <span class="n">response_format</span><span class="o">=</span><span class="s1">&#39;Respond in 1-2 paragraphs&#39;</span><span class="p">,</span>
+    <span class="p">)</span>
 
     <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Agent A:&quot;</span><span class="p">)</span>
     <span class="nb">print</span><span class="p">(</span><span class="n">response_a</span><span class="p">)</span>
@@ -314,14 +317,18 @@ This allows the agents to reason from different perspectives, challenge each oth
     <span class="c1"># --------------------------</span>
     <span class="c1"># Agent B</span>
     <span class="c1"># --------------------------</span>
-    <span class="n">response_b</span> <span class="o">=</span> <span class="n">agent_b</span><span class="o">.</span><span class="n">prompt</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;&quot;&quot;</span>
-<span class="s2">    You are a Farmer.</span>
+    <span class="n">response_b</span> <span class="o">=</span> <span class="n">agent_b</span><span class="o">.</span><span class="n">prompt</span><span class="p">(</span>
+    <span class="n">system</span><span class="o">=</span><span class="s1">&#39;You are a Farmer.&#39;</span><span class="p">,</span>
+    <span class="n">query</span><span class="o">=</span>
+    <span class="sa">f</span><span class="s2">&quot;&quot;&quot;</span>
 
 <span class="s2">    Data Scientist said:</span>
 <span class="s2">    </span><span class="si">{</span><span class="n">response_a</span><span class="si">}</span>
 
-<span class="s2">    Respond in 1-2 paragraphs and continue the discussion.</span>
-<span class="s2">    &quot;&quot;&quot;</span><span class="p">)</span>
+<span class="s2">    &quot;&quot;&quot;</span><span class="p">,</span>
+    <span class="n">instructions</span><span class="o">=</span><span class="s1">&#39;continue the discussion with your own opinion.&#39;</span><span class="p">,</span>
+    <span class="n">response_format</span><span class="o">=</span><span class="s1">&#39;Respond in 1-2 paragraphs.&#39;</span><span class="p">,</span>
+    <span class="p">)</span>
 
     <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Agent B:&quot;</span><span class="p">)</span>
     <span class="nb">print</span><span class="p">(</span><span class="n">response_b</span><span class="p">)</span>
@@ -329,8 +336,9 @@ This allows the agents to reason from different perspectives, challenge each oth
     <span class="c1"># --------------------------</span>
     <span class="c1"># Moderator summary</span>
     <span class="c1"># --------------------------</span>
-    <span class="n">moderator_summary</span> <span class="o">=</span> <span class="n">moderator</span><span class="o">.</span><span class="n">prompt</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;&quot;&quot;</span>
-<span class="s2">    You are a neutral moderator.</span>
+    <span class="n">moderator_summary</span> <span class="o">=</span> <span class="n">moderator</span><span class="o">.</span><span class="n">prompt</span><span class="p">(</span>
+    <span class="n">system</span><span class="o">=</span><span class="s1">&#39;You are a neutral moderator.&#39;</span><span class="p">,</span>
+    <span class="n">query</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;&quot;&quot;</span>
 
 <span class="s2">    Data Scientist:</span>
 <span class="s2">    </span><span class="si">{</span><span class="n">response_a</span><span class="si">}</span>
@@ -338,11 +346,15 @@ This allows the agents to reason from different perspectives, challenge each oth
 <span class="s2">    Farmer:</span>
 <span class="s2">    </span><span class="si">{</span><span class="n">response_b</span><span class="si">}</span>
 
-<span class="s2">    Summarize:</span>
-<span class="s2">    - agreements</span>
-<span class="s2">    - disagreements</span>
-<span class="s2">    - next question toward consensus</span>
-<span class="s2">    &quot;&quot;&quot;</span><span class="p">)</span>
+<span class="s2">    &quot;&quot;&quot;</span><span class="p">,</span>
+    <span class="n">instructions</span><span class="o">=</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Summarize:</span>
+<span class="sd">    - agreements</span>
+<span class="sd">    - disagreements</span>
+<span class="sd">    - next question toward consensus</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="p">)</span>
 
     <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Moderator:&quot;</span><span class="p">)</span>
     <span class="nb">print</span><span class="p">(</span><span class="n">moderator_summary</span><span class="p">)</span>
@@ -350,10 +362,9 @@ This allows the agents to reason from different perspectives, challenge each oth
     <span class="c1"># --------------------------</span>
     <span class="c1"># Scoring Agent (convergence check)</span>
     <span class="c1"># --------------------------</span>
-    <span class="n">score_output</span> <span class="o">=</span> <span class="n">scoring_agent</span><span class="o">.</span><span class="n">prompt</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;&quot;&quot;</span>
-<span class="s2">    You are a scoring system.</span>
-
-<span class="s2">    Evaluate agreement between the two agents.</span>
+    <span class="n">score_output</span> <span class="o">=</span> <span class="n">scoring_agent</span><span class="o">.</span><span class="n">prompt</span><span class="p">(</span>
+    <span class="n">system</span><span class="o">=</span><span class="s1">&#39;You are a scoring system.&#39;</span><span class="p">,</span>
+    <span class="n">query</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;&quot;&quot;</span>
 
 <span class="s2">    Data Scientist:</span>
 <span class="s2">    </span><span class="si">{</span><span class="n">response_a</span><span class="si">}</span>
@@ -364,10 +375,15 @@ This allows the agents to reason from different perspectives, challenge each oth
 <span class="s2">    Moderator summary:</span>
 <span class="s2">    </span><span class="si">{</span><span class="n">moderator_summary</span><span class="si">}</span>
 
-<span class="s2">    Return ONLY a number between 0 and 1:</span>
-<span class="s2">    - 1.0 = full agreement / consensus reached</span>
-<span class="s2">    - 0.0 = complete disagreement</span>
-<span class="s2">    &quot;&quot;&quot;</span><span class="p">)</span>
+<span class="s2">    &quot;&quot;&quot;</span><span class="p">,</span>
+    <span class="n">instructions</span><span class="o">=</span><span class="s1">&#39;Evaluate agreement between the two agents.&#39;</span><span class="p">,</span>
+    <span class="n">response_format</span><span class="o">=</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Return ONLY a number between 0 and 1:</span>
+<span class="sd">    - 1.0 = full agreement / consensus reached</span>
+<span class="sd">    - 0.0 = complete disagreement</span>
+<span class="sd">    &quot;&quot;&quot;</span><span class="p">,</span>
+    <span class="p">)</span>
 
     <span class="k">try</span><span class="p">:</span>
         <span class="n">score</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">score_output</span><span class="o">.</span><span class="n">strip</span><span class="p">())</span>

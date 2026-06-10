@@ -206,14 +206,17 @@ See the code block below to combine memory, retrieval, and language generation t
         # --------------------------
         # Agent A
         # --------------------------
-        response_a = agent_a.prompt(f"""
-        You are a Data Scientist.
+        response_a = agent_a.prompt(
+        system='You are a Data Scientist.',
+        query=f"""
     
         Topic:
         {message}
     
-        Respond in 1-2 paragraphs and ask a question.
-        """)
+        """,
+        instructions='Ask a question.',
+        response_format='Respond in 1-2 paragraphs',
+        )
     
         print("\nAgent A:")
         print(response_a)
@@ -221,14 +224,18 @@ See the code block below to combine memory, retrieval, and language generation t
         # --------------------------
         # Agent B
         # --------------------------
-        response_b = agent_b.prompt(f"""
-        You are a Farmer.
+        response_b = agent_b.prompt(
+        system='You are a Farmer.',
+        query=
+        f"""
     
         Data Scientist said:
         {response_a}
     
-        Respond in 1-2 paragraphs and continue the discussion.
-        """)
+        """,
+        instructions='continue the discussion with your own opinion.',
+        response_format='Respond in 1-2 paragraphs.',
+        )
     
         print("\nAgent B:")
         print(response_b)
@@ -236,20 +243,25 @@ See the code block below to combine memory, retrieval, and language generation t
         # --------------------------
         # Moderator summary
         # --------------------------
-        moderator_summary = moderator.prompt(f"""
-        You are a neutral moderator.
-    
+        moderator_summary = moderator.prompt(
+        system='You are a neutral moderator.',
+        query=f"""
+        
         Data Scientist:
         {response_a}
     
         Farmer:
         {response_b}
     
+        """,
+        instructions=
+        """
         Summarize:
         - agreements
         - disagreements
         - next question toward consensus
-        """)
+        """
+        )
     
         print("\nModerator:")
         print(moderator_summary)
@@ -257,10 +269,9 @@ See the code block below to combine memory, retrieval, and language generation t
         # --------------------------
         # Scoring Agent (convergence check)
         # --------------------------
-        score_output = scoring_agent.prompt(f"""
-        You are a scoring system.
-    
-        Evaluate agreement between the two agents.
+        score_output = scoring_agent.prompt(
+        system='You are a scoring system.',
+        query=f"""        
     
         Data Scientist:
         {response_a}
@@ -271,10 +282,15 @@ See the code block below to combine memory, retrieval, and language generation t
         Moderator summary:
         {moderator_summary}
     
+        """,
+        instructions='Evaluate agreement between the two agents.',
+        response_format=
+        """
         Return ONLY a number between 0 and 1:
         - 1.0 = full agreement / consensus reached
         - 0.0 = complete disagreement
-        """)
+        """,
+        )
     
         try:
             score = float(score_output.strip())

@@ -36,8 +36,6 @@ client.prompt('Explain the working of HNet - hypergeometric networks in 4 senten
 summary_text = client.summarize(context=pdf_text)
 print(summary_text)
 
-
-
 # [WARNING] Prompt length (XXXX tokens) exceeds the model context window (4096 tokens).
 # The model will truncate the input and important context may be lost.
 
@@ -62,7 +60,7 @@ client.prompt('What is the capital of france?', instructions='Your response must
 client.prompt('What is the capital of france?', instructions='only use the context.', response_format='only output 1 word.')
 
 # Store the database to disk (SQLite is auto-persisted; this also saves the ANN index)
-client.memory_save()
+# client.memory_save()
 
 # %% RAG with Statistical Validation
 
@@ -121,7 +119,6 @@ client.memory_save()
 # Query on the new knowledge
 response = client.prompt('Summarize the document.')
 print(response)
-
 
 
 # %%
@@ -193,6 +190,17 @@ response = client.prompt('What are Graphical Hypergeometric Networks?', instruct
 print(response)
 
 # %%
+from LLMlight import LLMlight
+
+client = LLMlight(model='mistralai/mistral-small-3.2')
+client.memory_init(store_path='local_database.db')
+
+# Rebuild and save the ANN index
+client.memory_reindex(batch_size=64, save_index=True)
+
+# Query as normal
+response = client.prompt('What is the capital of France?')
+print(response)
 
 # %%
 
