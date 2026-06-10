@@ -107,8 +107,7 @@ class LLMlight:
     Parameters
     ----------
     model : str
-        Model identifier served by the endpoint, e.g. ``'mistralai/mistral-small-3.2'``,
-        ``'unsloth/gemma-4-26b-a4b-it'``, ``'qwen/qwen3-coder-30b'``.
+        Model identifier served by the endpoint, e.g. ``'mistralai/mistral-small-3.2'``, ``'unsloth/gemma-4-26b-a4b-it'``, ``'qwen/qwen3-coder-30b'``.
         When ``None`` the available models are listed and ``__init__`` returns early.
     retrieval_method : str, default ``'naive_rag'``
         None          -- No chunking. The entire context is forwarded to the LLM.
@@ -116,19 +115,16 @@ class LLMlight:
         'naive_rag'   -- Context is split into chunks; top-k chunks are selected by
                         cosine similarity and combined into the prompt.
         'RSE'         -- Relevant Segment Extraction: contiguous high-scoring segments
-                        are identified and reconstructed. Requires ``embedding`` in
-                        ``('bert', 'bge-small')``.
+                        are identified and reconstructed. Requires ``embedding`` in ``('bert', 'bge-small')``.
     embedding : str, dict, or None, default ``None``
         Controls how text is vectorised for retrieval.
 
         ``None``          -- Retrieval embedding **disabled**. Memory retrieval and context retrieval both skip the similarity step and fall through to the full-context path.
         ``'automatic'``   -- Shorthand for ``{'memory': 'memvid', 'context': 'bert'}``.
         A string          -- Applies the same method to both memory and context paths.
-                            Valid values: ``'tfidf'``, ``'bow'``, ``'bert'``,
-                            ``'bge-small'``, ``'memvid'``.
+                            Valid values: ``'tfidf'``, ``'bow'``, ``'bert'``, ``'bge-small'``, ``'memvid'``.
                             Note: ``'memvid'`` is only valid for the memory path; it is silently corrected to ``'bert'`` when used as the context embedding.
-        A dict            -- Specify paths independently:
-                            ``{'memory': 'memvid', 'context': 'bert'}``.
+        A dict            -- Specify paths independently: ``{'memory': 'memvid', 'context': 'bert'}``.
                             Keys ``'memory'`` and ``'context'`` are both optional; omitted keys inherit the ``'automatic'`` defaults.
 
         Guidance by use-case:
@@ -209,7 +205,7 @@ class LLMlight:
                  temperature: float = 0.8,
                  top_p: float = 1.0,
                  chunks: dict = None,
-                 n_ctx: int = 4096,
+                 n_ctx: int = 8192,
                  file_path: str = None,
                  endpoint: str = "http://localhost:1234/v1/chat/completions",
                  verbose: (str, int) = 'info',
@@ -858,7 +854,7 @@ class LLMlight:
             logger.debug('Too few scores for significance test (need >= 2).')
             return None
 
-        logger.info('Building null distribution for retrieval score significance testing.')
+        logger.info(f'Building null distribution with {n} samples for similarity-score significance testing.')
 
         if self.embedding['memory'] == 'memvid':
             scored = self.memory.search_with_scores(query, top_k=n)
@@ -1388,7 +1384,8 @@ class LLMlight:
 
         mask = out.get('y_bool', np.ones(len(scored), dtype=bool))
         filtered = [pair for pair, keep in zip(scored, mask) if keep]
-        logger.info("%d / %d chunks retained after significance filtering.", len(filtered), len(scored))
+        logger.info(f"{len(filtered)} / {len(scored)} chunks retained after significance filtering with alpha={self.alpha}.")
+        # Return
         return filtered
 
     # ------------------------------------------------------------------
@@ -1448,6 +1445,7 @@ class LLMlight:
             logger.warning("Unknown memory embedding '%s', skipping retrieval.", self.embedding['memory'])
             return None
 
+        # Filter chunks on significance
         scored  = self._filter_by_significance(query, scored)
         chunks  = [text for _, text in scored]
 

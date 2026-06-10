@@ -1,8 +1,6 @@
 import pymupdf
 import os
 import numpy as np
-import json
-import re
 import logging
 
 try:
@@ -151,18 +149,6 @@ def RSE(context, query, label=None, chunk_size=800, irrelevant_chunk_penalty=0.2
 
     return context
 
-    # # Generate a response from the language model using the context
-    # response = generate_response(query, context)
-    # # Compile the result into a dictionary
-    # result = {
-    #     "query": query,
-    #     "segments": segments,
-    #     "response": response
-    # }
-    # print("\n=== FINAL RESPONSE ===")
-    # print(response)
-    # return result
-
 
 def create_embeddings(texts, model_path="BAAI/bge-small-en", batch_size=32, device="cpu"):
     """
@@ -198,38 +184,6 @@ def create_embeddings(texts, model_path="BAAI/bge-small-en", batch_size=32, devi
     # Return the list of all embeddings
     return embeddings
 
-# def create_embeddings(texts, model="BAAI/bge-en-icl"):
-#     """
-#     Generate embeddings for texts.
-    
-#     Args:
-#         texts (List[str]): List of texts to embed
-#         model (str): Embedding model to use
-        
-#     Returns:
-#         List[List[float]]: List of embedding vectors
-#     """
-#     if not texts:
-#         return []  # Return an empty list if no texts are provided
-        
-#     # Process in batches if the list is long
-#     batch_size = 100  # Adjust based on your API limits
-#     all_embeddings = []  # Initialize a list to store all embeddings
-    
-#     for i in range(0, len(texts), batch_size):
-#         batch = texts[i:i + batch_size]  # Get the current batch of texts
-        
-#         # Create embeddings for the current batch using the specified model
-#         response = client.embeddings.create(
-#             input=batch,
-#             model=model
-#         )
-        
-#         # Extract embeddings from the response
-#         batch_embeddings = [item.embedding for item in response.data]
-#         all_embeddings.extend(batch_embeddings)  # Add the batch embeddings to the list
-        
-#     return all_embeddings  # Return the list of all embeddings
 
 def extract_text_from_pdf(pdf_path):
     """
