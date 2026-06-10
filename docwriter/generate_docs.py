@@ -71,16 +71,12 @@ ENDPOINT = "http://localhost:1234/v1/chat/completions"
 
 MODELS: Dict[str, str] = {
     "orchestrator": "openai/gpt-oss-20b",
-    "analyst":      "microsoft/phi-4", #"qwen/qwen2.5-coder-32b",
-    "writer":       "mistralai/mistral-small-3.2",
+    "analyst":      "liquid/lfm2-24b-a2b", #"qwen/qwen2.5-coder-32b",
+    "writer":       "openai/gpt-oss-20b",
     "reviewer":     "microsoft/phi-4",
     "small":        "zai-org/glm-4.6v-flash",
 }
-    # "analyst":      "qwen3.5-9b-glm5.1-distill-v1", # qwen3.5-9b-glm5.1-distill-v1, zai-org/glm-4.6v-flash
-    # "writer":       "google/gemma-4-26b-a4b-qat", # google/gemma-4-26b-a4b-qat
-    # "reviewer":     "liquid/lfm2-24b-a2b",
-    # "small":        "gemma-4-e4b-it-qat",
-    
+
 # ---------------------------------------------------------------------------
 # DOC_STRUCTURE_PROMPT
 # ---------------------------------------------------------------------------
@@ -126,7 +122,7 @@ def _call_llm(model: str, system: str, user: str, temperature: float = 0.3, max_
         resp = requests.post(
             ENDPOINT,
             headers={"Content-Type": "application/json"},
-            json=payload, timeout=320,
+            json=payload, timeout=600,
         )
         resp.raise_for_status()
         choice = resp.json()["choices"][0]["message"]
@@ -973,12 +969,12 @@ def analyst_agent(page_name: str, page_description: str, parts: Dict[str, List],
         f"PAGE: {page_name}\n"
         f"DESCRIPTION: {page_description[:2000]}\n\n"
         f"FILE SUMMARIES:\n{summaries_block}\n"
-        + (f"\nADDITIONAL CONTEXT:\n{extra_context[:1500]}\n" if extra_context else "")
+        + (f"\nADDITIONAL CONTEXT:\n{extra_context[:8000]}\n" if extra_context else "")
         + "\nCombine insights. Produce the page spec JSON.")
 
     # Run LLM
     logger.info(f"[Analyst Agent]> Collected all information and is now going to combine and structure all information.")
-    raw = _call_llm(MODELS["writer"], ANALYST_SYSTEM, reduce_prompt, temperature=0.2, max_tokens=2000)
+    raw = _call_llm(MODELS["writer"], ANALYST_SYSTEM, reduce_prompt, temperature=0.2, max_tokens=4000)
     # structure
     result = _parse_json_response(raw)
     # Create final string
@@ -990,13 +986,21 @@ def analyst_agent(page_name: str, page_description: str, parts: Dict[str, List],
 WRITER_SYSTEM = """\
 You are an expert technical writer producing Sphinx reStructuredText (RST) documentation.
 
-RULES:
+DENSITY REQUIREMENTS — every page must have:
+  - At least 3–5 full prose paragraphs per section (not one-liner bullet lists)
+  - A complete parameter table (.. list-table:: with Type, Default, Description columns)
+    for every class or function that has parameters
+  - At least one runnable .. code-block:: python example per major function or class
+  - Clear explanation of WHY each component exists, not just WHAT it does
+
+RST RULES:
 - RST syntax: title underlined with #, sections with =, subsections with -.
 - Code examples: .. code-block:: python
 - Parameter tables: description-list or .. list-table::
 - No .. toctree:: or page-level metadata.
 - End every page with:  .. include:: add_bottom.add
 - Accurate — do NOT invent API names not in the spec.
+- Do NOT write placeholder text like "See documentation for details"
 - For Algorithm pages: include the core functions and an ASCII diagram of the workflow inside
   a .. code-block:: text  directive.
 - For Installation pages: include separate code-block:: console blocks for
@@ -1009,7 +1013,7 @@ Output ONLY raw RST text. No preamble, no markdown fences.
 def writer_agent(page_name: str, spec: Dict, existing_rst: str = "") -> str:
     logger.info(f"[Writer Agent]> {page_name} - ({MODELS['writer']}) drafting RST ...")
     # dump json
-    spec_json = json.dumps(spec, indent=2)[:5000]
+    spec_json = json.dumps(spec, indent=2)[:10000]
     style_hint = (
         f"\nStyle reference (do NOT copy — write fresh):\n{existing_rst[:1500]}"
         if existing_rst else ""
@@ -1018,10 +1022,16 @@ def writer_agent(page_name: str, spec: Dict, existing_rst: str = "") -> str:
         f"Write the Sphinx RST page: {page_name}\n\n"
         f"SPECIFICATION:\n{spec_json}\n"
         f"{style_hint}\n\n"
-        "Start with page title underlined by #. Output complete RST.\n"
+        "Requirements:\n"
+        "- Start with the page title underlined by #\n"
+        "- Every section must contain at least 3 full prose paragraphs\n"
+        "- Every class or function with parameters must have a .. list-table:: parameter table\n"
+        "- Every major class or function must have at least one .. code-block:: python usage example\n"
+        "- Do NOT write placeholder text like 'See documentation'\n"
+        "- Output the complete RST document\n"
     )
     # Call llm
-    raw = _call_llm(MODELS["writer"], WRITER_SYSTEM, user, temperature=0.4, max_tokens=4000)
+    raw = _call_llm(MODELS["writer"], WRITER_SYSTEM, user, temperature=0.4, max_tokens=8000)
     # Return
     return raw
 
@@ -1074,7 +1084,7 @@ def orchestrator_merge(page_name: str, draft_rst: str, review: Dict) -> str:
         "\n\nOutput the fully corrected RST.\n"
     )
     # run LLM
-    raw = _call_llm(MODELS["orchestrator"], ORCHESTRATOR_SYSTEM, user, temperature=0.2, max_tokens=3000)
+    raw = _call_llm(MODELS["orchestrator"], ORCHESTRATOR_SYSTEM, user, temperature=0.2, max_tokens=6000)
     # return
     return raw
 
@@ -1586,12 +1596,13 @@ SOURCE CODE:
 {code}
 
 TASK:
-Explain what this function does.
+Explain what this function does in detail.
 
 OUTPUT FORMAT:
-1. Summary (maximum 4-5 sentences)
-2. Key steps (bullet points)
-3. Inputs and outputs
+1. Summary (6–10 sentences covering purpose, design rationale, and important behaviour)
+2. Key steps (bullet points — be specific, mention variable names and logic branches)
+3. Inputs and outputs (types, defaults, what each parameter controls)
+4. A short runnable Python usage example (if applicable)
 """
 
 # ===========================================================================
@@ -1865,7 +1876,7 @@ def compiler_writer_agent(
     """
     # Combine all routed content (cap per block to manage context)
     combined = "\n\n" + ("=" * 60) + "\n\n".join(
-        f"[FROM: {i + 1}]\n{block[:3000]}"
+        f"[FROM: {i + 1}]\n{block[:6000]}"
         for i, block in enumerate(content_blocks)
     )
     combined = combined[:20000]
@@ -1909,7 +1920,7 @@ def compiler_writer_agent(
     )
 
     logger.info(f"[Compiler Writer Agent]> ({MODELS['writer']}) building: {page_name} ({len(content_blocks)} routed block(s)) ...")
-    return _call_llm(MODELS["writer"], COMPILER_WRITER_SYSTEM, user, temperature=0.35, max_tokens=4000)
+    return _call_llm(MODELS["writer"], COMPILER_WRITER_SYSTEM, user, temperature=0.35, max_tokens=8000)
 
 
 def archive_drafts(output_base: Path, keep: set) -> List[Path]:
