@@ -124,16 +124,11 @@ class SqliteHNSWBackend:
         # Retriever wrapper
         self.retriever = Retriever(self)
 
-        # Try to prepare an embedding function using sentence-transformers; otherwise fallback to TF-IDF
+        # Embedder is loaded lazily on first use (search / add / reindex).
+        # This avoids an HTTP round-trip to HuggingFace when just creating or
+        # opening an empty database.
         self._embedder = None
-        try:
-            from sentence_transformers import SentenceTransformer
-            model_name = self.config.get("embedding_model", "all-MiniLM-L6-v2")
-            self._embedder = SentenceTransformer(model_name)
-            logger.info(f"Using sentence-transformers model for embeddings: {model_name}")
-        except Exception:
-            logger.info("sentence-transformers not available; falling back to TF-IDF text search for retrieval.")
-            self._embedder = None
+        self._embedder_loaded = False  # tracks whether we already attempted load
 
         # Try to load ANN index if present
         self._maybe_load_ann()
@@ -287,11 +282,11 @@ class SqliteHNSWBackend:
             ids.append(id_)
 
         # Compute embeddings in one batch, then rebuild the ANN index once.
-        if self._embedder is not None and ids:
+        if self._get_embedder() is not None and ids:
             try:
-                vectors = self._embedder.encode(text, convert_to_numpy=True, show_progress_bar=len(text) > 50)
+                vectors = self._get_embedder().encode(text, convert_to_numpy=True, show_progress_bar=len(text) > 50)
             except TypeError:
-                vectors = np.asarray(self._embedder.encode(text))
+                vectors = np.asarray(self._get_embedder().encode(text))
             self._add_embeddings(ids, vectors)
 
         return ids
@@ -440,13 +435,13 @@ class SqliteHNSWBackend:
 
         # Rebuild in-memory ANN arrays to stay consistent.
         # hnswlib does not support deletion, so we reload everything from DB.
-        if self._use_ann and self._ann is not None and self._embedder is not None:
+        if self._use_ann and self._ann is not None and self._get_embedder() is not None:
             c.execute("SELECT id, text FROM documents ORDER BY id")
             rows = c.fetchall()
             if rows:
                 ids_remaining = [r[0] for r in rows]
                 texts_remaining = [r[1] for r in rows]
-                vecs = self._embedder.encode(texts_remaining, convert_to_numpy=True).astype(np.float32)
+                vecs = self._get_embedder().encode(texts_remaining, convert_to_numpy=True).astype(np.float32)
                 self._embeddings = vecs
                 self._ids = ids_remaining
                 try:
@@ -489,6 +484,26 @@ class SqliteHNSWBackend:
         # Try to load ANN index
         self._maybe_load_ann()
 
+    def _get_embedder(self):
+        """Return the SentenceTransformer embedder, loading it on first call.
+
+        This is the single place where sentence-transformers is imported and
+        the model is downloaded/loaded.  Calling it from __init__ is intentionally
+        avoided so that constructing or opening an empty database does not trigger
+        an HTTP round-trip to HuggingFace.
+        """
+        if not self._embedder_loaded:
+            self._embedder_loaded = True  # set before attempt so we don't retry on failure
+            try:
+                from sentence_transformers import SentenceTransformer
+                model_name = self.config.get("embedding_model", "all-MiniLM-L6-v2")
+                self._embedder = SentenceTransformer(model_name)
+                logger.info(f"Using sentence-transformers model for embeddings: {model_name}")
+            except Exception:
+                logger.info("sentence-transformers not available; falling back to TF-IDF text search for retrieval.")
+                self._embedder = None
+        return self._embedder
+
     def _maybe_load_ann(self):
         if os.path.isfile(self.index_path):
             try:
@@ -517,8 +532,8 @@ class SqliteHNSWBackend:
     def search(self, query: str, top_k: int = 5) -> List[Tuple[int, float, Dict]]:
         """Search by query string. If embedder+ANN available: use ANN; else use TF-IDF cosine similarity."""
         # If we have ANN and an embedder, use that
-        if self._use_ann and self._ann is not None and self._embedder is not None:
-            q_vec = self._embedder.encode([query], convert_to_numpy=True).astype(np.float32)
+        if self._use_ann and self._ann is not None and self._get_embedder() is not None:
+            q_vec = self._get_embedder().encode([query], convert_to_numpy=True).astype(np.float32)
             # Tune ef for search: ef should be >= top_k and larger values improve recall.
             try:
                 ef_search = max(50, int(top_k * 10))
