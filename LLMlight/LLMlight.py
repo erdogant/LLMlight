@@ -157,7 +157,7 @@ class LLMlight:
         ``'chunk_size'`` -> ``'size'``.
     top_chunks : int, default ``5``
         Number of top-ranked chunks returned by retrieval.
-    n_ctx : int, default ``4096``
+    n_ctx : int, default ``8192``
         Model context window in tokens. Used to compute ``max_tokens`` for each
         request and to warn when a prompt is likely to overflow.
     file_path : str or None, default ``None``
@@ -2045,14 +2045,34 @@ def compute_tokens(string, n_ctx=4096, task='max'):
     except Exception as e:
         raise ImportError("transformers is required for token counting. Install via 'pip install transformers'") from e
 
+    import warnings
     tokenizer = AutoTokenizer.from_pretrained("gpt2")
     # Encode WITHOUT truncation so we get the real token count.
-    tokens = tokenizer.encode(string)
+    # The GPT-2 tokenizer warns when the sequence exceeds its own 1024-token
+    # training limit, but here we are only *counting* tokens — not running
+    # GPT-2 — so the warning is a false alarm and we suppress it.
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message="Token indices sequence length is longer than the specified maximum",
+        )
+        tokens = tokenizer.encode(string)
     used_tokens = len(tokens)
     if used_tokens > n_ctx:
         logger.warning(
-            "Prompt length (%d tokens) exceeds context window (%d tokens). "
-            "The model will truncate the input. Consider reducing context size or chunk count.",
+            "Prompt length (%d tokens) exceeds the model context window (%d tokens). "
+            "The model will truncate the input and important context may be lost.\n"
+            "\n"
+            "  How to fix:\n"
+            "  * Reduce chunk size:   LLMlight(..., chunks={'size': 500})\n"
+            "    Smaller chunks = fewer tokens per prompt.\n"
+            "  * Reduce chunk overlap: LLMlight(..., chunks={'overlap': 50})\n"
+            "  * Reduce top_chunks:   LLMlight(..., top_chunks=3)\n"
+            "    Fewer chunks combined into a single prompt.\n"
+            "  * Use summarize():     client.summarize(context=text)\n"
+            "    Splits the document automatically, chunk by chunk.\n"
+            "  * Increase n_ctx:      LLMlight(..., n_ctx=8192)\n"
+            "    Only works if your model actually supports a larger window.",
             used_tokens, n_ctx,
         )
     # Determine how many tokens are available for the model to generate

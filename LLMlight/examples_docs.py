@@ -36,6 +36,22 @@ client.prompt('Explain the working of HNet - hypergeometric networks in 4 senten
 summary_text = client.summarize(context=pdf_text)
 print(summary_text)
 
+
+
+# [WARNING] Prompt length (XXXX tokens) exceeds the model context window (4096 tokens).
+# The model will truncate the input and important context may be lost.
+
+#   How to fix:
+#   * Reduce chunk size:    LLMlight(..., chunks={'size': 500})
+#     Smaller chunks = fewer tokens per prompt.
+#   * Reduce chunk overlap: LLMlight(..., chunks={'overlap': 50})
+#   * Reduce top_chunks:    LLMlight(..., top_chunks=3)
+#     Fewer chunks combined into a single prompt.
+#   * Use summarize():      client.summarize(context=text)
+#     Splits the document automatically, chunk by chunk.
+#   * Increase n_ctx:       LLMlight(..., n_ctx=8192)
+#     Only works if your model actually supports a larger window.
+    
 # %% Preprocessing & Chunking
 client.memory_add(text=['Apes like USB sticks.', 'The capital of France is Amsterdam.'])
 out = client.memory.get_all_chunks()
