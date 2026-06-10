@@ -69,6 +69,7 @@
 <li class="toctree-l1"><a class="reference internal" href="Examples.html#working-with-files-pdfs">Working with Files (PDFs)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="Examples.html#create-summaries">Create Summaries</a></li>
 <li class="toctree-l1"><a class="reference internal" href="Examples.html#adding-and-removing-memory-chunks">Adding and Removing Memory Chunks</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Examples.html#create-agent-discussion">Create Agent Discussion</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Saving and Loading</span></p>
 <ul>
@@ -196,29 +197,30 @@ Retrieving available models can be done via the <a class="reference internal" hr
 <section id="embedding-local-storage">
 <h1>Embedding &amp; Local Storage<a class="headerlink" href="#embedding-local-storage" title="Link to this heading"></a></h1>
 <p>In <strong>Embedding &amp; Local Storage</strong>, each chunk is transformed into a vector representation. These embeddings are stored in a local SQLite database (default backend) with an optional HNSW index, making retrieval fast, offline-friendly, and portable. Users can also add small text chunks or entire directories.</p>
-<p>summary_text = client.summarize(context=pdf_text)</p>
-<blockquote>
-<div><p># Add additional text chunks
-client.memory_add(text=[</p>
-<blockquote>
-<div><p>‘Apes like USB sticks.’,
-‘The capital of France is Amsterdam.’</p>
-</div></blockquote>
-<p>])</p>
-<p># Add all supported file types from a directory
-client.memory_add(</p>
-<blockquote>
-<div><p>dirpath=’c:/my_documents/’,
-filetypes=[‘.pdf’, ‘.txt’, ‘.epub’, ‘.md’, ‘.doc’, ‘.docx’, ‘.rtf’, ‘.html’, ‘.htm’]</p>
-</div></blockquote>
-<p>)</p>
-<p># Store the database to disk (SQLite is auto-persisted; this also saves the ANN index)
-client.memory_save()</p>
-<p>client.prompt(‘What is the capital of france?’, instructions=’Your response must be the truth.’)
-# ‘The provided context states that “The capital of France is Amsterdam.” However, this information is incorrect based on general knowledge. The actual capital of France is Paris. The context given here contains an error or is intentionally misleading. nn### Summary 1: nThe correct capital of France is Paris, not Amsterdam as stated in the context.’</p>
-<p>client.prompt(‘What is the capital of france?’, instructions=’only use the context.’, response_format=’only output 1 word.’)
-# Amsterdam</p>
-</div></blockquote>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">summary_text</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">summarize</span><span class="p">(</span><span class="n">context</span><span class="o">=</span><span class="n">pdf_text</span><span class="p">)</span>
+
+    <span class="c1"># Add additional text chunks</span>
+    <span class="n">client</span><span class="o">.</span><span class="n">memory_add</span><span class="p">(</span><span class="n">text</span><span class="o">=</span><span class="p">[</span>
+        <span class="s1">&#39;Apes like USB sticks.&#39;</span><span class="p">,</span>
+        <span class="s1">&#39;The capital of France is Amsterdam.&#39;</span>
+    <span class="p">])</span>
+
+    <span class="c1"># Add all supported file types from a directory</span>
+    <span class="n">client</span><span class="o">.</span><span class="n">memory_add</span><span class="p">(</span>
+        <span class="n">dirpath</span><span class="o">=</span><span class="s1">&#39;c:/my_documents/&#39;</span><span class="p">,</span>
+        <span class="n">filetypes</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;.pdf&#39;</span><span class="p">,</span> <span class="s1">&#39;.txt&#39;</span><span class="p">,</span> <span class="s1">&#39;.epub&#39;</span><span class="p">,</span> <span class="s1">&#39;.md&#39;</span><span class="p">,</span> <span class="s1">&#39;.doc&#39;</span><span class="p">,</span> <span class="s1">&#39;.docx&#39;</span><span class="p">,</span> <span class="s1">&#39;.rtf&#39;</span><span class="p">,</span> <span class="s1">&#39;.html&#39;</span><span class="p">,</span> <span class="s1">&#39;.htm&#39;</span><span class="p">]</span>
+    <span class="p">)</span>
+
+    <span class="c1"># Store the database to disk (SQLite is auto-persisted; this also saves the ANN index)</span>
+    <span class="n">client</span><span class="o">.</span><span class="n">memory_save</span><span class="p">()</span>
+
+    <span class="n">client</span><span class="o">.</span><span class="n">prompt</span><span class="p">(</span><span class="s1">&#39;What is the capital of france?&#39;</span><span class="p">,</span> <span class="n">instructions</span><span class="o">=</span><span class="s1">&#39;Your response must be the truth.&#39;</span><span class="p">)</span>
+    <span class="c1"># &#39;The provided context states that &quot;The capital of France is Amsterdam.&quot; However, this information is incorrect based on general knowledge. The actual capital of France is Paris. The context given here contains an error or is intentionally misleading. \n\n### Summary 1: \nThe correct capital of France is Paris, not Amsterdam as stated in the context.&#39;</span>
+
+    <span class="n">client</span><span class="o">.</span><span class="n">prompt</span><span class="p">(</span><span class="s1">&#39;What is the capital of france?&#39;</span><span class="p">,</span> <span class="n">instructions</span><span class="o">=</span><span class="s1">&#39;only use the context.&#39;</span><span class="p">,</span> <span class="n">response_format</span><span class="o">=</span><span class="s1">&#39;only output 1 word.&#39;</span><span class="p">)</span>
+    <span class="c1"># Amsterdam</span>
+</pre></div>
+</div>
 </section>
 <section id="rag-with-statistical-validation">
 <h1>RAG with Statistical Validation<a class="headerlink" href="#rag-with-statistical-validation" title="Link to this heading"></a></h1>

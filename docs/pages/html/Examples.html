@@ -69,6 +69,7 @@
 <li class="toctree-l1"><a class="reference internal" href="#working-with-files-pdfs">Working with Files (PDFs)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="#create-summaries">Create Summaries</a></li>
 <li class="toctree-l1"><a class="reference internal" href="#adding-and-removing-memory-chunks">Adding and Removing Memory Chunks</a></li>
+<li class="toctree-l1"><a class="reference internal" href="#create-agent-discussion">Create Agent Discussion</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Saving and Loading</span></p>
 <ul>
@@ -180,6 +181,9 @@
 <span class="c1"># Create summary</span>
 <span class="n">text_summary</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">summarize</span><span class="p">(</span><span class="n">context</span><span class="o">=</span><span class="n">pdf_text</span><span class="p">)</span>
 <span class="nb">print</span><span class="p">(</span><span class="n">text_summary</span><span class="p">)</span>
+
+<span class="c1"># release the file lock</span>
+<span class="n">client</span><span class="o">.</span><span class="n">memory_close</span><span class="p">()</span>
 </pre></div>
 </div>
 </section>
@@ -209,6 +213,201 @@
 <span class="c1"># Prompt using stored knowledge</span>
 <span class="n">response</span> <span class="o">=</span> <span class="n">client</span><span class="o">.</span><span class="n">prompt</span><span class="p">(</span><span class="s1">&#39;What do apes like?&#39;</span><span class="p">)</span>
 <span class="nb">print</span><span class="p">(</span><span class="n">response</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="create-agent-discussion">
+<h1>Create Agent Discussion<a class="headerlink" href="#create-agent-discussion" title="Link to this heading"></a></h1>
+<p>One of the most interesting applications is creating autonomous discussions between multiple AI agents.
+In this example, you will learn to setup two different agents, each with its own knowledge base, retrieval settings, and personality.
+During the conversation, every agent uses Retrieval-Augmented Generation (RAG) to retrieve relevant information from its memory before generating a response.
+This allows the agents to reason from different perspectives, challenge each other’s assumptions, and build upon previously exchanged ideas. By assigning distinct expertise domains, such as a Data Scientist, and an Farmer, you can simulate debates, brainstorming sessions, or expert panel discussions.</p>
+<p>See the code block below to combine memory, retrieval, and language generation to create dynamic multi-agent workflows that go far beyond simple question-answer interactions.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">LLMlight</span><span class="w"> </span><span class="kn">import</span> <span class="n">LLMlight</span>
+
+<span class="c1"># ====================================================</span>
+<span class="c1"># Agent A: Data Scientist</span>
+<span class="c1"># ====================================================</span>
+<span class="n">agent_a</span> <span class="o">=</span> <span class="n">LLMlight</span><span class="p">(</span>
+    <span class="n">model</span><span class="o">=</span><span class="s2">&quot;google/gemma-4-26b-a4b-qat&quot;</span><span class="p">,</span>
+    <span class="n">retrieval_method</span><span class="o">=</span><span class="s2">&quot;naive_rag&quot;</span><span class="p">,</span>
+    <span class="n">context_strategy</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+    <span class="n">top_chunks</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span>
+    <span class="n">temperature</span><span class="o">=</span><span class="mf">0.7</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="n">agent_a</span><span class="o">.</span><span class="n">memory_init</span><span class="p">(</span><span class="n">store_path</span><span class="o">=</span><span class="s2">&quot;agent_a.db&quot;</span><span class="p">)</span>
+
+<span class="c1"># ====================================================</span>
+<span class="c1"># Agent B: Farmer</span>
+<span class="c1"># ====================================================</span>
+<span class="n">agent_b</span> <span class="o">=</span> <span class="n">LLMlight</span><span class="p">(</span>
+    <span class="n">model</span><span class="o">=</span><span class="s2">&quot;google/gemma-4-26b-a4b-qat&quot;</span><span class="p">,</span>
+    <span class="n">retrieval_method</span><span class="o">=</span><span class="s2">&quot;naive_rag&quot;</span><span class="p">,</span>
+    <span class="n">context_strategy</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+    <span class="n">top_chunks</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span>
+    <span class="n">temperature</span><span class="o">=</span><span class="mf">0.7</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="n">agent_b</span><span class="o">.</span><span class="n">memory_init</span><span class="p">(</span><span class="n">store_path</span><span class="o">=</span><span class="s2">&quot;agent_b.db&quot;</span><span class="p">)</span>
+
+<span class="c1"># ====================================================</span>
+<span class="c1"># Moderator Agent (keeps discussion structured)</span>
+<span class="c1"># ====================================================</span>
+<span class="n">moderator</span> <span class="o">=</span> <span class="n">LLMlight</span><span class="p">(</span>
+    <span class="n">model</span><span class="o">=</span><span class="s2">&quot;google/gemma-4-26b-a4b-qat&quot;</span><span class="p">,</span>
+    <span class="n">retrieval_method</span><span class="o">=</span><span class="s2">&quot;naive_rag&quot;</span><span class="p">,</span>
+    <span class="n">context_strategy</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+    <span class="n">top_chunks</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span>
+    <span class="n">temperature</span><span class="o">=</span><span class="mf">0.3</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="n">moderator</span><span class="o">.</span><span class="n">memory_init</span><span class="p">(</span><span class="n">store_path</span><span class="o">=</span><span class="s2">&quot;moderator.db&quot;</span><span class="p">)</span>
+
+<span class="c1"># ====================================================</span>
+<span class="c1"># Scoring Agent (decides convergence / stopping)</span>
+<span class="c1"># ====================================================</span>
+<span class="n">scoring_agent</span> <span class="o">=</span> <span class="n">LLMlight</span><span class="p">(</span>
+    <span class="n">model</span><span class="o">=</span><span class="s2">&quot;google/gemma-4-26b-a4b-qat&quot;</span><span class="p">,</span>
+    <span class="n">retrieval_method</span><span class="o">=</span><span class="s2">&quot;naive_rag&quot;</span><span class="p">,</span>
+    <span class="n">context_strategy</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+    <span class="n">top_chunks</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span>
+    <span class="n">temperature</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span>  <span class="c1"># deterministic scoring</span>
+<span class="p">)</span>
+<span class="n">scoring_agent</span><span class="o">.</span><span class="n">memory_init</span><span class="p">(</span><span class="n">store_path</span><span class="o">=</span><span class="s2">&quot;scoring.db&quot;</span><span class="p">)</span>
+
+
+<span class="c1"># ====================================================</span>
+<span class="c1"># Shared memory (optional logging)</span>
+<span class="c1"># ====================================================</span>
+<span class="n">shared_memory</span> <span class="o">=</span> <span class="n">LLMlight</span><span class="p">(</span><span class="n">model</span><span class="o">=</span><span class="s2">&quot;google/gemma-4-26b-a4b-qat&quot;</span><span class="p">)</span>
+<span class="n">shared_memory</span><span class="o">.</span><span class="n">memory_init</span><span class="p">(</span><span class="n">store_path</span><span class="o">=</span><span class="s2">&quot;discussion.db&quot;</span><span class="p">)</span>
+
+
+<span class="c1"># ====================================================</span>
+<span class="c1"># Discussion Loop with early stopping</span>
+<span class="c1"># ====================================================</span>
+<span class="n">topic</span> <span class="o">=</span> <span class="s2">&quot;Discuss the importance of attention mechanisms in modern AI.&quot;</span>
+<span class="n">message</span> <span class="o">=</span> <span class="n">topic</span>
+
+<span class="n">MAX_ROUNDS</span> <span class="o">=</span> <span class="mi">5</span>
+<span class="n">AGREEMENT_THRESHOLD</span> <span class="o">=</span> <span class="mf">0.85</span>  <span class="c1"># stop if convergence is high enough</span>
+
+<span class="k">for</span> <span class="n">turn</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">MAX_ROUNDS</span><span class="p">):</span>
+
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="si">{</span><span class="s1">&#39;=&#39;</span><span class="o">*</span><span class="mi">80</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;ROUND </span><span class="si">{</span><span class="n">turn</span><span class="o">+</span><span class="mi">1</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="s1">&#39;=&#39;</span><span class="o">*</span><span class="mi">80</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="c1"># --------------------------</span>
+    <span class="c1"># Agent A</span>
+    <span class="c1"># --------------------------</span>
+    <span class="n">response_a</span> <span class="o">=</span> <span class="n">agent_a</span><span class="o">.</span><span class="n">prompt</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;&quot;&quot;</span>
+<span class="s2">    You are a Data Scientist.</span>
+
+<span class="s2">    Topic:</span>
+<span class="s2">    </span><span class="si">{</span><span class="n">message</span><span class="si">}</span>
+
+<span class="s2">    Respond in 1-2 paragraphs and ask a question.</span>
+<span class="s2">    &quot;&quot;&quot;</span><span class="p">)</span>
+
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Agent A:&quot;</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="n">response_a</span><span class="p">)</span>
+
+    <span class="c1"># --------------------------</span>
+    <span class="c1"># Agent B</span>
+    <span class="c1"># --------------------------</span>
+    <span class="n">response_b</span> <span class="o">=</span> <span class="n">agent_b</span><span class="o">.</span><span class="n">prompt</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;&quot;&quot;</span>
+<span class="s2">    You are a Farmer.</span>
+
+<span class="s2">    Data Scientist said:</span>
+<span class="s2">    </span><span class="si">{</span><span class="n">response_a</span><span class="si">}</span>
+
+<span class="s2">    Respond in 1-2 paragraphs and continue the discussion.</span>
+<span class="s2">    &quot;&quot;&quot;</span><span class="p">)</span>
+
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Agent B:&quot;</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="n">response_b</span><span class="p">)</span>
+
+    <span class="c1"># --------------------------</span>
+    <span class="c1"># Moderator summary</span>
+    <span class="c1"># --------------------------</span>
+    <span class="n">moderator_summary</span> <span class="o">=</span> <span class="n">moderator</span><span class="o">.</span><span class="n">prompt</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;&quot;&quot;</span>
+<span class="s2">    You are a neutral moderator.</span>
+
+<span class="s2">    Data Scientist:</span>
+<span class="s2">    </span><span class="si">{</span><span class="n">response_a</span><span class="si">}</span>
+
+<span class="s2">    Farmer:</span>
+<span class="s2">    </span><span class="si">{</span><span class="n">response_b</span><span class="si">}</span>
+
+<span class="s2">    Summarize:</span>
+<span class="s2">    - agreements</span>
+<span class="s2">    - disagreements</span>
+<span class="s2">    - next question toward consensus</span>
+<span class="s2">    &quot;&quot;&quot;</span><span class="p">)</span>
+
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Moderator:&quot;</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="n">moderator_summary</span><span class="p">)</span>
+
+    <span class="c1"># --------------------------</span>
+    <span class="c1"># Scoring Agent (convergence check)</span>
+    <span class="c1"># --------------------------</span>
+    <span class="n">score_output</span> <span class="o">=</span> <span class="n">scoring_agent</span><span class="o">.</span><span class="n">prompt</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;&quot;&quot;</span>
+<span class="s2">    You are a scoring system.</span>
+
+<span class="s2">    Evaluate agreement between the two agents.</span>
+
+<span class="s2">    Data Scientist:</span>
+<span class="s2">    </span><span class="si">{</span><span class="n">response_a</span><span class="si">}</span>
+
+<span class="s2">    Farmer:</span>
+<span class="s2">    </span><span class="si">{</span><span class="n">response_b</span><span class="si">}</span>
+
+<span class="s2">    Moderator summary:</span>
+<span class="s2">    </span><span class="si">{</span><span class="n">moderator_summary</span><span class="si">}</span>
+
+<span class="s2">    Return ONLY a number between 0 and 1:</span>
+<span class="s2">    - 1.0 = full agreement / consensus reached</span>
+<span class="s2">    - 0.0 = complete disagreement</span>
+<span class="s2">    &quot;&quot;&quot;</span><span class="p">)</span>
+
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">score</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">score_output</span><span class="o">.</span><span class="n">strip</span><span class="p">())</span>
+    <span class="k">except</span><span class="p">:</span>
+        <span class="n">score</span> <span class="o">=</span> <span class="mf">0.0</span>
+
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Agreement Score:&quot;</span><span class="p">,</span> <span class="n">score</span><span class="p">)</span>
+
+    <span class="c1"># --------------------------</span>
+    <span class="c1"># Store memory</span>
+    <span class="c1"># --------------------------</span>
+    <span class="n">shared_memory</span><span class="o">.</span><span class="n">memory_add</span><span class="p">(</span><span class="n">response_a</span><span class="p">)</span>
+    <span class="n">shared_memory</span><span class="o">.</span><span class="n">memory_add</span><span class="p">(</span><span class="n">response_b</span><span class="p">)</span>
+    <span class="n">shared_memory</span><span class="o">.</span><span class="n">memory_add</span><span class="p">(</span><span class="n">moderator_summary</span><span class="p">)</span>
+
+    <span class="c1"># --------------------------</span>
+    <span class="c1"># Early stopping condition</span>
+    <span class="c1"># --------------------------</span>
+    <span class="k">if</span> <span class="n">score</span> <span class="o">&gt;=</span> <span class="n">AGREEMENT_THRESHOLD</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Consensus reached early. Stopping discussion.&quot;</span><span class="p">)</span>
+        <span class="k">break</span>
+
+    <span class="c1"># Next round context</span>
+    <span class="n">message</span> <span class="o">=</span> <span class="n">moderator_summary</span>
+
+
+<span class="c1"># ====================================================</span>
+<span class="c1"># Final summary</span>
+<span class="c1"># ====================================================</span>
+<span class="n">final_summary</span> <span class="o">=</span> <span class="n">shared_memory</span><span class="o">.</span><span class="n">prompt</span><span class="p">(</span><span class="s2">&quot;&quot;&quot;</span>
+<span class="s2">Summarize the full discussion:</span>
+
+<span class="s2">- final consensus</span>
+<span class="s2">- key arguments</span>
+<span class="s2">- remaining open points (if any)</span>
+<span class="s2">&quot;&quot;&quot;</span><span class="p">)</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">FINAL SUMMARY&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="s2">&quot;=&quot;</span> <span class="o">*</span> <span class="mi">80</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">final_summary</span><span class="p">)</span>
 </pre></div>
 </div>
 <hr>

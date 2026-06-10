@@ -68,6 +68,7 @@
 <li class="toctree-l1"><a class="reference internal" href="Examples.html#working-with-files-pdfs">Working with Files (PDFs)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="Examples.html#create-summaries">Create Summaries</a></li>
 <li class="toctree-l1"><a class="reference internal" href="Examples.html#adding-and-removing-memory-chunks">Adding and Removing Memory Chunks</a></li>
+<li class="toctree-l1"><a class="reference internal" href="Examples.html#create-agent-discussion">Create Agent Discussion</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Saving and Loading</span></p>
 <ul>
@@ -95,6 +96,7 @@
 <li class="toctree-l3"><a class="reference internal" href="#LLMlight.LLMlight.LLMlight.global_reasoning"><code class="docutils literal notranslate"><span class="pre">LLMlight.global_reasoning()</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="#LLMlight.LLMlight.LLMlight.memory_add"><code class="docutils literal notranslate"><span class="pre">LLMlight.memory_add()</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="#LLMlight.LLMlight.LLMlight.memory_chunks"><code class="docutils literal notranslate"><span class="pre">LLMlight.memory_chunks()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#LLMlight.LLMlight.LLMlight.memory_close"><code class="docutils literal notranslate"><span class="pre">LLMlight.memory_close()</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="#LLMlight.LLMlight.LLMlight.memory_init"><code class="docutils literal notranslate"><span class="pre">LLMlight.memory_init()</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="#LLMlight.LLMlight.LLMlight.memory_load"><code class="docutils literal notranslate"><span class="pre">LLMlight.memory_load()</span></code></a></li>
 <li class="toctree-l3"><a class="reference internal" href="#LLMlight.LLMlight.LLMlight.memory_reindex"><code class="docutils literal notranslate"><span class="pre">LLMlight.memory_reindex()</span></code></a></li>
@@ -115,7 +117,6 @@
 <li class="toctree-l2"><a class="reference internal" href="#LLMlight.LLMlight.compute_max_tokens"><code class="docutils literal notranslate"><span class="pre">compute_max_tokens()</span></code></a></li>
 <li class="toctree-l2"><a class="reference internal" href="#LLMlight.LLMlight.compute_tokens"><code class="docutils literal notranslate"><span class="pre">compute_tokens()</span></code></a></li>
 <li class="toctree-l2"><a class="reference internal" href="#LLMlight.LLMlight.convert_messages_to_model"><code class="docutils literal notranslate"><span class="pre">convert_messages_to_model()</span></code></a></li>
-<li class="toctree-l2"><a class="reference internal" href="#LLMlight.LLMlight.convert_verbose_to_new"><code class="docutils literal notranslate"><span class="pre">convert_verbose_to_new()</span></code></a></li>
 <li class="toctree-l2"><a class="reference internal" href="#LLMlight.LLMlight.disable_tqdm"><code class="docutils literal notranslate"><span class="pre">disable_tqdm()</span></code></a></li>
 <li class="toctree-l2"><a class="reference internal" href="#LLMlight.LLMlight.get_embeddings"><code class="docutils literal notranslate"><span class="pre">get_embeddings()</span></code></a></li>
 <li class="toctree-l2"><a class="reference internal" href="#LLMlight.LLMlight.get_logger"><code class="docutils literal notranslate"><span class="pre">get_logger()</span></code></a></li>
@@ -485,7 +486,7 @@ Defaults to a standard set (pdf, txt, epub, md, doc, docx, …).</p></li>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="LLMlight.LLMlight.LLMlight.memory_chunks">
-<span class="sig-name descname"><span class="pre">memory_chunks</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">n</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">10</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">list</span></span></span><a class="headerlink" href="#LLMlight.LLMlight.LLMlight.memory_chunks" title="Link to this definition"></a></dt>
+<span class="sig-name descname"><span class="pre">memory_chunks</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">n</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">list</span></span></span><a class="headerlink" href="#LLMlight.LLMlight.LLMlight.memory_chunks" title="Link to this definition"></a></dt>
 <dd><p>Return up to <em>n</em> stored chunks from the memory store.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -495,6 +496,30 @@ Defaults to a standard set (pdf, txt, epub, md, doc, docx, …).</p></li>
 <dd class="field-even"><p>list of str</p>
 </dd>
 </dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="LLMlight.LLMlight.LLMlight.memory_close">
+<span class="sig-name descname"><span class="pre">memory_close</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#LLMlight.LLMlight.LLMlight.memory_close" title="Link to this definition"></a></dt>
+<dd><p>Close the memory backend and release the file lock.</p>
+<p>Calls <code class="docutils literal notranslate"><span class="pre">close()</span></code> on the active backend (flushing any WAL journal and
+releasing the SQLite file lock), then removes <code class="docutils literal notranslate"><span class="pre">self.memory</span></code> so the
+instance is in a clean state.  Safe to call even when no store is open.</p>
+<p>This is the recommended way to free the lock before deleting or
+overwriting the store file — especially on Windows where an open
+connection prevents deletion.</p>
+<p class="rubric">Examples</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">client</span><span class="o">.</span><span class="n">memory_close</span><span class="p">()</span>          <span class="c1"># release lock</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">os</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="s1">&#39;knowledge.db&#39;</span><span class="p">)</span>      <span class="c1"># now safe to delete</span>
+</pre></div>
+</div>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="c1"># Overwrite the database entirely</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">client</span><span class="o">.</span><span class="n">memory_close</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">client</span><span class="o">.</span><span class="n">memory_init</span><span class="p">(</span><span class="s1">&#39;knowledge.db&#39;</span><span class="p">,</span> <span class="n">overwrite</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">client</span><span class="o">.</span><span class="n">memory_add</span><span class="p">(</span><span class="n">text</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;fresh data&#39;</span><span class="p">])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">client</span><span class="o">.</span><span class="n">memory_save</span><span class="p">()</span>
+</pre></div>
+</div>
 </dd></dl>
 
 <dl class="py method">
@@ -919,12 +944,6 @@ and any unrecognised model id.</p>
 <span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">convert_messages_to_model</span><span class="p">(</span><span class="n">messages</span><span class="p">,</span> <span class="n">model</span><span class="o">=</span><span class="s1">&#39;google/gemma-3-12b&#39;</span><span class="p">))</span>
 </pre></div>
 </div>
-</dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="LLMlight.LLMlight.convert_verbose_to_new">
-<span class="sig-prename descclassname"><span class="pre">LLMlight.LLMlight.</span></span><span class="sig-name descname"><span class="pre">convert_verbose_to_new</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">verbose</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#LLMlight.LLMlight.convert_verbose_to_new" title="Link to this definition"></a></dt>
-<dd><p>Convert old verbosity to the new.</p>
 </dd></dl>
 
 <dl class="py function">

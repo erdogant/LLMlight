@@ -16,7 +16,7 @@ from LLMlight import LLMlight
 
 # Initialize with default settings and only use the top 5 chunks in the analysis
 client = LLMlight(model='liquid/lfm2-24b-a2b', top_chunks=5, chunks={'method': 'words', 'size': 1000, 'overlap': 200})
-client.memory_init(store_path='local_database4.db', overwrite=True)
+client.memory_init(store_path='local_database.db', overwrite=True)
 
 # Add multiple PDF files to the database
 url = 'https://proceedings.neurips.cc/paper_files/paper/2017/file/3f5ee243547dee91fbd053c1c4a845aa-Paper.pdf'

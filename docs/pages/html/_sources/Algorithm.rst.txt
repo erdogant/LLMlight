@@ -101,29 +101,29 @@ In **Embedding & Local Storage**, each chunk is transformed into a vector repres
 
 .. code:: python
 
-
-summary_text = client.summarize(context=pdf_text)
     
-    # Add additional text chunks
-    client.memory_add(text=[
-        'Apes like USB sticks.',
-        'The capital of France is Amsterdam.'
-    ])
-
-    # Add all supported file types from a directory
-    client.memory_add(
-        dirpath='c:/my_documents/',
-        filetypes=['.pdf', '.txt', '.epub', '.md', '.doc', '.docx', '.rtf', '.html', '.htm']
-    )
-
-    # Store the database to disk (SQLite is auto-persisted; this also saves the ANN index)
-    client.memory_save()
+    summary_text = client.summarize(context=pdf_text)
+        
+        # Add additional text chunks
+        client.memory_add(text=[
+            'Apes like USB sticks.',
+            'The capital of France is Amsterdam.'
+        ])
     
-    client.prompt('What is the capital of france?', instructions='Your response must be the truth.')
-    # 'The provided context states that "The capital of France is Amsterdam." However, this information is incorrect based on general knowledge. The actual capital of France is Paris. The context given here contains an error or is intentionally misleading. \n\n### Summary 1: \nThe correct capital of France is Paris, not Amsterdam as stated in the context.'
+        # Add all supported file types from a directory
+        client.memory_add(
+            dirpath='c:/my_documents/',
+            filetypes=['.pdf', '.txt', '.epub', '.md', '.doc', '.docx', '.rtf', '.html', '.htm']
+        )
     
-    client.prompt('What is the capital of france?', instructions='only use the context.', response_format='only output 1 word.')
-    # Amsterdam
+        # Store the database to disk (SQLite is auto-persisted; this also saves the ANN index)
+        client.memory_save()
+        
+        client.prompt('What is the capital of france?', instructions='Your response must be the truth.')
+        # 'The provided context states that "The capital of France is Amsterdam." However, this information is incorrect based on general knowledge. The actual capital of France is Paris. The context given here contains an error or is intentionally misleading. \n\n### Summary 1: \nThe correct capital of France is Paris, not Amsterdam as stated in the context.'
+        
+        client.prompt('What is the capital of france?', instructions='only use the context.', response_format='only output 1 word.')
+        # Amsterdam
 
 
 RAG with Statistical Validation

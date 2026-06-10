@@ -535,10 +535,11 @@ client = LLMlight()
 
 # %%
 
+dbname = 'knowledge_store.db'
 
 from LLMlight import LLMlight
 client = LLMlight(model='gemma-4-e2b-it')
-client.memory_init(store_path='knowledge_store.db')
+client.memory_init(store_path=dbname)
 client.memory_add(text=['BMC test1'])
 client.memory.get_all_chunks()
 results = client.memory.search('bmc')
@@ -552,7 +553,7 @@ from LLMlight import LLMlight
 # normal init
 client = LLMlight(model='gemma-4-e2b-it')
 # Init or load when exists
-client.memory_init(store_path='knowledge_store.db')
+client.memory_init(store_path=dbname)
 client.memory_chunks()
 
 # Add text
@@ -561,13 +562,13 @@ client.memory_add(text=['BMC test3'])
 results = client.memory.search('bmc')
 # [(31, 0.23, {'text': 'BMC test', 'id': 31})]
 client.memory_chunks()
+client.prompt('what do you know about BMC?')
 
 client.memory_remove(ids=results[0][0])
 client.memory_remove(query='BMC')     # by query (top-1 match)
 client.memory_remove(query='BMC', top_k=3)  # top-3 matches
-
-client.prompt('hi')
 client.prompt('what do you know about BMC?')
+
 
 # %%
 
