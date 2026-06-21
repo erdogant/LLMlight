@@ -52,7 +52,7 @@ class LLMlight:
     2. Go to left panel and select developers mode.
     3. On top select your model of interest.
     4. Then go to settings in the top bar.
-    5. Enable "server on local network" if you need.
+    5. Enable "server on local network" (only use when needed).
     6. Enable Running.
 
     How LLMlight Works
@@ -110,12 +110,9 @@ class LLMlight:
         Model identifier served by the endpoint, e.g. ``'mistralai/mistral-small-3.2'``, ``'unsloth/gemma-4-26b-a4b-it'``, ``'qwen/qwen3-coder-30b'``.
         When ``None`` the available models are listed and ``__init__`` returns early.
     retrieval_method : str, default ``'naive_rag'``
-        None          -- No chunking. The entire context is forwarded to the LLM.
-                        Use only when context fits within ``n_ctx``.
-        'naive_rag'   -- Context is split into chunks; top-k chunks are selected by
-                        cosine similarity and combined into the prompt.
-        'RSE'         -- Relevant Segment Extraction: contiguous high-scoring segments
-                        are identified and reconstructed. Requires ``embedding`` in ``('bert', 'bge-small')``.
+        None          -- No chunking. The entire context is forwarded to the LLM. Use only when context fits within ``n_ctx``.
+        'naive_rag'   -- Context is split into chunks; top-k chunks are selected by cosine similarity and combined into the prompt.
+        'RSE'         -- Relevant Segment Extraction: contiguous high-scoring segments are identified and reconstructed. Requires ``embedding`` in ``('bert', 'bge-small')``.
     embedding : str, dict, or None, default ``None``
         Controls how text is vectorised for retrieval.
 
@@ -153,9 +150,8 @@ class LLMlight:
         ``'chunk_size'`` -> ``'size'``.
     top_chunks : int, default ``5``
         Number of top-ranked chunks returned by retrieval.
-    n_ctx : int, default ``8192``
-        Model context window in tokens. Used to compute ``max_tokens`` for each
-        request and to warn when a prompt is likely to overflow.
+    n_ctx : int, default ``None``
+        Model context window in tokens. This is automatically derived from the model settings when set to None.
     file_path : str or None, default ``None``
         Path to an existing memory store to load at construction time.
         Relative paths are resolved under the LLMlight temp directory.
@@ -205,7 +201,7 @@ class LLMlight:
                  temperature: float = 0.8,
                  top_p: float = 1.0,
                  chunks: dict = None,
-                 n_ctx: int = 8192,
+                 n_ctx: int = None,
                  file_path: str = None,
                  endpoint: str = "http://localhost:1234/v1/chat/completions",
                  verbose: (str, int) = 'info',
@@ -213,7 +209,7 @@ class LLMlight:
 
         # Set the logger
         set_logger(verbose)
-
+        
         # Validate and normalise all parameters before storing anything
         params = _validate_params(
             model=model,
@@ -225,7 +221,6 @@ class LLMlight:
             temperature=temperature,
             top_p=top_p,
             chunks=chunks,
-            n_ctx=n_ctx,
         )
 
         # Store validated/normalised values -- all set unconditionally so every
@@ -239,11 +234,20 @@ class LLMlight:
         self.temperature      = params['temperature']
         self.top_p            = params['top_p']
         self.chunks           = params['chunks']
-        self.n_ctx            = params['n_ctx']
+        self.n_ctx            = n_ctx
         self.endpoint         = endpoint
         self.context          = None
         self.tempdir          = os.path.join(tempfile.gettempdir(), 'temp_LLMlight')
         self.store_path       = self._resolve_file_path(file_path)
+        self.modelinfo        = {}
+
+        # Get the max context length
+        if self.model is not None and (n_ctx is None or n_ctx < 512):
+            # Store modelinfo
+            self.modelinfo = self.get_model_info(model=model)
+            # self.n_ctx = modelinfo.get('max_context_length') or 8192
+            loaded = self.modelinfo.get("loaded_instances") or []
+            self.n_ctx = (loaded[0].get("config", {}).get("context_length", 16384) if loaded else 16384)
 
         # When no model is given, report available models and return early.
         # All attributes above are already set so tests can inspect them.
@@ -275,6 +279,7 @@ class LLMlight:
         logger.info(f'Embedding        : {self.embedding}')
         logger.info(f'Alpha (sig. test): {self.alpha}')
         logger.info(f'Chunk config     : {self.chunks}')
+        logger.info(f'Contex window    : {self.n_ctx}')
         logger.info('LLMlight initialised.')
 
     def _resolve_file_path(self, filepath: str):
@@ -342,7 +347,7 @@ class LLMlight:
             ``'string'``              -- Plain text; ``<think>...</think>`` blocks removed.
             ``'string_with_thinking'``-- Plain text including any thinking blocks.
             ``'dict'``                -- Parse response as JSON and return a dict.
-            ``'max'``                 -- Return the full raw API response object.
+            ``'raw'``                 -- Return the full raw API response object.
         verbose : str or int, optional
             Override logging verbosity for this call only.
 
@@ -408,7 +413,7 @@ class LLMlight:
         # Return
         return response
 
-    def requests_post_gguf(self, prompt, system, temperature=0.8, top_p=1, headers=None, task='max', stream=False, return_type='string'):
+    def requests_post_gguf(self, prompt, system, temperature=0.8, top_p=0.95, headers=None, task='max', stream=False, return_type='string'):
         # Note that it is better to use messages_prompt instead of a dict (messages_dict) because most GGUF-based models don't have a tokenizer/parser that can interpret the JSON-style message structure.
         # Prepare data for request.
         if headers is None: headers = {"Content-Type": "application/json"}
@@ -438,34 +443,77 @@ class LLMlight:
         # Return
         return response
 
-    def requests_post_http(self, prompt, system, temperature=0.8, top_p=1, headers=None, task='max', stream=False, return_type='string', max_tokens=None):
-        # Prepare data for request.
-        if headers is None: headers = {"Content-Type": "application/json"}
+    def requests_post_http(
+        self,
+        prompt,
+        system,
+        temperature=0.8,
+        top_p=1,
+        headers=None,
+        task='max',
+        stream=False,
+        return_type='string'):
+
+        # Prepare headers
+        if headers is None:
+            headers = {"Content-Type": "application/json"}
+    
         # Prepare messages
-        messages = [{"role": "system", "content": system}, {"role": "user", "content": prompt}]
-
-        # Convert messages to string prompt
-        prompt = convert_messages_to_model(messages, model=self.model)
-
-        # Compute tokens
-        if max_tokens is None:
-            used_tokens, max_tokens = compute_tokens(prompt, n_ctx=self.n_ctx, task=task)
-        # logger.info(f'Generating response with {self.model}')
-
+        messages = [
+            {"role": "system", "content": system},
+            {"role": "user", "content": prompt},
+        ]
+    
+        # Convert messages to string prompt for local token estimation
+        prompt_string = convert_messages_to_model(messages, model=self.model)
+    
+        # Estimate prompt tokens and max generation budget
+        estimated_prompt_tokens, max_tokens = compute_tokens(prompt_string, n_ctx=self.n_ctx, task=task)
+    
         data = {
             "model": self.model,
             "messages": messages,
             "temperature": temperature,
             "top_p": top_p,
             "stream": stream,
+            "estimated_prompt_tokens": estimated_prompt_tokens,
             "max_tokens": max_tokens,
-            }
-
+        }
+    
         # Send POST request
         response = self.requests_post(headers, data, stream=stream, return_type=return_type)
-
-        # Return
+    
+        # Return response
         return response
+
+    # def requests_post_http(self, prompt, system, temperature=0.8, top_p=1, headers=None, task='max', stream=False, return_type='string'):
+    #     # Prepare data for request.
+    #     if headers is None: headers = {"Content-Type": "application/json"}
+    #     # Prepare messages
+    #     messages = [{"role": "system", "content": system}, {"role": "user", "content": prompt}]
+
+    #     # Convert messages to string prompt
+    #     prompt = convert_messages_to_model(messages, model=self.model)
+
+    #     # Compute tokens
+    #     if max_tokens is None:
+    #         used_tokens, max_tokens = compute_tokens(prompt, n_ctx=self.n_ctx, task=task)
+    #     # logger.info(f'Generating response with {self.model}')
+
+    #     data = {
+    #         "model": self.model,
+    #         "messages": messages,
+    #         "temperature": temperature,
+    #         "top_p": top_p,
+    #         "stream": stream,
+    #         "max_tokens": max_tokens,
+    #         }
+
+    #     # Send POST request
+    #     response = self.requests_post(headers, data, stream=stream, return_type=return_type)
+
+    #     # Return
+    #     return response
 
     def requests_post(self, headers, data, stream=False, return_type='string'):
         """Create the request to the LLM."""
@@ -1632,7 +1680,40 @@ class LLMlight:
 
         # Return
         return context
+    
 
+    def get_model_info(self, model=None):
+        logger.info(f'Collecting model info..')
+        if model is None and hasattr(self, 'model'): model = self.model
+        if model is None:
+            return {}
+
+        # Get model url
+        model_url = self.get_model_endpoint()
+        response = requests.get(model_url, timeout=10)
+
+        # Check status
+        if response.status_code == 200:
+            try:
+                modelnames = response.json()["models"]
+                for modelname in modelnames:
+                    if modelname["key"]==model:
+                        logger.info(f'Model info collected: {model}')
+                        return modelname
+            except (KeyError, ValueError) as e:
+                logger.error("Error parsing model data:", e)
+
+        # If nothing is found, return None
+        return {}
+
+    def get_model_endpoint(self):
+        base_url = '/'.join(self.endpoint.split('/')[:3])
+        model_url = f"{base_url}/api/v1/models"
+        # base_url = '/'.join(self.endpoint.split('/')[:3]) + '/'
+        # model_url = base_url.rstrip('/') + '/v1/models'
+        return model_url
+
+    
     def get_available_models(self, validate=False):
         """Retrieve available models from the configured API endpoint.
 
@@ -1667,17 +1748,16 @@ class LLMlight:
         - Requires an accessible endpoint and valid API response.
         - Relies on the `LLMlight` class for validation (must be importable).
         """
-        base_url = '/'.join(self.endpoint.split('/')[:3]) + '/'
         logger.info(f'Collecting models at API endpoint: {self.endpoint}')
+        model_url = self.get_model_endpoint()
         models = None
 
         try:
-            model_url = base_url.rstrip('/') + '/v1/models'
             response = requests.get(model_url, timeout=10)
             if response.status_code == 200:
                 try:
-                    get_models = response.json()["data"]
-                    model_dict = {model["id"]: model for model in get_models}
+                    get_models = response.json()["models"]
+                    model_dict = {model["key"]: model for model in get_models}
                     models = list(model_dict.keys())
                 except (KeyError, ValueError) as e:
                     logger.error("Error parsing model data:", e)
@@ -1696,8 +1776,8 @@ class LLMlight:
             keys = copy.deepcopy(list(model_dict.keys()))
 
             for key in keys:
-                # logger.info(f'Checking: {key}')
                 from LLMlight import LLMlight
+                # logger.info(f'Checking: {key}')
                 llm = LLMlight(model=key)
                 response = llm.prompt('What is the capital of France?', instructions="You are only allowed to return one word.", return_type='string')
                 response = response[0:30].replace('\n', ' ').replace('\r', ' ').lower()
@@ -1850,8 +1930,7 @@ def _resolve_chunks(chunks) -> dict:
     return merged
 
 
-def _validate_params(model, retrieval_method, embedding, context_strategy,
-                     alpha, top_chunks, temperature, top_p, chunks, n_ctx) -> dict:
+def _validate_params(model, retrieval_method, embedding, context_strategy, alpha, top_chunks, temperature, top_p, chunks) -> dict:
     """Validate all constructor parameters and return a normalised dict.
 
     Raises ValueError or TypeError with a clear message on any bad value.
@@ -1877,8 +1956,6 @@ def _validate_params(model, retrieval_method, embedding, context_strategy,
         raise ValueError(f"temperature must be a float in [0, 2], got {temperature!r}.")
     if not isinstance(top_p, (int, float)) or not (0.0 < top_p <= 1.0):
         raise ValueError(f"top_p must be a float in (0, 1], got {top_p!r}.")
-    if not isinstance(n_ctx, int) or n_ctx < 512:
-        raise ValueError(f"n_ctx must be an integer >= 512, got {n_ctx!r}.")
 
     return {
         'model':            model,
@@ -1890,7 +1967,6 @@ def _validate_params(model, retrieval_method, embedding, context_strategy,
         'temperature':      float(temperature),
         'top_p':            float(top_p),
         'chunks':           _resolve_chunks(chunks),
-        'n_ctx':            n_ctx,
     }
 
 
@@ -2011,122 +2087,192 @@ def load_local_gguf_model(model_path: str, n_ctx: int=4096, n_threads: int=8, n_
     # Return
     return llm
 
-def compute_tokens(string, n_ctx=4096, task='max'):
-    """Estimate the token count of *string* and compute the generation budget.
+# def compute_tokens(string, n_ctx=4096, task='max'):
+#     """Estimate the token count of *string* and compute the generation budget.
 
-    Uses the GPT-2 tokenizer as a fast, dependency-light approximation.  Token
-    counts for non-GPT-2 model families (Llama, Mistral, Gemma, ...) may differ
-    by up to ~30 %, so treat the result as an estimate rather than an exact value.
+#     Uses the GPT-2 tokenizer as a fast, dependency-light approximation.  Token
+#     counts for non-GPT-2 model families (Llama, Mistral, Gemma, ...) may differ
+#     by up to ~30 %, so treat the result as an estimate rather than an exact value.
 
-    Unlike a naive approach the prompt is encoded **without** truncation so the
-    real length is always visible.  A warning is emitted when the prompt exceeds
-    ``n_ctx`` so the caller can react rather than silently losing context.
+#     Unlike a naive approach the prompt is encoded **without** truncation so the
+#     real length is always visible.  A warning is emitted when the prompt exceeds
+#     ``n_ctx`` so the caller can react rather than silently losing context.
+
+#     Parameters
+#     ----------
+#     string : str
+#         The full prompt string to measure.
+#     n_ctx : int, default ``4096``
+#         Model context window in tokens.
+#     task : str, default ``'max'``
+#         Generation task passed to :func:`compute_max_tokens` to determine the
+#         fraction of remaining tokens allocated for the response.
+
+#     Returns
+#     -------
+#     (used_tokens, max_tokens) : tuple of int
+#         ``used_tokens`` -- estimated tokens consumed by the prompt.
+#         ``max_tokens``  -- tokens available for generation, capped by ``n_ctx``.
+#     """
+#     try:
+#         from transformers import AutoTokenizer
+#     except Exception as e:
+#         raise ImportError("transformers is required for token counting. Install via 'pip install transformers'") from e
+
+#     import warnings
+#     tokenizer = AutoTokenizer.from_pretrained("gpt2")
+#     # Encode WITHOUT truncation so we get the real token count.
+#     # The GPT-2 tokenizer warns when the sequence exceeds its own 1024-token
+#     # training limit, but here we are only *counting* tokens — not running
+#     # GPT-2 — so the warning is a false alarm and we suppress it.
+#     with warnings.catch_warnings():
+#         warnings.filterwarnings(
+#             "ignore",
+#             message="Token indices sequence length is longer than the specified maximum",
+#         )
+#         tokens = tokenizer.encode(string)
+#     used_tokens = len(tokens)
+#     if used_tokens > n_ctx:
+#         logger.warning(
+#             "Prompt length (%d tokens) exceeds the model context window (%d tokens). "
+#             "The model will truncate the input and important context may be lost.\n"
+#             "\n"
+#             "  How to fix:\n"
+#             "  * Reduce chunk size:   LLMlight(..., chunks={'size': 500})\n"
+#             "    Smaller chunks = fewer tokens per prompt.\n"
+#             "  * Reduce chunk overlap: LLMlight(..., chunks={'overlap': 50})\n"
+#             "  * Reduce top_chunks:   LLMlight(..., top_chunks=3)\n"
+#             "    Fewer chunks combined into a single prompt.\n"
+#             "  * Use summarize():     client.summarize(context=text)\n"
+#             "    Splits the document automatically, chunk by chunk.\n"
+#             "  * Increase n_ctx:      LLMlight(..., n_ctx=8192)\n"
+#             "    Only works if your model actually supports a larger window.",
+#             used_tokens, n_ctx,
+#         )
+#     # Determine how many tokens are available for the model to generate
+#     max_tokens = compute_max_tokens(used_tokens, n_ctx=n_ctx, task=task)
+#     # Show message
+#     logger.info(f"Used_tokens={used_tokens}, max_tokens={max_tokens}, context_limit={n_ctx}")
+#     # Return
+#     return used_tokens, max_tokens
+
+def compute_tokens(text: str, n_ctx: int = 4096, chars_per_token=3.5, task: str = "max"):
+    """
+    Estimate token usage using a model-agnostic approximation.
+
+    We assume:
+        1 token ≈ 3.5 characters
+
+    This avoids model-specific tokenizers and provides a fast,
+    reproducible estimate across different LLM providers.
 
     Parameters
     ----------
-    string : str
-        The full prompt string to measure.
-    n_ctx : int, default ``4096``
-        Model context window in tokens.
-    task : str, default ``'max'``
-        Generation task passed to :func:`compute_max_tokens` to determine the
-        fraction of remaining tokens allocated for the response.
+    text : str
+        Prompt text.
+    n_ctx : int, default=4096
+        Model context window.
+    chars_per_token : float, default=305
+        3: for coding
+        4: for english
+        3.5 average usage
+    task : str, default='max'
+        Generation task.
 
     Returns
     -------
-    (used_tokens, max_tokens) : tuple of int
-        ``used_tokens`` -- estimated tokens consumed by the prompt.
-        ``max_tokens``  -- tokens available for generation, capped by ``n_ctx``.
+    used_tokens : int
+        Estimated prompt tokens.
+    max_tokens : int
+        Recommended generation budget.
     """
-    try:
-        from transformers import AutoTokenizer
-    except Exception as e:
-        raise ImportError("transformers is required for token counting. Install via 'pip install transformers'") from e
+    # Estimate the used tokens
+    used_tokens = max(1, int(len(text) / chars_per_token))
 
-    import warnings
-    tokenizer = AutoTokenizer.from_pretrained("gpt2")
-    # Encode WITHOUT truncation so we get the real token count.
-    # The GPT-2 tokenizer warns when the sequence exceeds its own 1024-token
-    # training limit, but here we are only *counting* tokens — not running
-    # GPT-2 — so the warning is a false alarm and we suppress it.
-    with warnings.catch_warnings():
-        warnings.filterwarnings(
-            "ignore",
-            message="Token indices sequence length is longer than the specified maximum",
-        )
-        tokens = tokenizer.encode(string)
-    used_tokens = len(tokens)
-    if used_tokens > n_ctx:
-        logger.warning(
-            "Prompt length (%d tokens) exceeds the model context window (%d tokens). "
-            "The model will truncate the input and important context may be lost.\n"
-            "\n"
-            "  How to fix:\n"
-            "  * Reduce chunk size:   LLMlight(..., chunks={'size': 500})\n"
-            "    Smaller chunks = fewer tokens per prompt.\n"
-            "  * Reduce chunk overlap: LLMlight(..., chunks={'overlap': 50})\n"
-            "  * Reduce top_chunks:   LLMlight(..., top_chunks=3)\n"
-            "    Fewer chunks combined into a single prompt.\n"
-            "  * Use summarize():     client.summarize(context=text)\n"
-            "    Splits the document automatically, chunk by chunk.\n"
-            "  * Increase n_ctx:      LLMlight(..., n_ctx=8192)\n"
-            "    Only works if your model actually supports a larger window.",
-            used_tokens, n_ctx,
-        )
-    # Determine how many tokens are available for the model to generate
-    max_tokens = compute_max_tokens(used_tokens, n_ctx=n_ctx, task=task)
-    # Show message
-    logger.debug(f"Used_tokens={used_tokens}, max_tokens={max_tokens}, context_limit={n_ctx}")
+    if used_tokens >= n_ctx:
+        logger.warning(f"Prompt length ({used_tokens:,} estimated tokens) exceeds context window ({n_ctx:,}). Input will likely be truncated.")
+
+    # Compute max tokens
+    max_tokens = compute_max_tokens(used_tokens=used_tokens, n_ctx=n_ctx, task=task)
+    logger.info(f"Estimated_tokens={used_tokens:,}, max_tokens={max_tokens:,}, context_limit={n_ctx:,}")
     # Return
     return used_tokens, max_tokens
 
 
-def compute_max_tokens(used_tokens, n_ctx=4096, task="max"):
+def compute_max_tokens(used_tokens: int, n_ctx: int = 4096, task: str = "max"):
     """
-    Compute the maximum number of tokens that can be generated for a given task,
-    taking into account the number of tokens already used and the model's context window.
+    Compute a safe generation budget.
 
-    Parameters
-    ----------
-    used_tokens : int
-        Number of tokens already consumed in the current context.
-    n_ctx : int, optional
-        Total context window size of the model (default is 4096 tokens).
-    task : str, optional
-        Type of generation task. Determines the proportion of the remaining tokens to use.
-        Options are:
-        - "summarization": Use up to 50% of the context window, minimum 128 tokens.
-        - "chat": Use up to 60% of the context window, minimum 128 tokens.
-        - "code": Use up to 75% of the context window, minimum 128 tokens.
-        - "longform": Use up to 90% of the context window, minimum 256 tokens.
-        - "max": Use all remaining tokens.
-        Any unrecognized task defaults to a safe fallback using 50% of the context window.
-
-    Returns
-    -------
-    max_tokens : int
-        Maximum number of tokens that can be generated for the specified task,
-        ensuring at least a minimum number of tokens as defined per task type.
+    The function reserves part of the context window for the prompt
+    and allocates the remaining space according to the task.
     """
 
-    available_tokens = max(n_ctx - used_tokens, 1)  # Ensure at least 1
+    available = max(n_ctx - used_tokens, 1)
 
-    task = task.lower()
-    if task == "summarization":
-        max_tokens = max(min(available_tokens, int(n_ctx * 0.5)), 128)
-    elif task == "chat":
-        max_tokens = max(min(available_tokens, int(n_ctx * 0.6)), 128)
-    elif task == "code":
-        max_tokens = max(min(available_tokens, int(n_ctx * 0.75)), 128)
-    elif task == "longform":
-        max_tokens = max(min(available_tokens, int(n_ctx * 0.9)), 256)
-    elif task == "max":
-        max_tokens = available_tokens
-    else:
-        # Default to safe fallback
-        max_tokens = max(min(available_tokens, int(n_ctx * 0.5)), 128)
+    task_configs = {
+        "summarization": {"ratio": 0.50, "minimum": 128},
+        "chat":          {"ratio": 0.60, "minimum": 128},
+        "code":          {"ratio": 0.75, "minimum": 256},
+        "longform":      {"ratio": 0.90, "minimum": 512},
+        "analysis":      {"ratio": 0.80, "minimum": 512},
+        "max":           {"ratio": 1.00, "minimum": 1},
+    }
 
-    return max_tokens
+    cfg = task_configs.get(task.lower(), task_configs["chat"])
+    if task.lower() == "max":
+        return available
+
+    target = int(n_ctx * cfg["ratio"])
+
+    return min(available, max(cfg["minimum"], target))
+
+
+# def compute_max_tokens(used_tokens, n_ctx=4096, task="max"):
+#     """
+#     Compute the maximum number of tokens that can be generated for a given task,
+#     taking into account the number of tokens already used and the model's context window.
+
+#     Parameters
+#     ----------
+#     used_tokens : int
+#         Number of tokens already consumed in the current context.
+#     n_ctx : int, optional
+#         Total context window size of the model (default is 4096 tokens).
+#     task : str, optional
+#         Type of generation task. Determines the proportion of the remaining tokens to use.
+#         Options are:
+#         - "summarization": Use up to 50% of the context window, minimum 128 tokens.
+#         - "chat": Use up to 60% of the context window, minimum 128 tokens.
+#         - "code": Use up to 75% of the context window, minimum 128 tokens.
+#         - "longform": Use up to 90% of the context window, minimum 256 tokens.
+#         - "max": Use all remaining tokens.
+#         Any unrecognized task defaults to a safe fallback using 50% of the context window.
+
+#     Returns
+#     -------
+#     max_tokens : int
+#         Maximum number of tokens that can be generated for the specified task,
+#         ensuring at least a minimum number of tokens as defined per task type.
+#     """
+
+#     available_tokens = max(n_ctx - used_tokens, 1)  # Ensure at least 1
+
+#     task = task.lower()
+#     if task == "summarization":
+#         max_tokens = max(min(available_tokens, int(n_ctx * 0.5)), 128)
+#     elif task == "chat":
+#         max_tokens = max(min(available_tokens, int(n_ctx * 0.6)), 128)
+#     elif task == "code":
+#         max_tokens = max(min(available_tokens, int(n_ctx * 0.75)), 128)
+#     elif task == "longform":
+#         max_tokens = max(min(available_tokens, int(n_ctx * 0.9)), 256)
+#     elif task == "max":
+#         max_tokens = available_tokens
+#     else:
+#         # Default to safe fallback
+#         max_tokens = max(min(available_tokens, int(n_ctx * 0.5)), 128)
+
+#     return max_tokens
 
 
 def set_system_message(system):
