@@ -205,12 +205,10 @@ class LLMlight:
                  n_ctx: int = None,
                  file_path: str = None,
                  endpoint: str = "http://localhost:1234/v1/chat/completions",
+                 timeout = 600,
                  verbose: (str, int) = 'info',
                  ):
 
-        # Set the logger
-        set_logger(verbose)
-        
         # Validate and normalise all parameters before storing anything
         params = _validate_params(
             model=model,
@@ -235,6 +233,7 @@ class LLMlight:
         self.temperature      = params['temperature']
         self.top_p            = params['top_p']
         self.chunks           = params['chunks']
+        self.timeout          = timeout
         self.n_ctx            = n_ctx
         self.endpoint         = endpoint
         self.context          = None
@@ -311,7 +310,7 @@ class LLMlight:
                top_p: (int, float) = None,
                stream: bool = False,
                return_type: str = 'string',
-               verbose=None,
+               thinking: bool = True,
                ):
         """Run the model and return its response.
 
@@ -351,6 +350,16 @@ class LLMlight:
             ``'raw'``                 -- Return the full raw API response object.
         verbose : str or int, optional
             Override logging verbosity for this call only.
+        thinking : bool, default ``True``
+            Whether the model is allowed to "think" (emit reasoning, e.g.
+            ``<think>...</think>`` blocks) before producing its final answer.
+            When ``False``, LLMlight asks the model/backend to skip its
+            reasoning step: a ``chat_template_kwargs={'enable_thinking': False}``
+            hint is sent to backends that support it (e.g. vLLM/LM Studio with
+            Qwen3-style models), and ``/no_think`` is appended to the system
+            message as a fallback for backends that rely on that convention.
+            Any ``<think>...</think>`` content still present in the raw output
+            is removed when ``return_type='string'``, regardless of this flag.
 
         Returns
         -------
@@ -382,6 +391,14 @@ class LLMlight:
         # Set system message
         system = set_system_message(system)
 
+        # Toggle "thinking" mode. Some backends (e.g. vLLM/LM Studio serving
+        # Qwen3-style models) support this via a chat_template_kwargs hint,
+        # passed through in requests_post_http/requests_post_gguf. As a
+        # universally-compatible fallback we also append the '/no_think'
+        # convention to the system message when thinking is disabled.
+        if not thinking:
+            system = f"{system}\n/no_think"
+
         # Extract relevant text for video memory
         relevant_memory = self.relevant_memory_retrieval(query, return_type='list')
 
@@ -405,15 +422,15 @@ class LLMlight:
         # Run model
         if os.path.isfile(self.endpoint):
             # Run LLM from gguf model
-            response = self.requests_post_gguf(prompt, system, temperature=temperature, top_p=top_p, task=self.task, stream=stream, return_type=return_type)
+            response = self.requests_post_gguf(prompt, system, temperature=temperature, top_p=top_p, task=self.task, stream=stream, return_type=return_type, thinking=thinking)
         else:
             # Run LLM with http model
-            response = self.requests_post_http(prompt, system, temperature=temperature, top_p=top_p, task=self.task, stream=stream, return_type=return_type)
+            response = self.requests_post_http(prompt, system, temperature=temperature, top_p=top_p, task=self.task, stream=stream, return_type=return_type, thinking=thinking)
 
         # Return
         return response
 
-    def requests_post_gguf(self, prompt, system, temperature=0.8, top_p=0.95, headers=None, task='max', stream=False, return_type='string'):
+    def requests_post_gguf(self, prompt, system, temperature=0.8, top_p=0.95, headers=None, task='max', stream=False, return_type='string', thinking=True):
         # Note that it is better to use messages_prompt instead of a dict (messages_dict) because most GGUF-based models don't have a tokenizer/parser that can interpret the JSON-style message structure.
         # Prepare data for request.
         if headers is None: headers = {"Content-Type": "application/json"}
@@ -452,7 +469,9 @@ class LLMlight:
         headers=None,
         task='max',
         stream=False,
-        return_type='string'):
+        return_type='string',
+        timeout=480,
+        thinking=True):
 
         # Prepare headers
         if headers is None:
@@ -476,8 +495,11 @@ class LLMlight:
             "temperature": temperature,
             "top_p": top_p,
             "stream": stream,
-            "estimated_prompt_tokens": estimated_prompt_tokens,
             "max_tokens": max_tokens,
+            # Hint for backends (e.g. vLLM / LM Studio serving Qwen3-style
+            # models) that support toggling "thinking" via the chat template.
+            # Backends that don't recognize this field simply ignore it.
+            "chat_template_kwargs": {"enable_thinking": thinking},
         }
     
         # Send POST request
@@ -518,7 +540,7 @@ class LLMlight:
     def requests_post(self, headers, data, stream=False, return_type='string'):
         """Create the request to the LLM."""
         # Get response
-        response = requests.post(self.endpoint, headers=headers, json=data, stream=stream)
+        response = requests.post(self.endpoint, headers=headers, json=data, timeout=self.timeout, stream=stream)
 
         # Handle the response
         if response.status_code == 200:
@@ -938,9 +960,7 @@ class LLMlight:
             ) from exc
 
         try:
-            model = distfit(
-                method='parametric', alpha=self.alpha, bound=bound, verbose='warning'
-            )
+            model = distfit(method='parametric', alpha=self.alpha, bound=bound, verbose='warning')
             model.fit_transform(random_scores)
 
             # Guard: distfit stores histogram data used by plot(); if it is
@@ -1397,8 +1417,7 @@ class LLMlight:
         -------
         list of (score: float, text: str) tuples, highest score first.
         """
-        if not chunks:
-            return []
+        if not chunks: return []
         top_k = min(top_k, len(chunks))
         query_vector, chunk_vectors = self._embed(query, chunks, embedding)
         scores = cosine_similarity(query_vector, chunk_vectors)[0]
@@ -1534,17 +1553,10 @@ class LLMlight:
             return context
 
         if self.retrieval_method == 'naive_rag' and self.embedding['context'] is not None and self.embedding['context'] in get_embeddings():
-            logger.info(
-                "naive_rag: retrieving [%d] chunks from context (embedding='%s').",
-                self.top_chunks, self.embedding['context'],
-            )
-            chunks = utils.chunk_text(
-                context,
-                method=self.chunks['method'],
-                chunk_size=self.chunks['size'],
-                overlap=self.chunks['overlap'],
-            )
-            scored     = self._retrieve(query, chunks, self.embedding['context'], self.top_chunks)
+            logger.info(f"naive_rag: retrieving {self.top_chunks} chunks from context (embedding='{self.embedding['context']}').")
+            # Create chunks
+            chunks = utils.chunk_text(context, method=self.chunks['method'], chunk_size=self.chunks['size'], overlap=self.chunks['overlap'])
+            scored = self._retrieve(query, chunks, self.embedding['context'], self.top_chunks)
             chunks_out = [text for _, text in scored]
 
             if return_type == 'string':
@@ -2156,12 +2168,12 @@ def load_local_gguf_model(model_path: str, n_ctx: int=4096, n_threads: int=8, n_
 #     # Return
 #     return used_tokens, max_tokens
 
-def compute_tokens(text: str, n_ctx: int = 4096, chars_per_token=3.5, task: str = "max"):
+def compute_tokens(text: str, n_ctx: int = 16384, chars_per_token=3, task: str = "max"):
     """
     Estimate token usage using a model-agnostic approximation.
 
     We assume:
-        1 token ≈ 3.5 characters
+        1 token ≈ 3 characters
 
     This avoids model-specific tokenizers and provides a fast,
     reproducible estimate across different LLM providers.
@@ -2170,7 +2182,7 @@ def compute_tokens(text: str, n_ctx: int = 4096, chars_per_token=3.5, task: str 
     ----------
     text : str
         Prompt text.
-    n_ctx : int, default=4096
+    n_ctx : int, default=16384
         Model context window.
     chars_per_token : float, default=305
         3: for coding
