@@ -160,9 +160,6 @@ class LLMlight:
     endpoint : str, default ``'http://localhost:1234/v1/chat/completions'``
         URL of the OpenAI-compatible chat completions endpoint, or an absolute
         path to a local ``.gguf`` model file.
-    verbose : str or int, default ``'info'``
-        Logging verbosity. Accepts level names (``'debug'``, ``'info'``,
-        ``'warning'``, ``'error'``, ``'silent'``) or integer log levels.
 
     Examples
     --------
@@ -206,7 +203,6 @@ class LLMlight:
                  file_path: str = None,
                  endpoint: str = "http://localhost:1234/v1/chat/completions",
                  timeout = 600,
-                 verbose: (str, int) = 'info',
                  ):
 
         # Validate and normalise all parameters before storing anything
@@ -348,18 +344,12 @@ class LLMlight:
             ``'string_with_thinking'``-- Plain text including any thinking blocks.
             ``'dict'``                -- Parse response as JSON and return a dict.
             ``'raw'``                 -- Return the full raw API response object.
-        verbose : str or int, optional
-            Override logging verbosity for this call only.
         thinking : bool, default ``True``
-            Whether the model is allowed to "think" (emit reasoning, e.g.
-            ``<think>...</think>`` blocks) before producing its final answer.
-            When ``False``, LLMlight asks the model/backend to skip its
-            reasoning step: a ``chat_template_kwargs={'enable_thinking': False}``
-            hint is sent to backends that support it (e.g. vLLM/LM Studio with
-            Qwen3-style models), and ``/no_think`` is appended to the system
+            Whether the model is allowed to "think" (emit reasoning, e.g. ``<think>...</think>`` blocks) before producing its final answer.
+            When ``False``, LLMlight asks the model/backend to skip its reasoning step: a ``chat_template_kwargs={'enable_thinking': False}``
+            hint is sent to backends that support it (e.g. vLLM/LM Studio with Qwen3-style models), and ``/no_think`` is appended to the system
             message as a fallback for backends that rely on that convention.
-            Any ``<think>...</think>`` content still present in the raw output
-            is removed when ``return_type='string'``, regardless of this flag.
+            Any ``<think>...</think>`` content still present in the raw output is removed when ``return_type='string'``, regardless of this flag.
 
         Returns
         -------
@@ -488,7 +478,9 @@ class LLMlight:
     
         # Estimate prompt tokens and max generation budget
         estimated_prompt_tokens, max_tokens = compute_tokens(prompt_string, n_ctx=self.n_ctx, task=task)
-    
+
+        # Hint for backends (e.g. vLLM / LM Studio serving Qwen3-style models) that support toggling "thinking" via the chat template.
+        # Backends that don't recognize this field simply ignore it.
         data = {
             "model": self.model,
             "messages": messages,
@@ -496,9 +488,6 @@ class LLMlight:
             "top_p": top_p,
             "stream": stream,
             "max_tokens": max_tokens,
-            # Hint for backends (e.g. vLLM / LM Studio serving Qwen3-style
-            # models) that support toggling "thinking" via the chat template.
-            # Backends that don't recognize this field simply ignore it.
             "chat_template_kwargs": {"enable_thinking": thinking},
         }
     
@@ -508,34 +497,6 @@ class LLMlight:
         # Return response
         return response
 
-    # def requests_post_http(self, prompt, system, temperature=0.8, top_p=1, headers=None, task='max', stream=False, return_type='string'):
-    #     # Prepare data for request.
-    #     if headers is None: headers = {"Content-Type": "application/json"}
-    #     # Prepare messages
-    #     messages = [{"role": "system", "content": system}, {"role": "user", "content": prompt}]
-
-    #     # Convert messages to string prompt
-    #     prompt = convert_messages_to_model(messages, model=self.model)
-
-    #     # Compute tokens
-    #     if max_tokens is None:
-    #         used_tokens, max_tokens = compute_tokens(prompt, n_ctx=self.n_ctx, task=task)
-    #     # logger.info(f'Generating response with {self.model}')
-
-    #     data = {
-    #         "model": self.model,
-    #         "messages": messages,
-    #         "temperature": temperature,
-    #         "top_p": top_p,
-    #         "stream": stream,
-    #         "max_tokens": max_tokens,
-    #         }
-
-    #     # Send POST request
-    #     response = self.requests_post(headers, data, stream=stream, return_type=return_type)
-
-    #     # Return
-    #     return response
 
     def requests_post(self, headers, data, stream=False, return_type='string'):
         """Create the request to the LLM."""
@@ -982,9 +943,9 @@ class LLMlight:
             else:
                 fig, ax = None, None
 
-            self.distfit     = model
+            self.distfit = model
             self.distfit.fig = fig
-            self.distfit.ax  = ax
+            self.distfit.ax = ax
             return results
 
         except (IndexError, ValueError) as exc:
@@ -2052,7 +2013,7 @@ def convert_messages_to_model(messages, model='llama', add_assistant_start=True)
 
 
 
-def load_local_gguf_model(model_path: str, n_ctx: int=4096, n_threads: int=8, n_gpu_layers: int=0, verbose: bool=True) -> Llama:
+def load_local_gguf_model(model_path: str, n_ctx: int=4096, n_threads: int=8, n_gpu_layers: int=0) -> Llama:
     """
     Loads a local GGUF model using llama-cpp-python.
 
@@ -2061,14 +2022,13 @@ def load_local_gguf_model(model_path: str, n_ctx: int=4096, n_threads: int=8, n_
         n_ctx (int): Maximum context length. Default is 4096.
         n_threads (int): Number of CPU threads to use. Default is 8.
         n_gpu_layers (int): Number of layers to offload to GPU (if available). Default is 20.
-        verbose (bool): Whether to print status info.
 
     Returns:
         Llama: The loaded Llama model object.
 
     Example:
         >>> model_path = r'C://Users//beeld//.lmstudio//models//NousResearch//Hermes-3-Llama-3.2-3B-GGUF//Hermes-3-Llama-3.2-3B.Q4_K_M.gguf'
-        >>> llm = load_local_gguf_model(model_path, verbose=True)
+        >>> llm = load_local_gguf_model(model_path)
         >>> prompt = "<start_of_turn>user\\nWhat is 2 + 2?\\n<end_of_turn>\\n<start_of_turn>model\\n"
         >>> response = llm(prompt=prompt, max_tokens=20, stop=["<end_of_turn>"])
         >>> print(response["choices"][0]["text"].strip())
@@ -2092,7 +2052,6 @@ def load_local_gguf_model(model_path: str, n_ctx: int=4096, n_threads: int=8, n_
         n_ctx=n_ctx,
         n_threads=n_threads,
         n_gpu_layers=n_gpu_layers,
-        verbose=verbose
     )
 
     logger.info("Model loaded successfully!")
