@@ -160,6 +160,9 @@ class LLMlight:
     endpoint : str, default ``'http://localhost:1234/v1/chat/completions'``
         URL of the OpenAI-compatible chat completions endpoint, or an absolute
         path to a local ``.gguf`` model file.
+    password : str, optional, default ``None``
+        API key / password / bearer token for the endpoint, when required.
+        Sent as an ``Authorization: Bearer <password>`` header on HTTP requests.
 
     Examples
     --------
@@ -202,6 +205,7 @@ class LLMlight:
                  n_ctx: int = None,
                  file_path: str = None,
                  endpoint: str = "http://localhost:1234/v1/chat/completions",
+                 password: str = None,
                  timeout = 600,
                  ):
 
@@ -232,6 +236,7 @@ class LLMlight:
         self.timeout          = timeout
         self.n_ctx            = n_ctx
         self.endpoint         = endpoint
+        self.password         = password
         self.context          = None
         self.tempdir          = os.path.join(tempfile.gettempdir(), 'temp_LLMlight')
         self.store_path       = self._resolve_file_path(file_path)
@@ -345,11 +350,19 @@ class LLMlight:
             ``'dict'``                -- Parse response as JSON and return a dict.
             ``'raw'``                 -- Return the full raw API response object.
         thinking : bool, default ``True``
-            Whether the model is allowed to "think" (emit reasoning, e.g. ``<think>...</think>`` blocks) before producing its final answer.
-            When ``False``, LLMlight asks the model/backend to skip its reasoning step: a ``chat_template_kwargs={'enable_thinking': False}``
-            hint is sent to backends that support it (e.g. vLLM/LM Studio with Qwen3-style models), and ``/no_think`` is appended to the system
+            Whether the model is allowed to "think" (emit reasoning, e.g.
+            ``<think>...</think>`` blocks) before producing its final answer.
+            When ``False``, LLMlight asks the model/backend to skip its
+            reasoning step: a ``chat_template_kwargs={'enable_thinking': False}``
+            hint is sent to backends that support it (e.g. vLLM/LM Studio with
+            Qwen3-style models), and ``/no_think`` is appended to the system
             message as a fallback for backends that rely on that convention.
-            Any ``<think>...</think>`` content still present in the raw output is removed when ``return_type='string'``, regardless of this flag.
+            Any ``<think>...</think>`` content still present in the raw output
+            is removed when ``return_type='string'``, regardless of this flag.
+        password : str, optional
+            API key / password / bearer token for this call. Overrides the
+            instance-level ``password`` set at construction. Most local
+            endpoints don't require one, so this can be left as ``None``.
 
         Returns
         -------
@@ -466,6 +479,10 @@ class LLMlight:
         # Prepare headers
         if headers is None:
             headers = {"Content-Type": "application/json"}
+
+        # Only attach an Authorization header when a password/API key is actually set. Most local endpoints (e.g. LM Studio) need none
+        if self.password:
+            headers = {**headers, "Authorization": f"Bearer {self.password}"}
     
         # Prepare messages
         messages = [
@@ -478,7 +495,7 @@ class LLMlight:
     
         # Estimate prompt tokens and max generation budget
         estimated_prompt_tokens, max_tokens = compute_tokens(prompt_string, n_ctx=self.n_ctx, task=task)
-
+    
         # Hint for backends (e.g. vLLM / LM Studio serving Qwen3-style models) that support toggling "thinking" via the chat template.
         # Backends that don't recognize this field simply ignore it.
         data = {
@@ -943,9 +960,9 @@ class LLMlight:
             else:
                 fig, ax = None, None
 
-            self.distfit = model
+            self.distfit     = model
             self.distfit.fig = fig
-            self.distfit.ax = ax
+            self.distfit.ax  = ax
             return results
 
         except (IndexError, ValueError) as exc:
@@ -1663,7 +1680,8 @@ class LLMlight:
 
         # Get model url
         model_url = self.get_model_endpoint()
-        response = requests.get(model_url, timeout=10)
+        headers = {"Authorization": f"Bearer {self.password}"} if getattr(self, 'password', None) else None
+        response = requests.get(model_url, headers=headers, timeout=10)
 
         # Check status
         if response.status_code == 200:
@@ -1726,7 +1744,8 @@ class LLMlight:
         models = None
 
         try:
-            response = requests.get(model_url, timeout=10)
+            headers = {"Authorization": f"Bearer {self.password}"} if getattr(self, 'password', None) else None
+            response = requests.get(model_url, headers=headers, timeout=10)
             if response.status_code == 200:
                 try:
                     get_models = response.json()["models"]
@@ -2052,80 +2071,13 @@ def load_local_gguf_model(model_path: str, n_ctx: int=4096, n_threads: int=8, n_
         n_ctx=n_ctx,
         n_threads=n_threads,
         n_gpu_layers=n_gpu_layers,
+        verbose='warning'
     )
 
     logger.info("Model loaded successfully!")
     # Return
     return llm
 
-# def compute_tokens(string, n_ctx=4096, task='max'):
-#     """Estimate the token count of *string* and compute the generation budget.
-
-#     Uses the GPT-2 tokenizer as a fast, dependency-light approximation.  Token
-#     counts for non-GPT-2 model families (Llama, Mistral, Gemma, ...) may differ
-#     by up to ~30 %, so treat the result as an estimate rather than an exact value.
-
-#     Unlike a naive approach the prompt is encoded **without** truncation so the
-#     real length is always visible.  A warning is emitted when the prompt exceeds
-#     ``n_ctx`` so the caller can react rather than silently losing context.
-
-#     Parameters
-#     ----------
-#     string : str
-#         The full prompt string to measure.
-#     n_ctx : int, default ``4096``
-#         Model context window in tokens.
-#     task : str, default ``'max'``
-#         Generation task passed to :func:`compute_max_tokens` to determine the
-#         fraction of remaining tokens allocated for the response.
-
-#     Returns
-#     -------
-#     (used_tokens, max_tokens) : tuple of int
-#         ``used_tokens`` -- estimated tokens consumed by the prompt.
-#         ``max_tokens``  -- tokens available for generation, capped by ``n_ctx``.
-#     """
-#     try:
-#         from transformers import AutoTokenizer
-#     except Exception as e:
-#         raise ImportError("transformers is required for token counting. Install via 'pip install transformers'") from e
-
-#     import warnings
-#     tokenizer = AutoTokenizer.from_pretrained("gpt2")
-#     # Encode WITHOUT truncation so we get the real token count.
-#     # The GPT-2 tokenizer warns when the sequence exceeds its own 1024-token
-#     # training limit, but here we are only *counting* tokens — not running
-#     # GPT-2 — so the warning is a false alarm and we suppress it.
-#     with warnings.catch_warnings():
-#         warnings.filterwarnings(
-#             "ignore",
-#             message="Token indices sequence length is longer than the specified maximum",
-#         )
-#         tokens = tokenizer.encode(string)
-#     used_tokens = len(tokens)
-#     if used_tokens > n_ctx:
-#         logger.warning(
-#             "Prompt length (%d tokens) exceeds the model context window (%d tokens). "
-#             "The model will truncate the input and important context may be lost.\n"
-#             "\n"
-#             "  How to fix:\n"
-#             "  * Reduce chunk size:   LLMlight(..., chunks={'size': 500})\n"
-#             "    Smaller chunks = fewer tokens per prompt.\n"
-#             "  * Reduce chunk overlap: LLMlight(..., chunks={'overlap': 50})\n"
-#             "  * Reduce top_chunks:   LLMlight(..., top_chunks=3)\n"
-#             "    Fewer chunks combined into a single prompt.\n"
-#             "  * Use summarize():     client.summarize(context=text)\n"
-#             "    Splits the document automatically, chunk by chunk.\n"
-#             "  * Increase n_ctx:      LLMlight(..., n_ctx=8192)\n"
-#             "    Only works if your model actually supports a larger window.",
-#             used_tokens, n_ctx,
-#         )
-#     # Determine how many tokens are available for the model to generate
-#     max_tokens = compute_max_tokens(used_tokens, n_ctx=n_ctx, task=task)
-#     # Show message
-#     logger.info(f"Used_tokens={used_tokens}, max_tokens={max_tokens}, context_limit={n_ctx}")
-#     # Return
-#     return used_tokens, max_tokens
 
 def compute_tokens(text: str, n_ctx: int = 16384, chars_per_token=3, task: str = "max"):
     """
@@ -2196,54 +2148,6 @@ def compute_max_tokens(used_tokens: int, n_ctx: int = 4096, task: str = "max"):
     target = int(n_ctx * cfg["ratio"])
 
     return min(available, max(cfg["minimum"], target))
-
-
-# def compute_max_tokens(used_tokens, n_ctx=4096, task="max"):
-#     """
-#     Compute the maximum number of tokens that can be generated for a given task,
-#     taking into account the number of tokens already used and the model's context window.
-
-#     Parameters
-#     ----------
-#     used_tokens : int
-#         Number of tokens already consumed in the current context.
-#     n_ctx : int, optional
-#         Total context window size of the model (default is 4096 tokens).
-#     task : str, optional
-#         Type of generation task. Determines the proportion of the remaining tokens to use.
-#         Options are:
-#         - "summarization": Use up to 50% of the context window, minimum 128 tokens.
-#         - "chat": Use up to 60% of the context window, minimum 128 tokens.
-#         - "code": Use up to 75% of the context window, minimum 128 tokens.
-#         - "longform": Use up to 90% of the context window, minimum 256 tokens.
-#         - "max": Use all remaining tokens.
-#         Any unrecognized task defaults to a safe fallback using 50% of the context window.
-
-#     Returns
-#     -------
-#     max_tokens : int
-#         Maximum number of tokens that can be generated for the specified task,
-#         ensuring at least a minimum number of tokens as defined per task type.
-#     """
-
-#     available_tokens = max(n_ctx - used_tokens, 1)  # Ensure at least 1
-
-#     task = task.lower()
-#     if task == "summarization":
-#         max_tokens = max(min(available_tokens, int(n_ctx * 0.5)), 128)
-#     elif task == "chat":
-#         max_tokens = max(min(available_tokens, int(n_ctx * 0.6)), 128)
-#     elif task == "code":
-#         max_tokens = max(min(available_tokens, int(n_ctx * 0.75)), 128)
-#     elif task == "longform":
-#         max_tokens = max(min(available_tokens, int(n_ctx * 0.9)), 256)
-#     elif task == "max":
-#         max_tokens = available_tokens
-#     else:
-#         # Default to safe fallback
-#         max_tokens = max(min(available_tokens, int(n_ctx * 0.5)), 128)
-
-#     return max_tokens
 
 
 def set_system_message(system):
