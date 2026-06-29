@@ -1557,7 +1557,7 @@ class LLMlight:
         # Warn when the raw context is likely to exceed the context window.
         # Rough heuristic: 1 token ≈ 4 characters for Latin-script text.
         estimated_tokens = len(context) // 4
-        if estimated_tokens > self.n_ctx:
+        if self.n_ctx is not None and estimated_tokens > self.n_ctx:
             logger.warning(
                 "Full context is ~%d tokens but n_ctx=%d. "
                 "The model will likely truncate the input. "
@@ -2116,6 +2116,10 @@ def compute_tokens(text: str, n_ctx: int = 16384, chars_per_token=3, task: str =
     # Estimate the used tokens
     used_tokens = max(1, int(len(text) / chars_per_token))
 
+    # Fall back to the function default when no context window is known
+    if n_ctx is None:
+        n_ctx = 16384
+
     if used_tokens >= n_ctx:
         logger.warning(f"Prompt length ({used_tokens:,} estimated tokens) exceeds context window ({n_ctx:,}). Input will likely be truncated.")
 
@@ -2133,6 +2137,9 @@ def compute_max_tokens(used_tokens: int, n_ctx: int = 4096, task: str = "max"):
     The function reserves part of the context window for the prompt
     and allocates the remaining space according to the task.
     """
+
+    if n_ctx is None:
+        n_ctx = 4096
 
     available = max(n_ctx - used_tokens, 1)
 
