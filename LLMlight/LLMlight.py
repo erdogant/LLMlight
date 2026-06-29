@@ -1009,7 +1009,7 @@ class LLMlight:
         if system is None:
             logger.error('system can not be None. <return>')
             return
-        if (context is None) and (not hasattr(self, 'text') or self.context is None):
+        if (context is None) and (self.context is None):
             logger.error('No input text found. Use context or <model.read_pdf("here comes your file path to the pdf")> first. <return>')
             return
 
@@ -1197,7 +1197,7 @@ class LLMlight:
         """
         # Create chunks with overlapping parts to make sure we do not miss out
         if isinstance(context, str):
-            chunks = utils.chunk_text(context, method=self.chunks['method'], chunk_size=self.chunks['size'], overlap=self.chunks['overlap'], return_type='list')
+            chunks = utils.chunk_text(context, method=self.chunks['method'], chunk_size=self.chunks['size'], overlap=self.chunks['overlap'])
         else:
             chunks = context
 
@@ -1548,7 +1548,7 @@ class LLMlight:
                 label=None,
                 chunk_size=self.chunks['size'],
                 irrelevant_chunk_penalty=0,
-                embedding=self.embedding['context'],
+                embedding_method=self.embedding['context'],
                 device='cpu',
                 batch_size=32,
             )
@@ -1641,7 +1641,7 @@ class LLMlight:
         # Return
         return prompt
 
-    def read_pdf(self, file_path, title_pages=[1, 2], body_pages=[], reference_pages=[-1], return_type='str'):
+    def read_pdf(self, file_path, title_pages=None, body_pages=None, reference_pages=None, return_type='str'):
         """
         Reads a PDF file and extracts its text content as a string.
 
@@ -1653,6 +1653,10 @@ class LLMlight:
             dict: dictionary
 
         """
+        if title_pages is None: title_pages = [1, 2]
+        if body_pages is None: body_pages = []
+        if reference_pages is None: reference_pages = [-1]
+
         context = ''
 
         if 'http' in file_path[0:5]:
@@ -1692,7 +1696,7 @@ class LLMlight:
                         logger.info(f'Model info collected: {model}')
                         return modelname
             except (KeyError, ValueError) as e:
-                logger.error("Error parsing model data:", e)
+                logger.error(f"Error parsing model data: {e}")
 
         # If nothing is found, return None
         return {}
@@ -1752,13 +1756,13 @@ class LLMlight:
                     model_dict = {model["key"]: model for model in get_models}
                     models = list(model_dict.keys())
                 except (KeyError, ValueError) as e:
-                    logger.error("Error parsing model data:", e)
+                    logger.error(f"Error parsing model data: {e}")
             else:
-                logger.warning("Request failed with status code:", response.status_code)
-                logger.warning("Response:", response.text)
+                logger.warning(f"Request failed with status code: {response.status_code}")
+                logger.warning(f"Response: {response.text}")
 
         except requests.exceptions.RequestException as e:
-            logger.error("Request error:", e)
+            logger.error(f"Request error: {e}")
             logger.error(f'No connection could be made with the endpoint: {model_url}')
             return None
 
@@ -2071,7 +2075,7 @@ def load_local_gguf_model(model_path: str, n_ctx: int=4096, n_threads: int=8, n_
         n_ctx=n_ctx,
         n_threads=n_threads,
         n_gpu_layers=n_gpu_layers,
-        verbose='warning'
+        verbose=False
     )
 
     logger.info("Model loaded successfully!")
@@ -2181,7 +2185,8 @@ class wget:
     def filename_from_url(url, ext=True):
         """Return filename."""
         urlname = os.path.basename(url)
-        if not ext: _, ext = os.path.splitext(urlname)
+        if not ext:
+            urlname, _ = os.path.splitext(urlname)
         return urlname
 
     def download(url, writepath):

@@ -135,7 +135,7 @@ def RSE(context, query, label=None, chunk_size=800, irrelevant_chunk_penalty=0.2
 
     # Calculate relevance scores and chunk values based on the query
     print("\nCalculating relevance scores and chunk values...")
-    chunk_values = calculate_chunk_values(query, chunks, vector_store, irrelevant_chunk_penalty)
+    chunk_values = calculate_chunk_values(query, chunks, vector_store, irrelevant_chunk_penalty, embedding_method=embedding_method)
 
     # Find the best segments of text based on chunk values
     best_segments, scores = find_best_segments(chunk_values, max_segment_length=20, total_max_length=30, min_segment_value=0.2)
@@ -258,7 +258,7 @@ def process_document(context, label=None, chunk_size=800, embedding_method="all-
     return chunks, vector_store, doc_info
 
 
-def calculate_chunk_values(query, chunks, vector_store, irrelevant_chunk_penalty=0.2):
+def calculate_chunk_values(query, chunks, vector_store, irrelevant_chunk_penalty=0.2, embedding_method="all-MiniLM-L6-v2"):
     """
     Calculate chunk values by combining relevance and position.
     
@@ -267,12 +267,16 @@ def calculate_chunk_values(query, chunks, vector_store, irrelevant_chunk_penalty
         chunks (List[str]): List of document chunks
         vector_store (SimpleVectorStore): Vector store containing the chunks
         irrelevant_chunk_penalty (float): Penalty for irrelevant chunks
+        embedding_method (str): Model path/name used to embed the chunks in `vector_store`.
+            Must match the model used when the chunks were embedded, otherwise the
+            query and chunk vectors live in different embedding spaces and the
+            resulting cosine similarities are meaningless.
         
     Returns:
         List[float]: List of chunk values
     """
-    # Create query embedding
-    query_embedding = create_embeddings([query])[0]
+    # Create query embedding (using the SAME model the chunks were embedded with)
+    query_embedding = create_embeddings([query], model_path=embedding_method)[0]
     
     # Get all chunks with similarity scores
     num_chunks = len(chunks)
@@ -316,24 +320,28 @@ def find_best_segments(chunk_values, max_segment_length=20, total_max_length=30,
     while total_included_chunks < total_max_length:
         best_score = min_segment_value  # Minimum threshold for a segment
         best_segment = None
-        
+        remaining_budget = total_max_length - total_included_chunks
+
         # Try each possible starting position
         for start in range(len(chunk_values)):
             # Skip if this start position is already in a selected segment
             if any(start >= s[0] and start < s[1] for s in best_segments):
                 continue
-                
-            # Try each possible segment length
-            for length in range(1, min(max_segment_length, len(chunk_values) - start) + 1):
+
+            # Try each possible segment length, capped by the remaining total budget
+            max_len_here = min(max_segment_length, len(chunk_values) - start, remaining_budget)
+            for length in range(1, max_len_here + 1):
                 end = start + length
-                
-                # Skip if end position is already in a selected segment
-                if any(end > s[0] and end <= s[1] for s in best_segments):
+
+                # Skip if this candidate overlaps any already-selected segment in any
+                # way -- including fully containing one (start before it, end after it),
+                # which a check on just the start/end boundaries would miss.
+                if any(start < s[1] and end > s[0] for s in best_segments):
                     continue
-                
+
                 # Calculate segment value as sum of chunk values
                 segment_value = sum(chunk_values[start:end])
-                
+
                 # Update best segment if this one is better
                 if segment_value > best_score:
                     best_score = segment_value

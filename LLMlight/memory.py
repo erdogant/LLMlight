@@ -93,8 +93,6 @@ def close_and_remove(path, backend_instance=None):
 
     # Remove the .db and any SQLite journal / WAL side-files.
     for suffix in ('', '-wal', '-shm', '.hnsw'):
-        p = path + suffix if suffix.startswith('-') else os.path.splitext(path)[0] + suffix + os.path.splitext(path)[1] if suffix == '' else path + suffix
-        # Simpler: just try both combinations
         for candidate in (path + suffix, os.path.splitext(path)[0] + suffix):
             try:
                 if os.path.isfile(candidate):
@@ -473,11 +471,6 @@ class MemvidBackend:
             "remove(): marked %d chunk(s) for removal (%d -> %d). "
             "Call save() to persist.", before - after, before, after,
         )
-
-        # Stage removed texts so save() will rebuild without them
-        if not hasattr(self, '_pending_remove_ids'):
-            self._pending_remove_ids = set()
-        self._pending_remove_ids.update(to_delete_ids)
 
         return to_delete_ids
 

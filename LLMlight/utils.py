@@ -29,6 +29,11 @@ def chunk_text(text, method='chars', chunk_size=512, overlap=0):
     # Chunk in chars
     if method == 'chars':
         if chunk_size is not None and chunk_size > 0:
+            if overlap >= chunk_size:
+                raise ValueError(
+                    f"overlap ({overlap}) must be less than chunk_size ({chunk_size}); "
+                    "otherwise chunking cannot advance through the text."
+                )
             # Simple character-based chunking
             for i in range(0, len(text), chunk_size - overlap):
                 chunk = text[i:i + chunk_size]
@@ -175,7 +180,7 @@ def read_pdf(file_path, title_pages=None, body_pages=None, reference_pages=None,
 
 def count_words(string):
     if string.strip() != '':
-        words = string.strip().split(' ')
+        words = string.strip().split()
         words = [word.strip() for word in words if word.strip() and not word.strip().isdigit()]
         logger.info(f"Word count: {len(words)}, Number of characters: {len(string)}")
         return len(words)
