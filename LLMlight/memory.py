@@ -212,7 +212,9 @@ class MemvidBackend:
             tempdir: str = None):
         """Add text chunks or files to the pending encoder buffer."""
         if filetypes is None:
-            filetypes = ['.pdf', '.txt', '.epub', '.md', '.doc', '.docx', '.rtf', '.html', '.htm']
+            filetypes = ['.pdf', '.txt', '.epub', '.md', '.doc', '.docx',
+                         '.ppt', '.pptx', '.xls', '.xlsx', '.csv', '.json',
+                         '.xml', '.rtf', '.html', '.htm']
 
         if not hasattr(self, 'encoder'):
             raise RuntimeError('Memory store is not initialised. Call memory_init() first.')
@@ -261,6 +263,12 @@ class MemvidBackend:
             for fpath in resolved:
                 self._ingest_file(fpath, filetypes, chunk_size, chunk_overlap)
 
+    # Binary / office formats that must go through markitdown rather than
+    # being opened as raw text -- opening these with open(..., 'r') (the old
+    # fallback branch below) silently mangles them into unusable byte-soup.
+    _MARKITDOWN_EXTS = ('.doc', '.docx', '.ppt', '.pptx', '.xls', '.xlsx',
+                        '.csv', '.json', '.xml')
+
     def _ingest_file(self, file_path, filetypes, chunk_size, chunk_overlap):
         """Add a single file to the encoder buffer."""
         filename = os.path.basename(file_path)
@@ -286,6 +294,13 @@ class MemvidBackend:
                 clean = ' '.join(ph for ph in phrases if ph)
                 if clean.strip():
                     self.encoder.add_text(clean, chunk_size=chunk_size, overlap=chunk_overlap)
+        elif ext in self._MARKITDOWN_EXTS and ext in filetypes:
+            text = LLMlight.utils.read_document(file_path, return_type='str')
+            if text and text.strip():
+                self.encoder.add_text(text, chunk_size=chunk_size, overlap=chunk_overlap)
+            else:
+                logger.warning(f'markitdown produced no text, skipping: {file_path}')
+                return
         elif ext in filetypes:
             with open(file_path, 'r', encoding='utf-8', errors='ignore') as fh:
                 self.encoder.add_text(fh.read(), chunk_size=chunk_size, overlap=chunk_overlap)

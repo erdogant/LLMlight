@@ -178,6 +178,71 @@ def read_pdf(file_path, title_pages=None, body_pages=None, reference_pages=None,
     return context
 
 
+def read_document(file_path, return_type='str'):
+    """
+    Generic document reader powered by Microsoft's ``markitdown`` library.
+
+    Unlike :func:`read_pdf`, which is PDF-specific, this function can extract
+    text from (almost) any file type -- Word (.doc/.docx), PowerPoint
+    (.ppt/.pptx), Excel (.xls/.xlsx), PDF, HTML, CSV/JSON/XML, plain text,
+    images (via EXIF metadata / OCR), audio (via speech transcription), ZIP
+    archives (recursively), and more -- converting the content into clean
+    Markdown text that is well suited as LLM context (headings, lists, and
+    tables are preserved using Markdown syntax).
+
+    Args:
+        file_path (str): Path to a local file on disk.
+        return_type (str): 'str' (default) returns the extracted Markdown
+            text as a plain string. 'dict' returns {'title', 'body'} for
+            consistency with :func:`read_pdf`.
+
+    Returns:
+        str or dict: Extracted markdown text (or {'title': '', 'body': ''}
+        / '' on failure -- missing file, unsupported/corrupt file, or the
+        optional ``markitdown`` dependency not being installed).
+    """
+    logger.info('Reading document with markitdown')
+
+    empty = {"title": "", "body": ""} if return_type == 'dict' else ""
+
+    if not file_path or not os.path.isfile(file_path):
+        logger.error(f'File not found on disk: {file_path}')
+        return empty
+
+    try:
+        from markitdown import MarkItDown
+    except ImportError:
+        logger.error(
+            "The 'markitdown' package is required for read_document(). "
+            "Install it with: pip install \"markitdown[all]\""
+        )
+        return empty
+
+    try:
+        converter = MarkItDown(enable_plugins=False)
+        result = converter.convert(file_path)
+        text = (getattr(result, 'text_content', '') or '').strip()
+        title = (getattr(result, 'title', None) or '').strip()
+    except Exception as e:
+        logger.error(f"Error converting document with markitdown: {e}")
+        return empty
+
+    # Light normalisation only. Note: clean_text() is deliberately NOT used
+    # here, because it strips characters such as '#', '*', '|', '_' that
+    # markitdown uses to represent Markdown headings, lists, and tables --
+    # applying it would destroy the structure markitdown just extracted.
+    text = unicodedata.normalize("NFKD", text)
+    text = re.sub(r'\n{3,}', '\n\n', text).strip()
+
+    if not text:
+        logger.warning(f'markitdown produced no text content for: {file_path}')
+
+    if return_type == 'dict':
+        return {"title": title, "body": text}
+
+    return text
+
+
 def count_words(string):
     if string.strip() != '':
         words = string.strip().split()

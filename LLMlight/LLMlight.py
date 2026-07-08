@@ -33,10 +33,12 @@ try:
     from . import RAG
     from . import utils
     from . import memory
+    from . import extract as extract_module
 except Exception as e:
     import memory
     import RAG
     import utils
+    import extract as extract_module
 
 # Set external loggers to ERROR
 logger = logging.getLogger(__name__)
@@ -817,7 +819,11 @@ class LLMlight:
             Directory to scan recursively for supported file types.
         filetypes : list of str, optional
             File extensions to include when scanning *dirpath*.
-            Defaults to a standard set (pdf, txt, epub, md, doc, docx, ...).
+            Defaults to a standard set (pdf, txt, epub, md, doc, docx, ppt,
+            pptx, xls, xlsx, csv, json, xml, rtf, html, htm). Office/binary
+            formats (doc, docx, ppt, pptx, xls, xlsx, csv, json, xml) are
+            converted via the optional ``markitdown`` dependency -- install
+            with ``pip install "markitdown[all]"``.
         chunk_size : int
             Characters (or words) per chunk.
         chunk_overlap : int
@@ -830,7 +836,8 @@ class LLMlight:
 
         if filetypes is None:
             filetypes = ['.pdf', '.txt', '.epub', '.md', '.doc', '.docx',
-                         '.rtf', '.html', '.htm']
+                         '.ppt', '.pptx', '.xls', '.xlsx', '.csv', '.json',
+                         '.xml', '.rtf', '.html', '.htm']
 
         # Normalise text: read_pdf() can return a dict or a plain string.
         # Convert dict to a flat list of its non-empty string values so the
@@ -1674,7 +1681,208 @@ class LLMlight:
 
         # Return
         return context
-    
+
+    def read_document(self, file_path, return_type='str'):
+        """
+        Reads (almost) any document type and extracts its text content as
+        clean Markdown, using Microsoft's ``markitdown`` library under the
+        hood.
+
+        This is a generic complement to ``read_pdf()``: use ``read_pdf()``
+        when you need fine control over title/body/reference pages of a
+        PDF specifically, and ``read_document()`` for everything else --
+        Word (.doc/.docx), PowerPoint (.ppt/.pptx), Excel (.xls/.xlsx),
+        HTML, CSV/JSON/XML, plain text, images (EXIF/OCR), audio
+        (transcription), ZIP archives, and PDFs too (Markdown-style output,
+        e.g. preserved tables, can be preferable to ``read_pdf()`` here).
+
+        Requires the optional dependency: ``pip install "markitdown[all]"``.
+
+        Args:
+            file_path (str): Path to a local file, or an http(s) URL. URLs
+                are downloaded to a temp folder first (same behaviour as
+                ``read_pdf()``).
+            return_type (str): 'str' (default) returns the markdown text as
+                a plain string. 'dict' returns {'title', 'body'}.
+
+        Returns:
+            str or dict: Extracted content, or an empty result ('' / a dict
+            with empty strings) if the file is missing, unsupported, or
+            ``markitdown`` is not installed.
+
+        Examples
+        --------
+        >>> from LLMlight import LLMlight
+        >>> client = LLMlight(model='mistralai/mistral-small-3.2')
+        >>> context = client.read_document('report.docx')
+        >>> context = client.read_document('slides.pptx')
+        >>> context = client.read_document('data.xlsx')
+        >>> context = client.read_document('https://example.com/paper.pdf')
+        >>> response = client.prompt('Summarize this document.', context=context)
+        >>> print(response)
+        """
+        empty = {"title": "", "body": ""} if return_type == 'dict' else ""
+
+        if not file_path:
+            logger.error('No file_path provided.')
+            return empty
+
+        context = empty
+
+        if 'http' in file_path[0:8].lower():
+            logger.info('Downloading file from url..')
+            url = file_path
+            filename = wget.filename_from_url(url)
+            file_path = os.path.join(self.tempdir, filename)
+            wget.download(url, file_path)   # downloads to file_path; return value is None
+
+        if os.path.isfile(file_path):
+            context = utils.read_document(file_path, return_type=return_type)
+        else:
+            logger.error(f'file_path does not exist: {file_path}')
+
+        # Return
+        return context
+
+
+    def extract(self,
+                text_or_documents,
+                prompt_description,
+                examples,
+                model_id=None,
+                use_local_endpoint=True,
+                api_key=None,
+                **kwargs):
+        """
+        Run LLM-based structured information extraction with precise source
+        grounding, using Google's LangExtract
+        (https://github.com/google/langextract).
+
+        Why LangExtract, in short: every extraction it returns is mapped
+        back to its exact character span in the input text
+        (``.char_interval``), so results can be highlighted and traced
+        against the original document -- see ``visualize_extractions()``
+        -- instead of trusting an LLM's free-form JSON at face value.
+
+        Requires the optional dependency: ``pip install "langextract[openai]"``
+        (the ``openai`` extra is needed for `use_local_endpoint=True`,
+        since routing goes through LangExtract's OpenAI-compatible
+        provider; plain ``pip install langextract`` is enough for
+        `use_local_endpoint=False` with e.g. a Gemini model).
+
+        Parameters
+        ----------
+        text_or_documents : str
+            The text to extract from (LangExtract also accepts a URL or
+            its own ``Document``/list-of-``Document`` objects).
+        prompt_description : str
+            Free-text instructions describing what to extract.
+        examples : list of lx.data.ExampleData
+            Few-shot examples that steer extraction -- required by
+            LangExtract, and the main lever for extraction quality. Build
+            these with ``LLMlight.extract.build_example()`` so you don't
+            need to import ``langextract`` directly, e.g.:
+
+                from LLMlight import extract as lx_extract
+                examples = [lx_extract.build_example(
+                    text="ROMEO. But soft! What light through yonder window breaks?",
+                    extractions=[{"extraction_class": "character",
+                                  "extraction_text": "ROMEO",
+                                  "attributes": {"emotional_state": "wonder"}}],
+                )]
+        model_id : str, optional
+            e.g. ``'gemini-3.5-flash'``, ``'gpt-4o'``, ``'gemma2:2b'``.
+            Defaults to ``self.model`` when ``use_local_endpoint=True``.
+        use_local_endpoint : bool, default True
+            When ``True`` (default), routes the extraction through this
+            client's own OpenAI-compatible ``self.endpoint`` (e.g. a local
+            LM Studio/vLLM server) instead of a cloud provider -- no
+            separate LangExtract/OpenAI/Gemini API key needed (a harmless
+            placeholder key is used automatically, since the OpenAI SDK
+            requires a non-empty key even when the local server doesn't
+            check it). Set ``False`` to use a cloud model (Gemini, OpenAI,
+            ...) via `model_id` the normal LangExtract way (needs a real
+            API key -- see LangExtract's own setup instructions).
+        api_key : str, optional
+            Overrides ``self.password`` / cloud API key resolution.
+        **kwargs :
+            Forwarded to ``lx.extract`` (e.g. ``extraction_passes``,
+            ``max_workers``, ``max_char_buffer``).
+
+        Returns
+        -------
+        AnnotatedDocument
+            LangExtract's result object; iterate ``result.extractions``
+            (each has ``.extraction_class``, ``.extraction_text``,
+            ``.attributes``, ``.char_interval``).
+
+        Examples
+        --------
+        >>> from LLMlight import LLMlight
+        >>> from LLMlight import extract as lx_extract
+        >>> client = LLMlight(model='mistralai/mistral-small-3.2')
+        >>> examples = [lx_extract.build_example(
+        ...     text="ROMEO. But soft! What light through yonder window breaks?",
+        ...     extractions=[{"extraction_class": "character",
+        ...                    "extraction_text": "ROMEO",
+        ...                    "attributes": {"emotional_state": "wonder"}}],
+        ... )]
+        >>> result = client.extract(
+        ...     text_or_documents="Lady Juliet gazed longingly at the stars, her heart aching for Romeo",
+        ...     prompt_description="Extract characters, emotions, and relationships in order of appearance.",
+        ...     examples=examples,
+        ... )
+        >>> html_path = client.visualize_extractions(result, output_html="visualization.html")
+        """
+        if model_id is None:
+            model_id = self.model
+
+        base_url = None
+        if use_local_endpoint:
+            # LLMlight's default endpoint is an OpenAI-compatible chat
+            # completions URL, e.g. 'http://localhost:1234/v1/chat/completions'.
+            # LangExtract's OpenAI provider wants the base 'v1' URL and
+            # appends '/chat/completions' itself.
+            base_url = self.endpoint.rsplit('/chat/completions', 1)[0]
+
+        return extract_module.extract(
+            text_or_documents=text_or_documents,
+            prompt_description=prompt_description,
+            examples=examples,
+            model_id=model_id,
+            base_url=base_url,
+            api_key=api_key or getattr(self, 'password', None),
+            **kwargs,
+        )
+
+    def visualize_extractions(self, results, output_html=None):
+        """
+        Generate an interactive, self-contained HTML visualization of one
+        or more LangExtract results (from ``extract()``), highlighting
+        every extraction in its original context -- the easiest way to
+        review results.
+
+        Parameters
+        ----------
+        results : AnnotatedDocument, list of AnnotatedDocument, or str
+            Result(s) from ``client.extract()``, or a path to an existing
+            ``.jsonl`` file of previously saved results.
+        output_html : str, optional
+            Path to write the HTML file to (e.g. ``'visualization.html'``).
+            When omitted, the HTML is only returned as a string.
+
+        Returns
+        -------
+        str: the raw HTML content -- open ``output_html`` in a browser, or
+        in Jupyter render it inline with
+        ``from IPython.display import HTML; HTML(html)``.
+
+        Examples
+        --------
+        >>> html = client.visualize_extractions(result, output_html="visualization.html")
+        """
+        return extract_module.visualize(results, output_html=output_html)
+
 
     def get_model_info(self, model=None):
         logger.info(f'Collecting model info..')

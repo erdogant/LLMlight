@@ -1,3 +1,22 @@
+from LLMlight import LLMlight
+from LLMlight import extract as lx_extract
+
+client = LLMlight(model='liquid/lfm2-24b-a2b', endpoint='http://localhost:1234/v1/chat/completions')
+
+examples = [lx_extract.build_example(
+    text="ROMEO. But soft! What light through yonder window breaks?",
+    extractions=[{"extraction_class": "character", "extraction_text": "ROMEO",
+                  "attributes": {"emotional_state": "wonder"}}],
+)]
+
+result = client.extract(
+    text_or_documents="Lady Juliet gazed longingly at the stars, her heart aching for Romeo",
+    prompt_description="Extract characters, emotions, and relationships in order of appearance.",
+    examples=examples,
+)
+
+html = client.visualize_extractions(result, output_html="visualization.html")
+
 # %%
 from LLMlight import LLMlight
 
@@ -61,7 +80,7 @@ print(summary_text)
 #     Splits the document automatically, chunk by chunk.
 #   * Increase n_ctx:       LLMlight(..., n_ctx=8192)
 #     Only works if your model actually supports a larger window.
-    
+
 # %% Preprocessing & Chunking
 client.memory_add(text=['Apes like USB sticks.', 'The capital of France is Amsterdam.'])
 out = client.memory.get_all_chunks()
@@ -301,7 +320,7 @@ for turn in range(5):
         The Data Scientist said:
 
         {response_a}
-        
+
         """,
         response_format="Respond to the discussion in 1-2 paragraphs and ask a follow-up question to the data scientist.",
     )
@@ -742,7 +761,7 @@ print(response)
 # [LLMlight.LLM] [INFO    ] Creating response with google/gemma-4-26b-a4b-qat..
 # [LLMlight.LLM] [INFO    ] No context strategy applied.
 # [LLMlight.LLM] [INFO    ] No context is provided into the prompt.
-# [LLMlight.LLM] [INFO    ] Running model: google/gemma-4-26b-a4b-qat 
+# [LLMlight.LLM] [INFO    ] Running model: google/gemma-4-26b-a4b-qat
 # The capital of France is Paris.
 
 # %%
@@ -806,8 +825,8 @@ client.memory_init(store_path='knowledge_store.db')  # creates 'knowledge_store.
 client.memory_add(text=['Apes like USB sticks.', 'The capital of France is Amsterdam.'])
 
 # should return the inserted chunks
-client.memory_chunks()  
-                  
+client.memory_chunks()
+
 # Save index (saves ANN index if hnswlib is present)
 # client.memory_save()
 # Query memory
@@ -911,6 +930,5 @@ for temp in [0.99, 0.99, 0.99, 0.99, 0.99, 0.1, 0.1, 0.1, 0.1, 0.1]:
                              instructions='You are a helpfull assistant. Keep your answer brief.',
                              temperature=temp,
                              )
-    
-    responses.append(response)
 
+    responses.append(response)

@@ -2,15 +2,18 @@ sentence_transformers
 scikit-learn
 json-repair
 pymupdf
-accelerate
-bitsandbytes
 torch
 requests
 memvid
 distfit
 ipywidgets
 llama-cpp-python
-# flash_attn
 distfit
 hnswlib
 pysqlite3
+markitdown[all]
+langextract[openai]
+
+# flash_attn
+# accelerate
+# bitsandbytes

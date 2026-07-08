@@ -3,6 +3,7 @@ from LLMlight.LLMlight import LLMlight
 import LLMlight.RAG as RAG
 import LLMlight.utils as utils
 import LLMlight.memory as memory
+import LLMlight.extract as extract
 from LLMlight.sqlite_hnsw import SqliteHnswLLM
 
 from LLMlight.LLMlight import (
@@ -17,7 +18,7 @@ from LLMlight.LLMlight import (
 
 __author__ = 'Erdogan Tasksen'
 __email__ = 'erdogant@gmail.com'
-__version__ = '1.1.1'
+__version__ = '1.2.0'
 
 # Setup root logger
 # Setup package-level logger
@@ -146,6 +147,27 @@ Example
 >>> # Override temperature for a single call
 >>> response = client.prompt('Write a short poem.', temperature=1.0)
 >>> print(response)
+
+Example
+-------
+>>> # Structured extraction with source grounding, via Google's LangExtract
+>>> # https://github.com/google/langextract
+>>> from LLMlight import LLMlight
+>>> from LLMlight import extract as lx_extract
+>>> client = LLMlight(model='mistralai/mistral-small-3.2')
+>>> examples = [lx_extract.build_example(
+...     text="ROMEO. But soft! What light through yonder window breaks?",
+...     extractions=[{"extraction_class": "character",
+...                    "extraction_text": "ROMEO",
+...                    "attributes": {"emotional_state": "wonder"}}],
+... )]
+>>> result = client.extract(
+...     text_or_documents="Lady Juliet gazed longingly at the stars, her heart aching for Romeo",
+...     prompt_description="Extract characters, emotions, and relationships in order of appearance.",
+...     examples=examples,
+... )
+>>> # Instantly visualize every extraction, highlighted in its original context
+>>> html = client.visualize_extractions(result, output_html="visualization.html")
 
 References
 ----------

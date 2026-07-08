@@ -42,6 +42,8 @@ dependencies = [
     'memvid',
     'ipywidgets',
     'distfit',
+    'markitdown[all]',
+    'langextract[openai]',
     # 'accelerate',
     # 'bitsandbytes',
     # 'flash_attn',
