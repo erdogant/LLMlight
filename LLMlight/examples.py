@@ -17,6 +17,14 @@ result = client.extract(
 
 html = client.visualize_extractions(result, output_html="visualization.html")
 
+# 
+# import webbrowser
+webbrowser.open(html)
+outfile = Path("index.html")
+outfile.write_text(html, encoding="utf-8")
+webbrowser.open(outfile.resolve().as_uri())
+
+
 # %%
 from LLMlight import LLMlight
 
