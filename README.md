@@ -1,4 +1,4 @@
-# LLMlight
+# C110P - Lightweight and Flexible Agentic Framework
 
 [![Python](https://img.shields.io/pypi/pyversions/LLMlight)](https://img.shields.io/pypi/pyversions/LLMlight)
 [![Pypi](https://img.shields.io/pypi/v/LLMlight)](https://pypi.org/project/LLMlight/)
@@ -14,7 +14,7 @@
 [![Donate](https://img.shields.io/badge/Support%20this%20project-grey.svg?logo=github%20sponsors)](https://erdogant.github.io/LLMlight/pages/html/Documentation.html#)
 
 <div>
-LLMlight is a Python package for running Large Language Models (LLMs) locally with minimal dependencies. It provides a simple interface to interact with various LLM models, including support for GGUF models and local API endpoints. ⭐️Star it if you like it⭐️
+c110P is a Python package for running Large Language Models (LLMs) locally with minimal dependencies. It provides a simple interface to interact with various LLM models, including support for GGUF models and local API endpoints. ⭐️Star it if you like it⭐️
 </div>
 
 ---
