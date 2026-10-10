@@ -249,3 +249,39 @@ def count_words(string):
         words = [word.strip() for word in words if word.strip() and not word.strip().isdigit()]
         logger.info(f"Word count: {len(words)}, Number of characters: {len(string)}")
         return len(words)
+
+
+def resolve_max_context(modelinfo: dict, fallback: int = 32768) -> int:
+    """
+    Determine the model's maximum context length from LM Studio model info.
+
+    Priority (same idea as llm_coding_benchmark.determine_model_contexts):
+      1. ``max_context_length`` on the model card (trained / architecture max)
+      2. ``context_length`` of an already-loaded instance
+      3. ``fallback`` (module default ``N_CTX``)
+    """
+    if not modelinfo:
+        logger.warning(
+            f'No model info available; falling back to N_CTX={fallback:,}'
+        )
+        return int(fallback)
+
+    max_ctx = modelinfo.get("max_context_length")
+    if max_ctx is not None:
+        return int(max_ctx)
+
+    loaded = modelinfo.get("loaded_instances") or []
+    if loaded:
+        ctx = loaded[0].get("config", {}).get("context_length")
+        if ctx is not None:
+            logger.info(
+                f'max_context_length missing; using loaded instance '
+                f'context_length={int(ctx):,}'
+            )
+            return int(ctx)
+
+    logger.warning(
+        f'Could not read max_context_length from model info; '
+        f'falling back to N_CTX={fallback:,}'
+    )
+    return int(fallback)

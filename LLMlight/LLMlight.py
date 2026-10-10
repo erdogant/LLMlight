@@ -244,13 +244,16 @@ class LLMlight:
         self.store_path       = self._resolve_file_path(file_path)
         self.modelinfo        = {}
 
-        # Get the max context length
+        # Auto-detect context window when the user did not supply one (or
+        # supplied an unrealistically small value). Same source as the
+        # coding benchmark: LM Studio model card → max_context_length.
         if self.model is not None and (n_ctx is None or n_ctx < 512):
-            # Store modelinfo
             self.modelinfo = self.get_model_info(model=model)
-            # self.n_ctx = modelinfo.get('max_context_length') or 8192
-            loaded = self.modelinfo.get("loaded_instances") or []
-            self.n_ctx = (loaded[0].get("config", {}).get("context_length", 16384) if loaded else 16384)
+            self.n_ctx = utils.resolve_max_context(self.modelinfo, fallback=N_CTX)
+            if n_ctx is None:
+                logger.info(f'n_ctx not set → using model max context length: {self.n_ctx:,}')
+            else:
+                logger.info(f'n_ctx={n_ctx} too small → using model max context length: {self.n_ctx:,}')
 
         # When no model is given, report available models and return early.
         # All attributes above are already set so tests can inspect them.
@@ -258,10 +261,7 @@ class LLMlight:
             models = self.get_available_models(validate=False)
             if models is not None:
                 logger.info(f'Available models: {models}')
-                logger.info(
-                    f'Set model before proceeding: '
-                    f'Example: client = LLMlight(model="{models[0]}", endpoint="{endpoint}").'
-                )
+                logger.info(f'Set model before proceeding: Example: client = LLMlight(model="{models[0]}", endpoint="{endpoint}").')
                 self.models = models
             return
 
@@ -2244,13 +2244,13 @@ def convert_messages_to_model(messages, model='llama', add_assistant_start=True)
 
 
 
-def load_local_gguf_model(model_path: str, n_ctx: int=4096, n_threads: int=8, n_gpu_layers: int=0) -> Llama:
+def load_local_gguf_model(model_path: str, n_ctx: int=32768, n_threads: int=8, n_gpu_layers: int=0) -> Llama:
     """
     Loads a local GGUF model using llama-cpp-python.
 
     Args:
         model_path (str): Path to the .gguf model file.
-        n_ctx (int): Maximum context length. Default is 4096.
+        n_ctx (int): Maximum context length. Default is 32768
         n_threads (int): Number of CPU threads to use. Default is 8.
         n_gpu_layers (int): Number of layers to offload to GPU (if available). Default is 20.
 
@@ -2291,7 +2291,7 @@ def load_local_gguf_model(model_path: str, n_ctx: int=4096, n_threads: int=8, n_
     return llm
 
 
-def compute_tokens(text: str, n_ctx: int = 16384, chars_per_token=3, task: str = "max"):
+def compute_tokens(text: str, n_ctx: int = 32768, chars_per_token=3, task: str = "max"):
     """
     Estimate token usage using a model-agnostic approximation.
 
@@ -2305,7 +2305,7 @@ def compute_tokens(text: str, n_ctx: int = 16384, chars_per_token=3, task: str =
     ----------
     text : str
         Prompt text.
-    n_ctx : int, default=16384
+    n_ctx : int, default=N_CTX
         Model context window.
     chars_per_token : float, default=305
         3: for coding
@@ -2326,7 +2326,7 @@ def compute_tokens(text: str, n_ctx: int = 16384, chars_per_token=3, task: str =
 
     # Fall back to the function default when no context window is known
     if n_ctx is None:
-        n_ctx = 16384
+        n_ctx = 32768
 
     if used_tokens >= n_ctx:
         logger.warning(f"Prompt length ({used_tokens:,} estimated tokens) exceeds context window ({n_ctx:,}). Input will likely be truncated.")
@@ -2338,7 +2338,7 @@ def compute_tokens(text: str, n_ctx: int = 16384, chars_per_token=3, task: str =
     return used_tokens, max_tokens
 
 
-def compute_max_tokens(used_tokens: int, n_ctx: int = 4096, task: str = "max"):
+def compute_max_tokens(used_tokens: int, n_ctx: int = 32768, task: str = "max"):
     """
     Compute a safe generation budget.
 
@@ -2347,7 +2347,7 @@ def compute_max_tokens(used_tokens: int, n_ctx: int = 4096, task: str = "max"):
     """
 
     if n_ctx is None:
-        n_ctx = 4096
+        n_ctx = 32768
 
     available = max(n_ctx - used_tokens, 1)
 
