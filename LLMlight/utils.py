@@ -260,11 +260,13 @@ def resolve_max_context(modelinfo: dict, fallback: int = 32768) -> int:
       2. ``context_length`` of an already-loaded instance
       3. ``fallback`` (module default ``N_CTX``)
     """
+    resolved_fallback = 32768 if fallback is None else int(fallback)
+
     if not modelinfo:
         logger.warning(
-            f'No model info available; falling back to N_CTX={fallback:,}'
+            f'No model info available; falling back to N_CTX={resolved_fallback:,}'
         )
-        return int(fallback)
+        return resolved_fallback
 
     max_ctx = modelinfo.get("max_context_length")
     if max_ctx is not None:
@@ -282,6 +284,6 @@ def resolve_max_context(modelinfo: dict, fallback: int = 32768) -> int:
 
     logger.warning(
         f'Could not read max_context_length from model info; '
-        f'falling back to N_CTX={fallback:,}'
+        f'falling back to N_CTX={resolved_fallback:,}'
     )
-    return int(fallback)
+    return resolved_fallback

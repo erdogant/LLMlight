@@ -249,7 +249,7 @@ class LLMlight:
         # coding benchmark: LM Studio model card → max_context_length.
         if self.model is not None and (n_ctx is None or n_ctx < 512):
             self.modelinfo = self.get_model_info(model=model)
-            self.n_ctx = utils.resolve_max_context(self.modelinfo, fallback=N_CTX)
+            self.n_ctx = utils.resolve_max_context(self.modelinfo, fallback=n_ctx)
             if n_ctx is None:
                 logger.info(f'n_ctx not set → using model max context length: {self.n_ctx:,}')
             else:
