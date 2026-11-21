@@ -1,4 +1,4 @@
-# LLMLight - Lightweight and Flexible Agentic Framework
+# LLMLight - Local, Light and Flexible Agentic Framework
 
 [![Python](https://img.shields.io/pypi/pyversions/LLMlight)](https://img.shields.io/pypi/pyversions/LLMlight)
 [![Pypi](https://img.shields.io/pypi/v/LLMlight)](https://pypi.org/project/LLMlight/)
@@ -88,6 +88,34 @@ response = client.prompt('What is the capital of France?',
                          instructions='Do not argue with the information in the context. Only return the information from the context.')
 print(response)
 # According to the provided context, the capital of France is Amsterdam.
+
+```
+
+### 3. RAG example with context strategy
+
+```python
+from LLMlight import LLMlight
+
+client = LLMlight(
+          chunks={'type': 'words', 'size': 250, 'n': 5},
+          embedding='bert',
+          retrieval_method='naive_rag',
+          context_strategy='chunk-wise',
+          model="gpt-oss-20b",
+          endpoint="http://localhost:1234/v1/chat/completions",
+)
+
+# Article
+article_text = client.read_pdf('https://proceedings.neurips.cc/paper_files/paper/2017/file/3f5ee243547dee91fbd053c1c4a845aa-Paper.pdf')
+
+# Test the connection with a question:
+response = client.prompt(
+   query="What is the main goal that is achieved in this article?",
+   context=article_text,
+   instructions="Answer in two concise sentences.",
+   temperature=0
+)
+print(response)
 
 ```
 
