@@ -46,8 +46,8 @@ Retrieving available models can be done via the :func:`LLMlight.LLMlight.LLMligh
 
     from LLMlight import LLMlight
 
-    # Initialize LLMlight client
-    client = LLMlight(verbose='info')
+    # Initialize LLMlight client (model=None lists available models)
+    client = LLMlight(endpoint='http://localhost:1234/v1/chat/completions')
 
     # Get a list of available models
     modelnames = client.get_available_models(validate=False)
@@ -56,8 +56,9 @@ Retrieving available models can be done via the :func:`LLMlight.LLMlight.LLMligh
     print("Available models:", modelnames)
 
 
-- **validate=False**: Skips checking the integrity or availability of models, making retrieval faster.
-- **verbose='info'**: Shows additional information during model retrieval, such as download progress or caching messages.
+- **validate=False**: Skips checking endpoint-level model checks, making retrieval faster.
+- **endpoint=...**: Use your OpenAI-compatible local server URL (for example LM Studio on ``http://localhost:1234/v1/chat/completions``).
+- **n_ctx behavior**: If ``n_ctx`` is not provided, LLMlight tries to infer it from model info; when unavailable, it falls back to ``32768``.
 
 
 Preprocessing & Chunking
