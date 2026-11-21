@@ -1,4 +1,4 @@
-# LLMLight - Lightweight and Flexible Agentic Framework
+# LLMLight - Local, Light and Flexible Agentic Framework
 
 [![Python](https://img.shields.io/pypi/pyversions/LLMlight)](https://img.shields.io/pypi/pyversions/LLMlight)
 [![Pypi](https://img.shields.io/pypi/v/LLMlight)](https://pypi.org/project/LLMlight/)
